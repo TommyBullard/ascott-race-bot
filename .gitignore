@@ -1,0 +1,34 @@
+# Dependencies
+/node_modules
+
+# Next.js build output
+/.next/
+/out/
+
+# Production
+/build
+
+# Environment variables (keep .env.example tracked)
+.env
+.env*.local
+.env.development
+.env.production
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Editor / OS
+.DS_Store
+*.pem
+.idea/
+.vscode/*
+!.vscode/extensions.json

@@ -1,0 +1,20 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/tipster-discovery",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/racecards",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/odds",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/results",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

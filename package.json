@@ -1,0 +1,46 @@
+{
+  "name": "ascott-supabase-client",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "tsx scripts/tests.ts",
+    "simulate": "tsx scripts/royalAscotSimulation.ts",
+    "simulate:novalue": "tsx scripts/noValueSimulation.ts",
+    "verify:ingestion": "tsx scripts/verifyIngestion.ts",
+    "inspect:schema": "tsx scripts/inspectSchema.ts",
+    "run:model": "tsx scripts/runModel.ts",
+    "backtest": "tsx scripts/backtest.ts",
+    "seed:tipsters": "tsx scripts/seedInFormTipsters.ts",
+    "verify:racing": "tsx scripts/verifyRacingApi.ts",
+    "load:races": "tsx scripts/loadHistoricalRaces.ts",
+    "convert:bsp": "tsx scripts/convertBetfairBsp.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "next": "^16.2.9",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.5",
+    "@types/node": "^20.14.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "^16.2.9",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.3.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.4.5"
+  }
+}

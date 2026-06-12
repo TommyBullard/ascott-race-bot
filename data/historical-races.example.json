@@ -1,0 +1,62 @@
+{
+  "_README": "Template for the historical-race loader (npm run load:races). Replace ALL 'EXAMPLE' values with REAL data — the loader REFUSES --commit while any 'EXAMPLE' text remains. Nothing here is real; it only shows the shape. odds_decimal = the pre-race price the model scores on; bsp_decimal = Betfair SP used to settle a winning bet (needed for true BSP ROI). finish_pos=1 marks the winner. tipster_selections.horse_name must match a runner. Supply 'tipsters' priors (real proofed numbers) to enable needle weighting; without them needle mode equals the control.",
+  "races": [
+    {
+      "course": "EXAMPLE Downs",
+      "country": "GB",
+      "race_name": "EXAMPLE Handicap",
+      "meeting_date": "2025-06-18",
+      "off_time": "2025-06-18T14:30:00Z",
+      "handicap": true,
+      "source_label": "betfair_bsp",
+      "quote_type": "bsp",
+      "runners": [
+        {
+          "horse_name": "EXAMPLE Horse A",
+          "odds_decimal": 3.5,
+          "bsp_decimal": 3.62,
+          "sp_decimal": 3.5,
+          "finish_pos": 1,
+          "status": "ran",
+          "trainer": "EXAMPLE Trainer",
+          "jockey": "EXAMPLE Jockey"
+        },
+        {
+          "horse_name": "EXAMPLE Horse B",
+          "odds_decimal": 5.0,
+          "bsp_decimal": 5.4,
+          "sp_decimal": 5.0,
+          "finish_pos": 2,
+          "status": "ran"
+        },
+        {
+          "horse_name": "EXAMPLE Horse C",
+          "odds_decimal": 9.0,
+          "bsp_decimal": 10.5,
+          "finish_pos": 3,
+          "status": "ran"
+        }
+      ],
+      "tipster_selections": [
+        {
+          "tipster_name": "EXAMPLE Tipster (Some Paper)",
+          "affiliation": "Some Paper",
+          "horse_name": "EXAMPLE Horse A"
+        }
+      ]
+    }
+  ],
+  "tipsters": [
+    {
+      "canonical_name": "EXAMPLE Tipster (Some Paper)",
+      "display_name": "EXAMPLE Tipster",
+      "affiliation": "Some Paper",
+      "as_of_date": "2025-06-18",
+      "bets_count": 300,
+      "wins_count": 90,
+      "roi_bsp_gross": 0.06,
+      "ae_bsp": 1.04,
+      "strike_rate": 0.3
+    }
+  ]
+}

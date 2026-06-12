@@ -1,0 +1,9 @@
+# Build output
+.next/
+out/
+
+# Dependencies
+node_modules/
+
+# Lockfile is formatted by its package manager
+package-lock.json
