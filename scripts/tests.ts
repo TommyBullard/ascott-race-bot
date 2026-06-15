@@ -20,3 +20,4 @@ import './modelRunMetadata.test';
 import './modelRunHistory.test';
 import './modelDataQuality.test';
 import './modelRunAttempts.test';
+import './modelConfidence.test';

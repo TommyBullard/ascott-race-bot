@@ -60,6 +60,12 @@ export interface ModelRunMetadata {
    * yet. Part of the metadata-builder output; not persisted as its own column.
    */
   model_adjustments: ModelAdjustments;
+  /**
+   * Data-quality-adjusted confidence (Batch F1), supplied by the caller and
+   * stored verbatim — this builder computes nothing. OBSERVATIONAL only: not
+   * consumed by probability/selection/staking. Omitted when not provided.
+   */
+  adjusted_confidence?: number;
 }
 
 export interface BuildModelRunMetadataInput {
@@ -79,6 +85,13 @@ export interface BuildModelRunMetadataInput {
    * Defaults to `[]` when omitted; never fabricated here.
    */
   dataQualityFlags?: string[];
+  /**
+   * Data-quality-adjusted confidence for the run (computed by the caller via
+   * `computeAdjustedConfidence`). Stored verbatim on the output's
+   * `adjusted_confidence`; this builder does not compute it. Omitted when not
+   * provided.
+   */
+  adjustedConfidence?: number;
   /** Override `model_version` (defaults to {@link DEFAULT_MODEL_VERSION}). */
   modelVersion?: string;
   /** Override the probability-engine version tag. */
@@ -113,7 +126,7 @@ export function buildModelRunMetadata(
     : 'market_only';
   const data_quality_flags = input.dataQualityFlags ?? [];
 
-  return {
+  const metadata: ModelRunMetadata = {
     model_version: input.modelVersion ?? DEFAULT_MODEL_VERSION,
     probability_engine_version:
       input.probabilityEngineVersion ?? DEFAULT_PROBABILITY_ENGINE_VERSION,
@@ -125,4 +138,12 @@ export function buildModelRunMetadata(
     run_quality: evaluateRunQuality(data_quality_flags),
     model_adjustments: determineModelAdjustments(data_quality_flags),
   };
+
+  // Store the caller-supplied adjusted confidence verbatim, only when provided
+  // (kept optional so existing callers/output are unchanged).
+  if (input.adjustedConfidence !== undefined) {
+    metadata.adjusted_confidence = input.adjustedConfidence;
+  }
+
+  return metadata;
 }

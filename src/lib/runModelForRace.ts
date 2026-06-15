@@ -57,6 +57,7 @@ import {
   STALE_ODDS_THRESHOLD_MS,
   MIN_RUNNER_COUNT,
 } from './modelDataQuality';
+import { computeAdjustedConfidence } from './modelConfidence';
 import {
   buildSupersedePatch,
   currentMarker,
@@ -317,12 +318,41 @@ export async function runModelForRace(
   });
   traceModel(`[trace] data_quality_flags=${JSON.stringify(dataQuality.flags)}`);
 
+  // 2. Score the field. Shared with the backtest harness (`scoreRaceRunners`)
+  //    so both evaluate races identically: probabilities -> EV -> confidence ->
+  //    fractional-Kelly stake, ranked by EV (descending) for rank_in_race.
+  //    Computed before the metadata build so the run's headline confidence is
+  //    available to the observational confidence-adjustment layer below;
+  //    scoring is pure, so its result is identical regardless of position.
+  const scored = scoreRaceRunners(
+    inputs,
+    tipsterSelections,
+    tipsterStats,
+    bankroll,
+  );
+
+  // Observational only (Batch F1): scale the rank-1 (highest-EV) runner's
+  // confidence by data quality. Recorded for monitoring/future use; it does NOT
+  // feed probabilities, selection, or staking (those are already computed in
+  // `scored` above and are not modified here).
+  const baseConfidence = scored.length > 0 ? scored[0].confidence : 0;
+  const adjustedConfidence = computeAdjustedConfidence(
+    baseConfidence,
+    dataQuality.flags,
+    dataQuality.metrics,
+  );
+  traceModel(
+    `[trace] adjusted_confidence=${adjustedConfidence} (base=${baseConfidence})`,
+  );
+
   const metadata = buildModelRunMetadata({
     hasUsableTipsterSelections: tipsterSelections.length > 0,
     dataQualityFlags: dataQuality.flags,
+    adjustedConfidence,
     modelVersion: options.modelVersion,
-    // Record the thresholds used to interpret the flags + the computed metrics,
-    // for audit/visibility. Stored in config_json (no new DB columns).
+    // Record the thresholds used to interpret the flags + the computed metrics
+    // + the observational adjusted confidence, for audit/visibility. Stored in
+    // config_json (no new DB columns).
     config: {
       data_quality_thresholds: {
         min_market_completeness: MIN_MARKET_COMPLETENESS,
@@ -331,18 +361,9 @@ export async function runModelForRace(
         min_runner_count: MIN_RUNNER_COUNT,
       },
       data_quality_metrics: dataQuality.metrics,
+      data_quality_adjusted_confidence: adjustedConfidence,
     },
   });
-
-  // 2. Score the field. Shared with the backtest harness (`scoreRaceRunners`)
-  //    so both evaluate races identically: probabilities -> EV -> confidence ->
-  //    fractional-Kelly stake, ranked by EV (descending) for rank_in_race.
-  const scored = scoreRaceRunners(
-    inputs,
-    tipsterSelections,
-    tipsterStats,
-    bankroll,
-  );
 
   // 3a. Insert the new model run as the CURRENT run. Capture its generated id.
   const { data: runData, error: runError } = await supabaseAdmin
