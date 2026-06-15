@@ -52,12 +52,14 @@ import {
 import { buildModelRunMetadata } from './modelRunMetadata';
 import {
   assessDataQuality,
+  determineModelAdjustments,
   MIN_MARKET_COMPLETENESS,
   ODDS_REFRESH_INTERVAL_MS,
   STALE_ODDS_THRESHOLD_MS,
   MIN_RUNNER_COUNT,
 } from './modelDataQuality';
 import { computeAdjustedConfidence } from './modelConfidence';
+import { applyStakeSuppression } from './modelStakeSuppression';
 import {
   buildSupersedePatch,
   currentMarker,
@@ -345,10 +347,16 @@ export async function runModelForRace(
     `[trace] adjusted_confidence=${adjustedConfidence} (base=${baseConfidence})`,
   );
 
+  // Advisory model adjustments (single source: determineModelAdjustments).
+  // Computed once here, recorded in the metadata, and reused below to suppress
+  // staking when data quality is insufficient (Batch F2).
+  const modelAdjustments = determineModelAdjustments(dataQuality.flags);
+
   const metadata = buildModelRunMetadata({
     hasUsableTipsterSelections: tipsterSelections.length > 0,
     dataQualityFlags: dataQuality.flags,
     adjustedConfidence,
+    modelAdjustments,
     modelVersion: options.modelVersion,
     // Record the thresholds used to interpret the flags + the computed metrics
     // + the observational adjusted confidence, for audit/visibility. Stored in
@@ -424,6 +432,14 @@ export async function runModelForRace(
   //     descending, so the first staked runner is the top pick. The full
   //     per-runner detail remains in `model_runner_scores`.
   const topBet = scored.find((s) => s.stake > 0);
+
+  // Batch F2 — stake suppression safeguard: when data quality is insufficient
+  // (`suppressStaking`), zero the selected bet's STAKE while preserving the
+  // selection. Mutates only `topBet.stake`; ranking, confidence, EV, runner
+  // order, and the selection identity are untouched. No-op when there is no
+  // selected bet or when suppression does not apply.
+  applyStakeSuppression(topBet, modelAdjustments.suppressStaking);
+
   const recommended = topBet ? 1 : 0;
 
   if (topBet) {

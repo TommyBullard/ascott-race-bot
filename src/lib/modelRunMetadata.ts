@@ -92,6 +92,13 @@ export interface BuildModelRunMetadataInput {
    * provided.
    */
   adjustedConfidence?: number;
+  /**
+   * Advisory model adjustments for the run. When provided, stored verbatim
+   * (pass-through, no logic) — lets the caller supply the SAME object it already
+   * derived (e.g. for stake suppression) instead of recomputing. When omitted,
+   * the builder derives it from `dataQualityFlags` (backward compatible).
+   */
+  modelAdjustments?: ModelAdjustments;
   /** Override `model_version` (defaults to {@link DEFAULT_MODEL_VERSION}). */
   modelVersion?: string;
   /** Override the probability-engine version tag. */
@@ -136,7 +143,8 @@ export function buildModelRunMetadata(
     config_json: input.config ?? {},
     data_quality_flags,
     run_quality: evaluateRunQuality(data_quality_flags),
-    model_adjustments: determineModelAdjustments(data_quality_flags),
+    model_adjustments:
+      input.modelAdjustments ?? determineModelAdjustments(data_quality_flags),
   };
 
   // Store the caller-supplied adjusted confidence verbatim, only when provided
