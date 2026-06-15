@@ -11,8 +11,11 @@ import assert from 'node:assert/strict';
 
 import {
   parseModelDayArgs,
+  prepareMeetingRaces,
+  runModelForMeetingRaces,
   summarizeModelDayOutcomes,
   formatModelDaySummary,
+  type MeetingRace,
   type RaceRunOutcome,
 } from '../src/lib/modelDayRun';
 
@@ -88,4 +91,80 @@ test('formatModelDaySummary: one line per count', () => {
   assert.equal(lines.length, 7);
   assert.ok(lines.some((l) => l.includes('races_found: 0')));
   assert.ok(lines.some((l) => l.includes('failures: 0')));
+});
+
+// --- prepareMeetingRaces (shared by model:day + pipeline:day) ---------------
+
+function rows(): MeetingRace[] {
+  return [
+    { id: 'r2', course: 'Ascot', off_time: '2026-06-16T15:00:00Z', race_name: 'Late' },
+    { id: 'r1', course: 'Royal Ascot', off_time: '2026-06-16T13:30:00Z', race_name: 'Early' },
+    { id: 'r3', course: 'York', off_time: '2026-06-16T14:00:00Z', race_name: 'Other' },
+    { id: 'r4', course: 'Ascot', off_time: null, race_name: 'No time' },
+  ];
+}
+
+test('prepareMeetingRaces: course filter (Ascot matches Royal Ascot) + off-time sort', () => {
+  const out = prepareMeetingRaces(rows(), 'Ascot');
+  // York excluded; the two Ascot + Royal Ascot kept, sorted by off time (null last).
+  assert.deepEqual(out.map((r) => r.id), ['r1', 'r2', 'r4']);
+});
+
+test('prepareMeetingRaces: no course -> all races, sorted; nulls last', () => {
+  const out = prepareMeetingRaces(rows());
+  assert.deepEqual(out.map((r) => r.id), ['r1', 'r3', 'r2', 'r4']);
+});
+
+test('prepareMeetingRaces: does not mutate the input', () => {
+  const input = rows();
+  const snapshot = JSON.parse(JSON.stringify(input));
+  prepareMeetingRaces(input, 'Ascot');
+  assert.deepEqual(input, snapshot);
+});
+
+// --- runModelForMeetingRaces (injected runOne; no DB) -----------------------
+
+test('runModelForMeetingRaces: maps run / skipped / failed from runOne', async () => {
+  const races: MeetingRace[] = [
+    { id: 'a', course: 'Ascot', off_time: null, race_name: null },
+    { id: 'b', course: 'Ascot', off_time: null, race_name: null },
+    { id: 'c', course: 'Ascot', off_time: null, race_name: null },
+  ];
+  const outcomes = await runModelForMeetingRaces(races, async (id) => {
+    if (id === 'a') return { scored: 8, recommended: 1 }; // run
+    if (id === 'b') return null; // skipped (no priced field)
+    throw new Error('boom'); // c -> failed
+  });
+  assert.deepEqual(outcomes[0], { raceId: 'a', status: 'run', recommended: 1, scored: 8 });
+  assert.deepEqual(outcomes[1], { raceId: 'b', status: 'skipped' });
+  assert.equal(outcomes[2].status, 'failed');
+  assert.equal(outcomes[2].error, 'boom');
+
+  // The summary derives correctly from these outcomes.
+  const s = summarizeModelDayOutcomes(outcomes);
+  assert.equal(s.races_found, 3);
+  assert.equal(s.races_run, 1);
+  assert.equal(s.skipped_races, 1);
+  assert.equal(s.failures, 1);
+  assert.equal(s.recommendations_created, 1);
+});
+
+test('runModelForMeetingRaces: one failure does not stop the batch; onOutcome called per race', async () => {
+  const seen: string[] = [];
+  const races: MeetingRace[] = [
+    { id: 'a', course: null, off_time: null, race_name: null },
+    { id: 'b', course: null, off_time: null, race_name: null },
+  ];
+  const outcomes = await runModelForMeetingRaces(
+    races,
+    async (id) => {
+      if (id === 'a') throw new Error('x');
+      return { scored: 5, recommended: 0 };
+    },
+    (race) => seen.push(race.id),
+  );
+  assert.deepEqual(seen, ['a', 'b']); // both visited despite 'a' failing
+  assert.equal(outcomes[0].status, 'failed');
+  assert.equal(outcomes[1].status, 'run');
+  assert.equal(outcomes[1].recommended, 0); // no-bet
 });

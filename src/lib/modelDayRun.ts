@@ -1,11 +1,16 @@
 /**
- * Pure helpers for the "run the model for a whole race day" operator script
- * (scripts/runModelsForRaceDay.ts, Phase 3B).
+ * Pure helpers for the "run the model for a whole race day" operator scripts
+ * (scripts/runModelsForRaceDay.ts — Phase 3B; scripts/runRaceDayPipeline.ts —
+ * Phase 3C).
  *
- * Argument parsing, per-race outcome accumulation, and summary formatting live
- * here so they are unit-testable without a database. No I/O, no model maths —
- * the script wires these to the existing `runModelForRace` and a races query.
+ * Argument parsing, race selection (filter + sort), the per-race run loop, and
+ * outcome accumulation live here so they are unit-testable and shared by both
+ * scripts. No model maths and no direct DB query of its own — the run loop takes
+ * an injected `runOne` (the scripts pass the real `runModelForRace`; tests pass
+ * a fake), and the only import is the pure `normalizeCourse`.
  */
+
+import { normalizeCourse } from './raceSync';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -47,12 +52,98 @@ export function parseModelDayArgs(argv: readonly string[]): ModelDayArgs {
 /** Whether a race was run, skipped (no priced field), or failed. */
 export type RaceRunStatus = 'run' | 'skipped' | 'failed';
 
+/** A race considered for a meeting-day model run (id + display/sort fields). */
+export interface MeetingRace {
+  id: string;
+  course: string | null;
+  off_time: string | null;
+  race_name: string | null;
+}
+
+/** Sort key for off_time: known instants ascending, unknowns last. */
+function offTimeSortKey(offTime: string | null): number {
+  if (!offTime) return Number.POSITIVE_INFINITY;
+  const ms = Date.parse(offTime);
+  return Number.isNaN(ms) ? Number.POSITIVE_INFINITY : ms;
+}
+
+/**
+ * Filters raw race rows to the optional course (normalised — "Ascot" matches
+ * "Royal Ascot") and sorts by off time (unknowns last). Pure: returns a new
+ * array and does not mutate `rows` or their elements.
+ */
+export function prepareMeetingRaces(
+  rows: readonly MeetingRace[],
+  course?: string,
+): MeetingRace[] {
+  let races = rows.map((r) => ({ ...r }));
+  if (course && course.trim() !== '') {
+    const want = normalizeCourse(course);
+    races = races.filter((r) => normalizeCourse(r.course) === want);
+  }
+  races.sort((a, b) => offTimeSortKey(a.off_time) - offTimeSortKey(b.off_time));
+  return races;
+}
+
+/** Minimal result of one model run (subset of RunModelResult). */
+export interface RunOneRaceResult {
+  scored: number;
+  recommended: number;
+}
+
+/** Runs one race's model; returns null when there's nothing to model. Injected. */
+export type RunOneRace = (raceId: string) => Promise<RunOneRaceResult | null>;
+
 /** One race's outcome, fed into {@link summarizeModelDayOutcomes}. */
 export interface RaceRunOutcome {
   raceId: string;
   status: RaceRunStatus;
   /** Recommendations written for this race (only meaningful when status='run'). */
   recommended?: number;
+  /** Runners scored (only meaningful when status='run'); for logging. */
+  scored?: number;
+  /** Error message (only meaningful when status='failed'); for logging. */
+  error?: string;
+}
+
+/**
+ * Runs the model for each race in order, returning one outcome per race.
+ * `runOne` is injected (scripts pass the real `runModelForRace`; tests pass a
+ * fake), so this loop — the bug-prone part — is unit-testable without a DB. A
+ * `null` result is a `skipped` race (no priced field / snapshot); a thrown error
+ * is `failed` (message captured for logging, NEVER rethrown, so one bad race
+ * can't sink the batch). `onOutcome` lets the caller log each result in its own
+ * style. Does not mutate `races`.
+ */
+export async function runModelForMeetingRaces(
+  races: readonly MeetingRace[],
+  runOne: RunOneRace,
+  onOutcome?: (race: MeetingRace, outcome: RaceRunOutcome) => void,
+): Promise<RaceRunOutcome[]> {
+  const outcomes: RaceRunOutcome[] = [];
+  for (const race of races) {
+    let outcome: RaceRunOutcome;
+    try {
+      const result = await runOne(race.id);
+      outcome = result
+        ? {
+            raceId: race.id,
+            status: 'run',
+            recommended: result.recommended,
+            scored: result.scored,
+          }
+        : { raceId: race.id, status: 'skipped' };
+    } catch (err) {
+      outcome = {
+        raceId: race.id,
+        status: 'failed',
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+    outcomes.push(outcome);
+    onOutcome?.(race, outcome);
+  }
+  return outcomes;
 }
 
 /** Aggregate counts for the operator summary. */

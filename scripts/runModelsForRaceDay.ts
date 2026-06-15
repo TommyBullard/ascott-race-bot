@@ -21,12 +21,13 @@
 
 import { supabaseAdmin } from '../src/lib/supabaseAdmin';
 import { runModelForRace } from '../src/lib/runModelForRace';
-import { normalizeCourse } from '../src/lib/raceSync';
 import {
   parseModelDayArgs,
+  prepareMeetingRaces,
+  runModelForMeetingRaces,
   summarizeModelDayOutcomes,
   formatModelDaySummary,
-  type RaceRunOutcome,
+  type MeetingRace,
 } from '../src/lib/modelDayRun';
 
 const RACES_TABLE = 'races';
@@ -79,26 +80,15 @@ async function main(): Promise<void> {
     throw new Error(`races lookup failed for ${args.date}: ${error.message}`);
   }
 
-  let races = ((data ?? []) as RaceRow[]).map((r) => ({
+  // Filter to the optional course (normalised) + order by off time (shared with
+  // the Phase 3C pipeline via modelDayRun).
+  const rows = ((data ?? []) as RaceRow[]).map((r) => ({
     id: String(r.id),
     course: r.course,
     off_time: r.off_time,
     race_name: r.race_name,
   }));
-
-  // Optional course filter (normalised — "Ascot" matches "Royal Ascot").
-  if (args.course) {
-    const want = normalizeCourse(args.course);
-    races = races.filter((r) => normalizeCourse(r.course) === want);
-  }
-
-  // Stable, human-friendly order by off time (unknowns last).
-  races.sort((a, b) => {
-    const am = a.off_time ? Date.parse(a.off_time) : Number.POSITIVE_INFINITY;
-    const bm = b.off_time ? Date.parse(b.off_time) : Number.POSITIVE_INFINITY;
-    return (Number.isNaN(am) ? Number.POSITIVE_INFINITY : am) -
-      (Number.isNaN(bm) ? Number.POSITIVE_INFINITY : bm);
-  });
+  const races = prepareMeetingRaces(rows, args.course);
 
   const scope = `${args.date}${args.course ? ` course~"${args.course}"` : ''}`;
   console.log(
@@ -121,27 +111,20 @@ async function main(): Promise<void> {
     return;
   }
 
-  // COMMIT: run the model per race, collecting outcomes.
-  const outcomes: RaceRunOutcome[] = [];
-  for (const r of races) {
-    try {
-      const result = await runModelForRace(r.id);
-      if (result) {
-        outcomes.push({ raceId: r.id, status: 'run', recommended: result.recommended });
-        console.log(
-          `  run     ${r.id}  scored=${result.scored} recommended=${result.recommended}`,
-        );
+  // COMMIT: run the model per race (shared loop), logging each outcome.
+  const outcomes = await runModelForMeetingRaces(
+    races,
+    runModelForRace,
+    (race: MeetingRace, o) => {
+      if (o.status === 'run') {
+        console.log(`  run     ${race.id}  scored=${o.scored} recommended=${o.recommended}`);
+      } else if (o.status === 'skipped') {
+        console.log(`  skipped ${race.id}  (no priced runners / market snapshot)`);
       } else {
-        outcomes.push({ raceId: r.id, status: 'skipped' });
-        console.log(`  skipped ${r.id}  (no priced runners / market snapshot)`);
+        console.error(`  FAILED  ${race.id}  ${o.error}`);
       }
-    } catch (err) {
-      outcomes.push({ raceId: r.id, status: 'failed' });
-      console.error(
-        `  FAILED  ${r.id}  ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  }
+    },
+  );
 
   const summary = summarizeModelDayOutcomes(outcomes);
   console.log('\nSummary:');
