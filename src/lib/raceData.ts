@@ -510,11 +510,13 @@ function toNumberOrNull(value: unknown): number | null {
 export async function fetchRaceRecommendations(
   raceId: string,
 ): Promise<RaceRecommendation[]> {
-  // Latest model run for the race.
+  // Latest CURRENT model run for the race (append-only history: superseded runs
+  // are retained but excluded here via is_current).
   const { data: runData, error: runError } = await supabaseAdmin
     .from(MODEL_RUNS_TABLE)
     .select('id, run_time')
     .eq('race_id', raceId)
+    .eq('is_current', true)
     .order('run_time', { ascending: false })
     .limit(1);
 
@@ -725,11 +727,13 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
     }
   }
 
-  // 3. Latest model run for the race.
+  // 3. Latest CURRENT model run for the race (superseded runs are retained in
+  //    history but excluded here via is_current).
   const { data: runData, error: runError } = await supabaseAdmin
     .from(MODEL_RUNS_TABLE)
     .select('id, run_time')
     .eq('race_id', raceId)
+    .eq('is_current', true)
     .order('run_time', { ascending: false })
     .limit(1);
 
@@ -996,11 +1000,13 @@ export async function computeModelAccuracy(
 
   const settledRaceIds = [...winnerByRace.keys()];
 
-  // 2. Latest model run per settled race (rows are newest-first).
+  // 2. Latest CURRENT model run per settled race (rows are newest-first;
+  //    superseded runs are excluded via is_current).
   const { data: runData, error: runError } = await supabaseAdmin
     .from(MODEL_RUNS_TABLE)
     .select('id, race_id, run_time')
     .in('race_id', settledRaceIds)
+    .eq('is_current', true)
     .order('run_time', { ascending: false });
 
   if (runError) {

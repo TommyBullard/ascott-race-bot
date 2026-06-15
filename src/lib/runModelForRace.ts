@@ -10,13 +10,18 @@
  *   - `recommendations`      : the single best bet for the run (one row; the
  *                              table is keyed by `model_run_id`)
  *
- * Idempotency ("overwrite existing run for race_id") is achieved by inserting
- * the NEW run and its children first, then deleting any OLDER runs for the race
- * and their children. Ordering it this way means:
- *   - a failed insert (e.g. a wrong `bet_mode` enum value) aborts BEFORE any
- *     delete, so existing data is never lost; and
- *   - the race is never left with zero runs mid-operation (the reader, which
- *     picks the latest run by `run_time`, always sees a complete run).
+ * Idempotency ("the race has exactly one CURRENT run") is achieved append-only:
+ * the NEW run and its children are inserted FIRST, stamped `is_current = true`;
+ * then the race's OTHER current rows (run + children) are SUPERSEDED — marked
+ * `is_current = false` with a `superseded_at` timestamp. Historical rows are
+ * never deleted, so any past run stays queryable for audit.
+ *
+ * Ordering: insert-new-then-supersede-others. If an insert fails, the previous
+ * current run remains intact (nothing was superseded yet). If superseding fails
+ * after the inserts, the race transiently has more than one current run, but
+ * readers pick the NEWEST current run (by `run_time`), so they still return the
+ * new pick; the next run cleans up the stragglers. The new run and its children
+ * are excluded from the supersede so they stay current.
  *
  * NOTE: supabase-js cannot wrap multiple statements in a single transaction, so
  * this is a best-effort sequence rather than atomic. For strict atomicity, move
@@ -44,6 +49,11 @@ import {
   type TipsterStats,
 } from './modelProbabilities';
 import { buildModelRunMetadata } from './modelRunMetadata';
+import {
+  buildSupersedePatch,
+  currentMarker,
+  selectRunIdsToSupersede,
+} from './modelRunHistory';
 
 const MODEL_RUNS_TABLE = 'model_runs';
 const MODEL_RUNNER_SCORES_TABLE = 'model_runner_scores';
@@ -100,7 +110,7 @@ export interface RunModelResult {
   scored: number;
   /** Number of recommended bets (rows written to recommendations). */
   recommended: number;
-  /** Older runs removed for idempotency. */
+  /** Prior current runs superseded (marked not-current), never deleted. */
   supersededRuns: number;
 }
 
@@ -204,9 +214,10 @@ function traceModel(message: string): void {
  * Computes and stores a model run for `raceId`, returning a summary, or `null`
  * when the race has no priced runners / market snapshot to model.
  *
- * @throws if any insert fails (notably a `bet_mode` enum mismatch) or if a
- *   cleanup delete fails. Inserts run before deletes, so a pre-delete failure
- *   leaves existing runs intact.
+ * @throws if any insert/supersede update fails (notably a `bet_mode` enum
+ *   mismatch). The new run is inserted before any supersede, so a failed insert
+ *   leaves the previous current run intact; a failed supersede leaves extra
+ *   current runs that readers tolerate (newest wins) and the next run cleans up.
  */
 export async function runModelForRace(
   raceId: string,
@@ -281,8 +292,7 @@ export async function runModelForRace(
     bankroll,
   );
 
-  // 3a. Insert the new model run FIRST (fail-safe: a bad bet_mode aborts here,
-  //     before any delete). Capture its generated id.
+  // 3a. Insert the new model run as the CURRENT run. Capture its generated id.
   const { data: runData, error: runError } = await supabaseAdmin
     .from(MODEL_RUNS_TABLE)
     .insert({
@@ -298,6 +308,7 @@ export async function runModelForRace(
       bet_mode: betMode,
       base_kelly_fraction: baseKellyFraction,
       signal_kappa: signalKappa,
+      ...currentMarker(),
     })
     .select('id')
     .single();
@@ -309,8 +320,8 @@ export async function runModelForRace(
   }
   const modelRunId = String((runData as { id: string }).id);
 
-  // 3b. Per-runner scores (all runners). The richer columns the upstream model
-  //     emits (support_raw, support_deherded, disagreement_bonus,
+  // 3b. Per-runner scores (all runners), stamped current. The richer columns the
+  //     upstream model emits (support_raw, support_deherded, disagreement_bonus,
   //     p_ev_positive) are nullable and not produced by this engine, so they
   //     are left null.
   const scoreRows = scored.map((s) => ({
@@ -322,6 +333,7 @@ export async function runModelForRace(
     ev_per_1: s.ev,
     confidence_score: s.confidence,
     rank_in_race: s.rank,
+    ...currentMarker(),
   }));
 
   const { error: scoresError } = await supabaseAdmin
@@ -365,6 +377,7 @@ export async function runModelForRace(
           edge: topBet.edge,
           confidence: topBet.confidence,
         },
+        ...currentMarker(),
       });
     if (recsError) {
       throw new Error(
@@ -373,53 +386,67 @@ export async function runModelForRace(
     }
   }
 
-  // 4. Idempotency cleanup: remove OLDER runs for this race and their children.
-  //    Children are deleted before parents to respect FKs regardless of whether
-  //    ON DELETE CASCADE is configured.
-  const { data: oldRunData, error: oldRunsError } = await supabaseAdmin
+  // 4. Supersede the race's OTHER current model output now that the new run is
+  //    safely written (append-only history: rows are UPDATED, never deleted).
+  //    Insert-first means a failed insert above left the previous current run
+  //    intact; and if this supersede fails, readers still pick the newest
+  //    current run by run_time. The just-inserted run is EXCLUDED, and children
+  //    are filtered by the OLDER run ids only, so the new run + its children
+  //    stay current. Best-effort (supabase-js cannot transact); see the header.
+  const { data: currentRunData, error: currentRunsError } = await supabaseAdmin
     .from(MODEL_RUNS_TABLE)
     .select('id')
     .eq('race_id', raceId)
-    .neq('id', modelRunId);
+    .eq('is_current', true);
 
-  if (oldRunsError) {
+  if (currentRunsError) {
     throw new Error(
-      `Failed to list prior model runs for race ${raceId}: ${oldRunsError.message}`,
+      `Failed to list current model runs for race ${raceId}: ${currentRunsError.message}`,
     );
   }
 
-  const oldRunIds = ((oldRunData ?? []) as { id: string }[]).map((r) =>
-    String(r.id),
+  // Exclude the just-inserted run so only OLDER current runs are superseded.
+  const supersededRunIds = selectRunIdsToSupersede(
+    ((currentRunData ?? []) as { id: string }[]).map((r) => String(r.id)),
+    modelRunId,
   );
 
-  if (oldRunIds.length > 0) {
-    const { error: delRecsError } = await supabaseAdmin
+  if (supersededRunIds.length > 0) {
+    const patch = buildSupersedePatch();
+
+    // Children (recs, scores) filtered by the OLDER run ids only — never the new
+    // run's children — then the older runs themselves. UPDATE, not DELETE, so
+    // order is not FK-sensitive; the `is_current` guard avoids rewriting rows
+    // already superseded by an earlier run.
+    const { error: supRecsError } = await supabaseAdmin
       .from(RECOMMENDATIONS_TABLE)
-      .delete()
-      .in('model_run_id', oldRunIds);
-    if (delRecsError) {
+      .update(patch)
+      .in('model_run_id', supersededRunIds)
+      .eq('is_current', true);
+    if (supRecsError) {
       throw new Error(
-        `Failed to delete superseded recommendations for race ${raceId}: ${delRecsError.message}`,
+        `Failed to supersede prior recommendations for race ${raceId}: ${supRecsError.message}`,
       );
     }
 
-    const { error: delScoresError } = await supabaseAdmin
+    const { error: supScoresError } = await supabaseAdmin
       .from(MODEL_RUNNER_SCORES_TABLE)
-      .delete()
-      .in('model_run_id', oldRunIds);
-    if (delScoresError) {
+      .update(patch)
+      .in('model_run_id', supersededRunIds)
+      .eq('is_current', true);
+    if (supScoresError) {
       throw new Error(
-        `Failed to delete superseded model runner scores for race ${raceId}: ${delScoresError.message}`,
+        `Failed to supersede prior model runner scores for race ${raceId}: ${supScoresError.message}`,
       );
     }
 
-    const { error: delRunsError } = await supabaseAdmin
+    const { error: supRunsError } = await supabaseAdmin
       .from(MODEL_RUNS_TABLE)
-      .delete()
-      .in('id', oldRunIds);
-    if (delRunsError) {
+      .update(patch)
+      .in('id', supersededRunIds);
+    if (supRunsError) {
       throw new Error(
-        `Failed to delete superseded model runs for race ${raceId}: ${delRunsError.message}`,
+        `Failed to supersede prior model runs for race ${raceId}: ${supRunsError.message}`,
       );
     }
   }
@@ -429,6 +456,6 @@ export async function runModelForRace(
     race_id: raceId,
     scored: scoreRows.length,
     recommended,
-    supersededRuns: oldRunIds.length,
+    supersededRuns: supersededRunIds.length,
   };
 }
