@@ -27,6 +27,11 @@ function asStringOrNull(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
 }
 
+/** Returns `value` when it is a finite number, else `null`. */
+function asNumberOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
 /**
  * Returns a NEW array containing only the string entries of `value`, or `[]`
  * when `value` is not an array. Non-string entries are dropped (safe), and the
@@ -116,5 +121,53 @@ export function getDataQualityOutputsFromConfig(
     data_quality_short_summary: asStringOrNull(
       getProp(configJson, 'data_quality_short_summary'),
     ),
+  };
+}
+
+/**
+ * The full set of observability outputs surfaced for one model run, in the
+ * camelCase shape the read API exposes. Every field is optional/null-safe so a
+ * legacy run (or missing/malformed config_json) yields nulls / empty arrays
+ * rather than throwing or fabricating values.
+ */
+export interface ModelRunObservability {
+  runQuality: string | null;
+  modelAdjustments: Record<string, unknown> | null;
+  dataQualityAdjustedConfidence: number | null;
+  dataQualityShortSummary: string | null;
+  dataQualitySummary: string[];
+  tipsterConsensus: Record<string, unknown> | null;
+  tipsterModelAlignment: Record<string, unknown> | null;
+  tipsterConsensusShortSummary: string | null;
+  tipsterConsensusSummary: string[];
+}
+
+/**
+ * Aggregates every observability field from a model run's config_json into the
+ * API-facing {@link ModelRunObservability} shape. Pure: it composes the
+ * individual null-safe readers above (plus a finite-number read for the
+ * adjusted confidence), so `null` / malformed / partial config_json maps to
+ * safe nulls and empty arrays. Never throws, never mutates, never fabricates.
+ *
+ * Passing `null` (e.g. a race with no current model run) returns the fully-empty
+ * shape, so callers can use it as a stable default.
+ */
+export function getModelObservabilityFromConfig(
+  configJson: unknown,
+): ModelRunObservability {
+  const dq = getDataQualityOutputsFromConfig(configJson);
+  const consensusSummary = getTipsterConsensusSummaryFromConfig(configJson);
+  return {
+    runQuality: dq.run_quality,
+    modelAdjustments: dq.model_adjustments,
+    dataQualityAdjustedConfidence: asNumberOrNull(
+      getProp(configJson, 'data_quality_adjusted_confidence'),
+    ),
+    dataQualityShortSummary: dq.data_quality_short_summary,
+    dataQualitySummary: dq.data_quality_summary,
+    tipsterConsensus: getTipsterConsensusFromConfig(configJson),
+    tipsterModelAlignment: getTipsterModelAlignmentFromConfig(configJson),
+    tipsterConsensusShortSummary: consensusSummary.short_summary,
+    tipsterConsensusSummary: consensusSummary.summary,
   };
 }

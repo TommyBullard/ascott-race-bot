@@ -29,6 +29,10 @@
 
 import { supabaseAdmin } from './supabaseAdmin';
 import type { SkippedRunReason } from './modelRunAttempts';
+import {
+  getModelObservabilityFromConfig,
+  type ModelRunObservability,
+} from './modelRunConfigReaders';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { TipsterSelection } from './modelProbabilities';
 
@@ -691,6 +695,13 @@ export interface RaceCard {
   modelPick: RaceCardPick | null;
   /** Up to two alternative runners (EV rank 2-3), excluding the model pick. */
   alternatives: RaceCardRunner[];
+  /**
+   * Observational model outputs read from the current run's `config_json`
+   * (data quality + tipster consensus). Always present but null-safe: every
+   * field is null / `[]` when the run is missing or lacks the key. Read-only;
+   * not used by any decision logic. (Batch J1.)
+   */
+  observability: ModelRunObservability;
 }
 
 interface ScoreRankRow {
@@ -749,6 +760,9 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
     favourite: null,
     modelPick: null,
     alternatives: [],
+    // Empty/null-safe default; populated from the current run's config_json below
+    // (stays empty when the race has no current model run).
+    observability: getModelObservabilityFromConfig(null),
   };
 
   // 2. Market data (odds + de-overrounded probs) from the latest snapshot.
@@ -779,10 +793,11 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
   }
 
   // 3. Latest CURRENT model run for the race (superseded runs are retained in
-  //    history but excluded here via is_current).
+  //    history but excluded here via is_current). `config_json` carries the
+  //    observational outputs surfaced below (Batch J1).
   const { data: runData, error: runError } = await supabaseAdmin
     .from(MODEL_RUNS_TABLE)
-    .select('id, run_time')
+    .select('id, run_time, config_json')
     .eq('race_id', raceId)
     .eq('is_current', true)
     .order('run_time', { ascending: false })
@@ -794,10 +809,15 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
     );
   }
 
-  const latestRun = ((runData ?? []) as ModelRunRow[])[0];
+  const latestRun = ((runData ?? []) as (ModelRunRow & {
+    config_json: unknown;
+  })[])[0];
   if (!latestRun) {
-    return card; // No run yet: show race + favourite only.
+    return card; // No run yet: show race + favourite only (observability empty).
   }
+
+  // Surface the run's observational outputs (read-only, null-safe).
+  card.observability = getModelObservabilityFromConfig(latestRun.config_json);
 
   // 4. The run's staking decision (rank-1 rec) + per-runner scores.
   const [recsResult, scoresResult] = await Promise.all([

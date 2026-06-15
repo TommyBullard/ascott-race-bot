@@ -14,6 +14,7 @@ import {
   getTipsterModelAlignmentFromConfig,
   getTipsterConsensusSummaryFromConfig,
   getDataQualityOutputsFromConfig,
+  getModelObservabilityFromConfig,
 } from '../src/lib/modelRunConfigReaders';
 
 /** A full, well-formed config_json blob (the producer's shape). */
@@ -155,4 +156,81 @@ test('readers never mutate the input', () => {
   const dq = getDataQualityOutputsFromConfig(arrConfig);
   dq.data_quality_summary.push('mutated');
   assert.deepEqual(arrConfig.data_quality_summary, ['a', 'b']);
+});
+
+// --- getModelObservabilityFromConfig (Batch J1 aggregator) ------------------
+
+test('observability: full config maps every field to the camelCase API shape', () => {
+  const c = { ...fullConfig(), data_quality_adjusted_confidence: 0.64 };
+  const o = getModelObservabilityFromConfig(c);
+  assert.equal(o.runQuality, 'DEGRADED');
+  assert.deepEqual(o.modelAdjustments, {
+    suppressStaking: true,
+    reduceConfidence: false,
+    notes: ['x'],
+  });
+  assert.equal(o.dataQualityAdjustedConfidence, 0.64);
+  assert.equal(
+    o.dataQualityShortSummary,
+    'DEGRADED — Low market completeness (0.72)',
+  );
+  assert.deepEqual(o.dataQualitySummary, ['⚠ Low market completeness (0.72)']);
+  assert.ok(o.tipsterConsensus);
+  assert.equal(o.tipsterConsensus!.consensus_runner_id, 'a');
+  assert.ok(o.tipsterModelAlignment);
+  assert.equal(o.tipsterModelAlignment!.alignment_label, 'ALIGNED');
+  assert.equal(
+    o.tipsterConsensusShortSummary,
+    'Tipsters aligned with recommendation',
+  );
+  assert.deepEqual(o.tipsterConsensusSummary, [
+    '👥 Tipster consensus: runner a with 100.0% support',
+  ]);
+});
+
+test('observability: null/malformed config -> fully empty, null-safe shape (no throw)', () => {
+  for (const c of [null, undefined, 42, 'str', ['arr']]) {
+    const o = getModelObservabilityFromConfig(c);
+    assert.deepEqual(o, {
+      runQuality: null,
+      modelAdjustments: null,
+      dataQualityAdjustedConfidence: null,
+      dataQualityShortSummary: null,
+      dataQualitySummary: [],
+      tipsterConsensus: null,
+      tipsterModelAlignment: null,
+      tipsterConsensusShortSummary: null,
+      tipsterConsensusSummary: [],
+    });
+  }
+});
+
+test('observability: legacy partial config -> present keys mapped, missing -> null/[]', () => {
+  // A pre-J1 run with only data-quality keys, no tipster keys.
+  const o = getModelObservabilityFromConfig({
+    run_quality: 'OK',
+    data_quality_summary: ['ok'],
+  });
+  assert.equal(o.runQuality, 'OK');
+  assert.deepEqual(o.dataQualitySummary, ['ok']);
+  assert.equal(o.tipsterConsensus, null);
+  assert.equal(o.tipsterModelAlignment, null);
+  assert.equal(o.tipsterConsensusShortSummary, null);
+  assert.deepEqual(o.tipsterConsensusSummary, []);
+  assert.equal(o.dataQualityAdjustedConfidence, null);
+});
+
+test('observability: adjusted confidence only mapped when a finite number', () => {
+  assert.equal(
+    getModelObservabilityFromConfig({ data_quality_adjusted_confidence: 0 })
+      .dataQualityAdjustedConfidence,
+    0,
+  );
+  for (const bad of [null, 'x', undefined, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.equal(
+      getModelObservabilityFromConfig({ data_quality_adjusted_confidence: bad })
+        .dataQualityAdjustedConfidence,
+      null,
+    );
+  }
 });
