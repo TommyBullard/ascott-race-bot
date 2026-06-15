@@ -18,6 +18,8 @@ import {
   deriveRaceExplanationProps,
   type RaceObservabilityLike,
 } from '@/lib/raceExplanation';
+import { formatRelativeAge, isStaleAge } from '@/lib/relativeTime';
+import { STALE_ODDS_THRESHOLD_MS } from '@/lib/modelDataQuality';
 
 /** A runner as shown on a card (mirrors the server `RaceCardRunner`). */
 interface RaceCardRunner {
@@ -56,6 +58,10 @@ interface RaceCard {
    * (false). Optional for back-compat with older responses.
    */
   hasModelRun?: boolean;
+  /** Latest odds snapshot time (ISO) for the freshness indicator; null/absent if none. */
+  latestOddsSnapshotTime?: string | null;
+  /** Latest model run time (ISO) for the freshness indicator; null/absent if none. */
+  latestModelRunTime?: string | null;
   /**
    * Read-only model observability for this race (from the current run's
    * config_json, surfaced by the API in Batch J1). Optional/null-safe: absent or
@@ -337,6 +343,29 @@ const styles = {
     whiteSpace: 'nowrap' as const,
     fontVariantNumeric: 'tabular-nums' as const,
   } as CSSProperties,
+  freshnessRow: {
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    alignItems: 'center',
+    gap: 8,
+    fontSize: 12,
+    marginBottom: 12,
+    fontVariantNumeric: 'tabular-nums' as const,
+  } as CSSProperties,
+  freshOk: {
+    color: '#656d76',
+  } as CSSProperties,
+  freshStale: {
+    color: '#9a6700',
+    fontWeight: 700,
+    background: '#fff8c5',
+    border: '1px solid #eac54f',
+    borderRadius: 999,
+    padding: '1px 8px',
+  } as CSSProperties,
+  freshSep: {
+    color: '#afb8c1',
+  } as CSSProperties,
   sectionLabel: {
     fontSize: 11,
     fontWeight: 700,
@@ -520,6 +549,50 @@ function RunnerLine({ runner }: { runner: RaceCardRunner }) {
   );
 }
 
+/**
+ * Compact "odds updated / model updated X ago" freshness row. Read-only display:
+ * it shows recency from the persisted timestamps and flags staleness, but never
+ * recomputes any model value. Stale odds use the existing
+ * `STALE_ODDS_THRESHOLD_MS`; the model is flagged stale when its persisted
+ * data-quality verdict (`runQuality`) is `STALE`.
+ */
+function FreshnessRow({
+  card,
+  nowMs,
+}: {
+  card: RaceCard;
+  nowMs: number;
+}) {
+  // Odds freshness.
+  const oddsTime = card.latestOddsSnapshotTime ?? null;
+  const oddsAge = formatRelativeAge(oddsTime, nowMs);
+  const oddsStale =
+    oddsTime != null && isStaleAge(oddsTime, nowMs, STALE_ODDS_THRESHOLD_MS);
+
+  // Model freshness.
+  const modelTime = card.latestModelRunTime ?? null;
+  const modelAge = formatRelativeAge(modelTime, nowMs);
+  const runQuality = (card.observability?.runQuality ?? '').toUpperCase();
+  const modelStale = modelTime != null && runQuality === 'STALE';
+
+  return (
+    <div style={styles.freshnessRow}>
+      <span style={oddsStale ? styles.freshStale : styles.freshOk}>
+        {oddsTime == null
+          ? 'Odds update time unavailable'
+          : `Odds updated ${oddsAge.text}${oddsStale ? ' · stale' : ''}`}
+      </span>
+      <span style={styles.freshSep}>·</span>
+      <span style={modelStale ? styles.freshStale : styles.freshOk}>
+        {modelTime == null
+          ? 'Model has not run yet'
+          : `Model updated ${modelAge.text}${modelStale ? ' · stale' : ''}`}
+      </span>
+    </div>
+  );
+}
+
+
 function RaceCardView({ card, nowMs }: { card: RaceCard; nowMs: number }) {
   const cd = countdownTo(card.off_time, nowMs);
   const pick = card.modelPick;
@@ -538,6 +611,9 @@ function RaceCardView({ card, nowMs }: { card: RaceCard; nowMs: number }) {
         </div>
         <span style={countdownStyle(cd)}>{cd ? cd.text : 'no time'}</span>
       </header>
+
+      {/* Data freshness: odds + model recency (read-only). */}
+      <FreshnessRow card={card} nowMs={nowMs} />
 
       {/* Market favourite */}
       <div style={styles.favouriteRow}>

@@ -35,3 +35,4 @@ import './dbHealthSpec.test';
 import './cronDiagnostics.test';
 import './cronDate.test';
 import './modelPersistenceMapping.test';
+import './relativeTime.test';

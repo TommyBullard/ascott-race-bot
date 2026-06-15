@@ -727,6 +727,18 @@ export interface RaceCard {
    */
   hasModelRun: boolean;
   /**
+   * `market_snapshots.snapshot_time` (ISO) of the latest odds snapshot this card
+   * was priced from, or null when there is no priced snapshot. For the
+   * dashboard's "odds updated X ago" freshness indicator only. (Phase 3A.)
+   */
+  latestOddsSnapshotTime: string | null;
+  /**
+   * `model_runs.run_time` (ISO) of the current model run, or null when no run
+   * exists yet. For the dashboard's "model updated X ago" indicator only.
+   * (Phase 3A.)
+   */
+  latestModelRunTime: string | null;
+  /**
    * Observational model outputs read from the current run's `config_json`
    * (data quality + tipster consensus). Always present but null-safe: every
    * field is null / `[]` when the run is missing or lacks the key. Read-only;
@@ -792,6 +804,8 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
     modelPick: null,
     alternatives: [],
     hasModelRun: false,
+    latestOddsSnapshotTime: null,
+    latestModelRunTime: null,
     // Empty/null-safe default; populated from the current run's config_json below
     // (stays empty when the race has no current model run).
     observability: getModelObservabilityFromConfig(null),
@@ -801,6 +815,8 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
   const inputs = await fetchRaceModelInputs(raceId);
   const marketByRunner = new Map<string, ModelInputRunner>();
   if (inputs) {
+    // Latest odds snapshot time, for the dashboard freshness indicator.
+    card.latestOddsSnapshotTime = inputs.snapshot_time;
     for (const r of inputs.runners) {
       marketByRunner.set(r.runner_id, r);
     }
@@ -850,6 +866,7 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
 
   // Surface the run's observational outputs (read-only, null-safe).
   card.hasModelRun = true;
+  card.latestModelRunTime = latestRun.run_time ?? null;
   card.observability = getModelObservabilityFromConfig(latestRun.config_json);
 
   // 4. The run's staking decision (rank-1 rec) + per-runner scores.
