@@ -27,3 +27,4 @@ import './dataQualityUtils.test';
 import './modelTipsterConsensus.test';
 import './modelRunConfigReaders.test';
 import './raceExplanation.test';
+import './runnerMatch.test';

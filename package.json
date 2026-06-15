@@ -24,6 +24,7 @@
     "seed:tipsters": "tsx scripts/seedInFormTipsters.ts",
     "verify:racing": "tsx scripts/verifyRacingApi.ts",
     "load:races": "tsx scripts/loadHistoricalRaces.ts",
+    "import:tipster-selections": "tsx scripts/importTipsterSelections.ts",
     "convert:bsp": "tsx scripts/convertBetfairBsp.ts"
   },
   "dependencies": {
