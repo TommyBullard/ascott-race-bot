@@ -15,3 +15,4 @@ import './backtest.test';
 import './historicalRaceLoader.test';
 import './betfairBsp.test';
 import './raceSync.test';
+import './auth.test';
