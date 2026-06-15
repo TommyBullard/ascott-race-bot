@@ -23,6 +23,7 @@
     "local:racecards": "node scripts/printLocalCurlCommands.js",
     "inspect:model-observability": "tsx scripts/inspectModelRunObservability.ts",
     "run:model": "tsx scripts/runModel.ts",
+    "model:day": "tsx scripts/runModelsForRaceDay.ts",
     "backtest": "tsx scripts/backtest.ts",
     "seed:tipsters": "tsx scripts/seedInFormTipsters.ts",
     "seed:demo": "tsx scripts/seedDemoRaceDay.ts",
