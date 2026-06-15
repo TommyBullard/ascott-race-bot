@@ -16,3 +16,4 @@ import './historicalRaceLoader.test';
 import './betfairBsp.test';
 import './raceSync.test';
 import './auth.test';
+import './modelRunMetadata.test';

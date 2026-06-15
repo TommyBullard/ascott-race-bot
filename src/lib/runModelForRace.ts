@@ -43,6 +43,7 @@ import {
   type TipsterSelection,
   type TipsterStats,
 } from './modelProbabilities';
+import { buildModelRunMetadata } from './modelRunMetadata';
 
 const MODEL_RUNS_TABLE = 'model_runs';
 const MODEL_RUNNER_SCORES_TABLE = 'model_runner_scores';
@@ -53,9 +54,6 @@ const RECOMMENDATIONS_TABLE = 'recommendations';
  * `bankroll_ledger` is empty (no balance to read).
  */
 const DEFAULT_BANKROLL = 1000;
-
-/** Identifies which engine produced a run (stored in model_runs.model_version). */
-const DEFAULT_MODEL_VERSION = 'ts-engine-v1';
 
 /** Fractional-Kelly multiplier the engine uses; recorded on the run. */
 const DEFAULT_BASE_KELLY_FRACTION = 0.2;
@@ -87,7 +85,7 @@ export interface RunModelOptions {
   bankroll?: number;
   /** `bet_mode` enum value (default 'strict_ev'). */
   betMode?: BetMode;
-  /** `model_runs.model_version` tag (default 'ts-engine-v1'). */
+  /** `model_runs.model_version` tag (default 'market-v1'). */
   modelVersion?: string;
   /** `model_runs.base_kelly_fraction` (default 0.2). */
   baseKellyFraction?: number;
@@ -215,7 +213,6 @@ export async function runModelForRace(
   options: RunModelOptions = {},
 ): Promise<RunModelResult | null> {
   const betMode = options.betMode ?? DEFAULT_BET_MODE;
-  const modelVersion = options.modelVersion ?? DEFAULT_MODEL_VERSION;
   const baseKellyFraction =
     options.baseKellyFraction ?? DEFAULT_BASE_KELLY_FRACTION;
   const signalKappa = options.signalKappa ?? DEFAULT_SIGNAL_KAPPA;
@@ -266,6 +263,14 @@ export async function runModelForRace(
 
   const tipsterStats = tipsterStatsFromPriors(tipsterPriors);
 
+  // Audit/versioning metadata for this run. "Usable" tipster selections means at
+  // least one selection row was returned for the race; with none, the run is
+  // market-only and is flagged NO_TIPSTER_SELECTIONS (never fabricated).
+  const metadata = buildModelRunMetadata({
+    hasUsableTipsterSelections: tipsterSelections.length > 0,
+    modelVersion: options.modelVersion,
+  });
+
   // 2. Score the field. Shared with the backtest harness (`scoreRaceRunners`)
   //    so both evaluate races identically: probabilities -> EV -> confidence ->
   //    fractional-Kelly stake, ranked by EV (descending) for rank_in_race.
@@ -284,7 +289,12 @@ export async function runModelForRace(
       race_id: raceId,
       run_time: new Date().toISOString(),
       market_snapshot_id: inputs.snapshot_id,
-      model_version: modelVersion,
+      model_version: metadata.model_version,
+      probability_engine_version: metadata.probability_engine_version,
+      staking_engine_version: metadata.staking_engine_version,
+      input_mode: metadata.input_mode,
+      config_json: metadata.config_json,
+      data_quality_flags: metadata.data_quality_flags,
       bet_mode: betMode,
       base_kelly_fraction: baseKellyFraction,
       signal_kappa: signalKappa,
