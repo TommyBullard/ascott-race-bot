@@ -9,6 +9,7 @@
  */
 
 import type { CSSProperties } from 'react';
+import Link from 'next/link';
 import ModelFlowVisual from '@/components/ModelFlowVisual';
 
 export const metadata = {
@@ -138,9 +139,9 @@ export default function HowItWorksPage() {
     <main style={styles.page}>
       <div style={styles.headerRow}>
         <h1 style={{ margin: 0 }}>How the model works</h1>
-        <a href="/" style={styles.navLink}>
+        <Link href="/" style={styles.navLink}>
           ← Recommendations
-        </a>
+        </Link>
       </div>
 
       <p style={styles.intro}>

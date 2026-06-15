@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import Link from 'next/link';
 
 /** Mirrors the server `TipsterLeaderboardEntry`. */
 interface TipsterLeaderboardEntry {
@@ -315,9 +316,9 @@ export default function LeaderboardPage() {
     <main style={styles.page}>
       <div style={styles.headerRow}>
         <h1>Tipster Leaderboard</h1>
-        <a href="/" style={styles.navLink}>
+        <Link href="/" style={styles.navLink}>
           ← Recommendations
-        </a>
+        </Link>
       </div>
 
       {status === 'loading' && <p style={styles.muted}>Loading leaderboard…</p>}
