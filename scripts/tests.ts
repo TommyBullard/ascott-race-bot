@@ -22,3 +22,4 @@ import './modelDataQuality.test';
 import './modelRunAttempts.test';
 import './modelConfidence.test';
 import './modelStakeSuppression.test';
+import './modelDataQualitySummary.test';

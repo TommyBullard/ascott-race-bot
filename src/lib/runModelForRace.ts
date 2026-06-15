@@ -53,6 +53,7 @@ import { buildModelRunMetadata } from './modelRunMetadata';
 import {
   assessDataQuality,
   determineModelAdjustments,
+  evaluateRunQuality,
   MIN_MARKET_COMPLETENESS,
   ODDS_REFRESH_INTERVAL_MS,
   STALE_ODDS_THRESHOLD_MS,
@@ -60,6 +61,7 @@ import {
 } from './modelDataQuality';
 import { computeAdjustedConfidence } from './modelConfidence';
 import { applyStakeSuppression } from './modelStakeSuppression';
+import { buildDataQualitySummary } from './modelDataQualitySummary';
 import {
   buildSupersedePatch,
   currentMarker,
@@ -352,11 +354,28 @@ export async function runModelForRace(
   // staking when data quality is insufficient (Batch F2).
   const modelAdjustments = determineModelAdjustments(dataQuality.flags);
 
+  // Read-only data-quality summary (Batch F3): a human-readable view of the
+  // already-computed intelligence, for monitoring/debugging. Purely
+  // observational — it does not feed selection/staking/probabilities. The
+  // run-quality verdict is computed once here (same single source the metadata
+  // builder uses) so the summary and the stored `run_quality` agree.
+  const runQuality = evaluateRunQuality(dataQuality.flags);
+  const dqSummary = buildDataQualitySummary(
+    dataQuality.flags,
+    dataQuality.metrics,
+    runQuality,
+    adjustedConfidence,
+    baseConfidence,
+    modelAdjustments,
+  );
+
   const metadata = buildModelRunMetadata({
     hasUsableTipsterSelections: tipsterSelections.length > 0,
     dataQualityFlags: dataQuality.flags,
     adjustedConfidence,
     modelAdjustments,
+    dataQualitySummary: dqSummary.summary,
+    dataQualityShortSummary: dqSummary.short_summary,
     modelVersion: options.modelVersion,
     // Record the thresholds used to interpret the flags + the computed metrics
     // + the observational adjusted confidence, for audit/visibility. Stored in

@@ -66,6 +66,17 @@ export interface ModelRunMetadata {
    * consumed by probability/selection/staking. Omitted when not provided.
    */
   adjusted_confidence?: number;
+  /**
+   * Human-readable data-quality summary lines (Batch F3), supplied by the
+   * caller (`buildDataQualitySummary`) and stored verbatim. OBSERVATIONAL only.
+   * Omitted when not provided.
+   */
+  data_quality_summary?: string[];
+  /**
+   * One-line data-quality summary (Batch F3), supplied by the caller and stored
+   * verbatim. OBSERVATIONAL only. Omitted when not provided.
+   */
+  data_quality_short_summary?: string;
 }
 
 export interface BuildModelRunMetadataInput {
@@ -99,6 +110,16 @@ export interface BuildModelRunMetadataInput {
    * the builder derives it from `dataQualityFlags` (backward compatible).
    */
   modelAdjustments?: ModelAdjustments;
+  /**
+   * Human-readable data-quality summary lines (Batch F3). Pass-through: stored
+   * verbatim on the output's `data_quality_summary`, no computation here.
+   */
+  dataQualitySummary?: string[];
+  /**
+   * One-line data-quality summary (Batch F3). Pass-through: stored verbatim on
+   * the output's `data_quality_short_summary`, no computation here.
+   */
+  dataQualityShortSummary?: string;
   /** Override `model_version` (defaults to {@link DEFAULT_MODEL_VERSION}). */
   modelVersion?: string;
   /** Override the probability-engine version tag. */
@@ -151,6 +172,14 @@ export function buildModelRunMetadata(
   // (kept optional so existing callers/output are unchanged).
   if (input.adjustedConfidence !== undefined) {
     metadata.adjusted_confidence = input.adjustedConfidence;
+  }
+
+  // Store the caller-supplied data-quality summary verbatim, only when provided.
+  if (input.dataQualitySummary !== undefined) {
+    metadata.data_quality_summary = input.dataQualitySummary;
+  }
+  if (input.dataQualityShortSummary !== undefined) {
+    metadata.data_quality_short_summary = input.dataQualityShortSummary;
   }
 
   return metadata;
