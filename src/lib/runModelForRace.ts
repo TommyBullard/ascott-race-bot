@@ -377,9 +377,12 @@ export async function runModelForRace(
     dataQualitySummary: dqSummary.summary,
     dataQualityShortSummary: dqSummary.short_summary,
     modelVersion: options.modelVersion,
-    // Record the thresholds used to interpret the flags + the computed metrics
-    // + the observational adjusted confidence, for audit/visibility. Stored in
-    // config_json (no new DB columns).
+    // Persist the data-quality intelligence in config_json (Option A — no new DB
+    // columns): the thresholds used to interpret the flags, the computed
+    // metrics, the observational adjusted confidence, the run-quality verdict,
+    // the advisory model adjustments, and the human-readable summaries. All are
+    // already-computed values recorded for query/analysis/dashboards/debugging;
+    // none of this changes model behaviour, selection, or staking.
     config: {
       data_quality_thresholds: {
         min_market_completeness: MIN_MARKET_COMPLETENESS,
@@ -389,6 +392,10 @@ export async function runModelForRace(
       },
       data_quality_metrics: dataQuality.metrics,
       data_quality_adjusted_confidence: adjustedConfidence,
+      run_quality: runQuality,
+      model_adjustments: modelAdjustments,
+      data_quality_summary: dqSummary.summary,
+      data_quality_short_summary: dqSummary.short_summary,
     },
   });
 

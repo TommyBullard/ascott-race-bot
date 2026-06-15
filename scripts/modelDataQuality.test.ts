@@ -476,7 +476,7 @@ test('formatDataQualitySummary: full data uses metrics for detail (matches examp
   );
   assert.deepEqual(lines, [
     '\u26A0 Low market completeness (0.72)',
-    '\u26A0 Odds are stale (4.2 min old)',
+    '\u26A0 Stale odds (4.2 min old)',
     '\u2139 No tipster selections',
   ]);
 });
@@ -496,11 +496,11 @@ test('formatDataQualitySummary: partial data -> detail omitted safely (no fabric
       declared_runner_count: null,
       priced_runner_count: 0,
     }),
-    ['\u26A0 Low market completeness', '\u26A0 Odds are stale'],
+    ['\u26A0 Low market completeness', '\u26A0 Stale odds'],
   );
   // Metrics omitted entirely -> labels only.
   assert.deepEqual(formatDataQualitySummary(['STALE_ODDS']), [
-    '\u26A0 Odds are stale',
+    '\u26A0 Stale odds',
   ]);
 });
 

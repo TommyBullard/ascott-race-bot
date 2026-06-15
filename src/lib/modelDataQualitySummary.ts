@@ -14,8 +14,9 @@
  */
 
 import { getFlagSeverity, type DataQualityMetrics } from './modelDataQuality';
-import type { RunQuality } from './modelDataQuality';
+import type { DataQualityFlag, RunQuality } from './modelDataQuality';
 import type { ModelAdjustments } from './modelDataQuality';
+import { FLAG_LABEL, isFiniteNumber } from './dataQualityUtils';
 
 /** Emoji markers (consistent across the summary). */
 const ICON = {
@@ -25,18 +26,6 @@ const ICON = {
   suppression: '\u{1F6D1}', // 🛑
   confidence: '\u{1F4C9}', // 📉
 } as const;
-
-/** Human-readable base label per known flag (detail appended from metrics). */
-const FLAG_LABEL: Record<string, string> = {
-  NO_MARKET_SNAPSHOT: 'No market snapshot',
-  NO_PRICED_RUNNERS: 'No priced runners',
-  MISSING_RUNNER_ODDS: 'Missing runner odds',
-  LOW_MARKET_COMPLETENESS: 'Low market completeness',
-  STALE_ODDS: 'Stale odds',
-  LOW_RUNNER_COUNT: 'Low runner count',
-  NO_TIPSTER_SELECTIONS: 'No tipster selections',
-  TIPSTER_SELECTIONS_UNMATCHED: 'Tipster selections unmatched',
-};
 
 /** Metrics this summary reads (subset of {@link DataQualityMetrics}). */
 export type DataQualitySummaryMetrics = Pick<
@@ -52,10 +41,6 @@ export interface DataQualitySummary {
   summary: string[];
   short_summary: string;
   run_quality: string;
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
 }
 
 /** Emoji marker for a flag, from its (single-source) severity. */
@@ -90,7 +75,7 @@ function flagDetail(flag: string, metrics: DataQualitySummaryMetrics): string {
 
 /** One short clause per flag for the short summary (with metric detail). */
 function shortClause(flag: string, metrics: DataQualitySummaryMetrics): string {
-  const label = FLAG_LABEL[flag] ?? flag;
+  const label = FLAG_LABEL[flag as DataQualityFlag] ?? flag;
   return `${label}${flagDetail(flag, metrics)}`;
 }
 
@@ -125,7 +110,7 @@ export function buildDataQualitySummary(
 
   // One line per flag, marked by severity and enriched with a metric detail.
   for (const flag of uniqueFlags) {
-    const label = FLAG_LABEL[flag] ?? flag;
+    const label = FLAG_LABEL[flag as DataQualityFlag] ?? flag;
     summary.push(`${iconForFlag(flag)} ${label}${flagDetail(flag, metrics)}`);
   }
 

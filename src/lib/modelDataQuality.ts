@@ -14,6 +14,8 @@
  * corresponding flag is simply not assessed (no false positive).
  */
 
+import { FLAG_LABEL, isFiniteNumber } from './dataQualityUtils';
+
 /** Minimum fraction of declared runners that must be priced (else low completeness). */
 export const MIN_MARKET_COMPLETENESS = 0.8;
 
@@ -136,11 +138,6 @@ export interface DataQualityInput {
   snapshotAgeMs?: number | null;
   /** runner_ids referenced by tipster selections (may be empty). */
   tipsterSelectionRunnerIds: string[];
-}
-
-/** True when `value` is a usable, finite number. */
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
 }
 
 /**
@@ -377,22 +374,6 @@ const SEVERITY_ICON: Record<FlagSeverity, string> = {
   info: '\u2139', // ℹ
 };
 
-/** Base human-readable label for each known flag (detail appended separately). */
-const FLAG_LABEL: Record<DataQualityFlag, string> = {
-  [DATA_QUALITY_FLAG.NO_MARKET_SNAPSHOT]: 'No market snapshot',
-  [DATA_QUALITY_FLAG.NO_PRICED_RUNNERS]: 'No priced runners',
-  [DATA_QUALITY_FLAG.MISSING_RUNNER_ODDS]: 'Missing runner odds',
-  [DATA_QUALITY_FLAG.LOW_MARKET_COMPLETENESS]: 'Low market completeness',
-  [DATA_QUALITY_FLAG.STALE_ODDS]: 'Odds are stale',
-  [DATA_QUALITY_FLAG.LOW_RUNNER_COUNT]: 'Low runner count',
-  [DATA_QUALITY_FLAG.NO_TIPSTER_SELECTIONS]: 'No tipster selections',
-  [DATA_QUALITY_FLAG.TIPSTER_SELECTIONS_UNMATCHED]: 'Tipster selections unmatched',
-};
-
-function isFiniteNum(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
 /**
  * Builds the optional `(detail)` suffix for a flag from the metrics, when the
  * relevant metric is present. Returns '' when the metric is missing (safe
@@ -407,18 +388,18 @@ function flagDetail(
   }
   if (
     flag === DATA_QUALITY_FLAG.LOW_MARKET_COMPLETENESS &&
-    isFiniteNum(metrics.market_completeness)
+    isFiniteNumber(metrics.market_completeness)
   ) {
     return ` (${metrics.market_completeness.toFixed(2)})`;
   }
-  if (flag === DATA_QUALITY_FLAG.STALE_ODDS && isFiniteNum(metrics.odds_age_ms)) {
+  if (flag === DATA_QUALITY_FLAG.STALE_ODDS && isFiniteNumber(metrics.odds_age_ms)) {
     const minutes = metrics.odds_age_ms / 60_000;
     return ` (${minutes.toFixed(1)} min old)`;
   }
   if (
     flag === DATA_QUALITY_FLAG.MISSING_RUNNER_ODDS &&
-    isFiniteNum(metrics.priced_runner_count) &&
-    isFiniteNum(metrics.declared_runner_count)
+    isFiniteNumber(metrics.priced_runner_count) &&
+    isFiniteNumber(metrics.declared_runner_count)
   ) {
     return ` (${metrics.priced_runner_count}/${metrics.declared_runner_count} priced)`;
   }

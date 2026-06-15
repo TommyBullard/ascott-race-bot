@@ -13,6 +13,7 @@
  */
 
 import { DATA_QUALITY_FLAG, STALE_ODDS_THRESHOLD_MS } from './modelDataQuality';
+import { isFiniteNumber } from './dataQualityUtils';
 
 /** Confidence multiplier applied when the latest odds snapshot is stale. */
 export const STALE_ODDS_CONFIDENCE_FACTOR = 0.9;
@@ -28,11 +29,6 @@ export const MISSING_RUNNER_ODDS_CONFIDENCE_FACTOR = 0.95;
 export interface AdjustedConfidenceMetrics {
   market_completeness: number | null;
   odds_age_ms: number | null;
-}
-
-/** True when `value` is a usable, finite number. */
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
 }
 
 /** Clamps a value into the inclusive [0, 1] range. */
