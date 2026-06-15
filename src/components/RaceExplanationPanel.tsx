@@ -26,6 +26,14 @@ export interface RaceExplanationPanelProps {
   tipsterConsensusSummary?: string[] | null;
   runQuality?: string | null;
   alignmentLabel?: string | null;
+  /** True when staking was suppressed for this run (data-quality safeguard). */
+  stakeSuppressed?: boolean | null;
+  /** True when confidence was reduced for this run (data-quality safeguard). */
+  confidenceReduced?: boolean | null;
+  /** Persisted data-quality-adjusted confidence (0-1), shown when reduced. */
+  adjustedConfidence?: number | null;
+  /** Optional style override merged over the panel container (e.g. when nested). */
+  style?: CSSProperties;
 }
 
 const styles = {
@@ -79,6 +87,16 @@ const styles = {
     border: '1px solid #d0d7de',
     color: '#424a53',
   } as CSSProperties,
+  warnBadge: {
+    display: 'inline-block',
+    padding: '1px 8px',
+    fontSize: 12,
+    fontWeight: 600,
+    borderRadius: 999,
+    background: '#fff8c5',
+    border: '1px solid #eac54f',
+    color: '#9a6700',
+  } as CSSProperties,
   details: {
     marginTop: 8,
   } as CSSProperties,
@@ -105,6 +123,11 @@ function cleanList(value: string[] | null | undefined): string[] | null {
   if (!Array.isArray(value)) return null;
   const items = value.filter((v): v is string => typeof v === 'string' && v.trim() !== '');
   return items.length > 0 ? items : null;
+}
+
+/** Formats a 0-1 confidence as a whole percentage (e.g. 0.64 -> "64%"). */
+function formatPct(value: number): string {
+  return `${(value * 100).toFixed(0)}%`;
 }
 
 /** One "label: value" row, rendered only when `value` is present. */
@@ -144,6 +167,10 @@ export default function RaceExplanationPanel({
   tipsterConsensusSummary,
   runQuality,
   alignmentLabel,
+  stakeSuppressed,
+  confidenceReduced,
+  adjustedConfidence,
+  style,
 }: RaceExplanationPanelProps) {
   const dqShort = clean(dataQualityShortSummary);
   const dqList = cleanList(dataQualitySummary);
@@ -151,6 +178,12 @@ export default function RaceExplanationPanel({
   const tipList = cleanList(tipsterConsensusSummary);
   const quality = clean(runQuality);
   const alignment = clean(alignmentLabel);
+  const suppressed = stakeSuppressed === true;
+  const reduced = confidenceReduced === true;
+  const adjConf =
+    typeof adjustedConfidence === 'number' && Number.isFinite(adjustedConfidence)
+      ? adjustedConfidence
+      : null;
 
   const hasAnything =
     dqShort !== null ||
@@ -158,10 +191,12 @@ export default function RaceExplanationPanel({
     tipShort !== null ||
     tipList !== null ||
     quality !== null ||
-    alignment !== null;
+    alignment !== null ||
+    suppressed ||
+    reduced;
 
   return (
-    <section style={styles.panel} aria-label="Race model explanation">
+    <section style={{ ...styles.panel, ...style }} aria-label="Race model explanation">
       <h2 style={styles.title}>Model explanation</h2>
 
       {!hasAnything ? (
@@ -170,10 +205,17 @@ export default function RaceExplanationPanel({
         </p>
       ) : (
         <>
-          {(quality !== null || alignment !== null) && (
+          {(quality !== null || alignment !== null || suppressed || reduced) && (
             <div style={styles.row}>
               {quality !== null && <span style={styles.badge}>Data quality: {quality}</span>}
               {alignment !== null && <span style={styles.badge}>Tipsters: {alignment}</span>}
+              {suppressed && <span style={styles.warnBadge}>Stake suppressed</span>}
+              {reduced && (
+                <span style={styles.warnBadge}>
+                  Confidence reduced
+                  {adjConf !== null ? ` (adjusted to ${formatPct(adjConf)})` : ''}
+                </span>
+              )}
             </div>
           )}
 

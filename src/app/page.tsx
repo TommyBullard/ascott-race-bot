@@ -13,6 +13,11 @@
  */
 
 import { useEffect, useState, type CSSProperties } from 'react';
+import RaceExplanationPanel from '@/components/RaceExplanationPanel';
+import {
+  deriveRaceExplanationProps,
+  type RaceObservabilityLike,
+} from '@/lib/raceExplanation';
 
 /** A runner as shown on a card (mirrors the server `RaceCardRunner`). */
 interface RaceCardRunner {
@@ -45,6 +50,13 @@ interface RaceCard {
   favourite: RaceCardRunner | null;
   modelPick: RaceCardPick | null;
   alternatives: RaceCardRunner[];
+  /**
+   * Read-only model observability for this race (from the current run's
+   * config_json, surfaced by the API in Batch J1). Optional/null-safe: absent or
+   * empty for races without a current run, in which case the explanation panel
+   * renders its empty state.
+   */
+  observability?: RaceObservabilityLike | null;
 }
 
 /** Live model accuracy snapshot (mirrors the server `ModelAccuracy`). */
@@ -444,6 +456,15 @@ const styles = {
     textAlign: 'right' as const,
     color: '#424a53',
   } as CSSProperties,
+  explanationPanel: {
+    border: 'none',
+    borderTop: '1px dashed #eaeef2',
+    borderRadius: 0,
+    padding: 0,
+    paddingTop: 12,
+    marginTop: 12,
+    background: 'transparent',
+  } as CSSProperties,
 };
 
 /** A pill style for a "Why" tag, tinted by tone. */
@@ -596,6 +617,13 @@ function RaceCardView({ card, nowMs }: { card: RaceCard; nowMs: number }) {
           ))}
         </div>
       )}
+
+      {/* Model explanation: read-only observability from the current run. Renders
+          its own empty state when this race has no usable observability. */}
+      <RaceExplanationPanel
+        {...deriveRaceExplanationProps(card.observability)}
+        style={styles.explanationPanel}
+      />
     </article>
   );
 }
