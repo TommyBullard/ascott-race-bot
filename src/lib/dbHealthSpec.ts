@@ -1,0 +1,270 @@
+/**
+ * Pure spec + classifiers for the read-only database health check
+ * (scripts/checkDatabaseHealth.ts, Batch K1d).
+ *
+ * This module holds (a) the schema the app expects — tables, their columns, and
+ * the indexes the migrations create — and (b) pure functions that turn a
+ * PostgREST probe error into a present/missing/indeterminate verdict and build a
+ * PASS/FAIL summary + additive SQL suggestions. No I/O, no DB, no mutation, so
+ * the decision logic is unit-testable without a database.
+ *
+ * WHY PROBES (not information_schema): the Supabase JS client talks to PostgREST,
+ * which by default does NOT expose `information_schema` / `pg_catalog`. Table,
+ * column, and row-count existence ARE reliably detectable by a read-only
+ * `select(head)` probe (the script does this). Index existence + RLS status live
+ * in `pg_catalog` and cannot be read through the REST API without a SQL/RPC
+ * capability (which would require a schema change), so the script reports those
+ * as MANUAL and emits read-only SQL for the operator to run themselves.
+ */
+
+/** A table the app requires, plus the columns it reads/writes. */
+export interface TableSpec {
+  name: string;
+  columns: readonly string[];
+}
+
+/** An index a migration creates (for the MANUAL verification SQL). */
+export interface IndexSpec {
+  name: string;
+  table: string;
+  columns: string;
+}
+
+/**
+ * Required tables + columns, derived from the app's verified insert/select
+ * payloads (src/lib/raceData.ts, runModelForRace.ts, liveSync.ts, discoverTipsters
+ * .ts, and the importer). Columns the code never touches are intentionally omitted.
+ */
+export const REQUIRED_TABLES: readonly TableSpec[] = [
+  {
+    name: 'races',
+    columns: [
+      'id', 'meeting_date', 'course', 'country', 'race_name', 'off_time',
+      'handicap_flag', 'status', 'official_result_time',
+    ],
+  },
+  {
+    name: 'runners',
+    columns: [
+      'id', 'race_id', 'horse_name', 'trainer', 'jockey', 'draw', 'saddlecloth',
+      'official_rating', 'weight_lbs', 'runner_status', 'finish_pos',
+      'bsp_decimal', 'sp_decimal',
+    ],
+  },
+  {
+    name: 'market_snapshots',
+    columns: ['id', 'race_id', 'snapshot_time', 'source_label'],
+  },
+  {
+    name: 'runner_quotes',
+    columns: ['id', 'snapshot_id', 'runner_id', 'quote_type', 'odds_decimal'],
+  },
+  {
+    name: 'model_runs',
+    columns: [
+      'id', 'race_id', 'run_time', 'market_snapshot_id', 'model_version',
+      'probability_engine_version', 'staking_engine_version', 'input_mode',
+      'config_json', 'data_quality_flags', 'bet_mode', 'base_kelly_fraction',
+      'signal_kappa', 'is_current', 'superseded_at',
+    ],
+  },
+  {
+    name: 'model_runner_scores',
+    columns: [
+      'id', 'model_run_id', 'runner_id', 'market_prob', 'model_prob', 'edge',
+      'ev_per_1', 'confidence_score', 'rank_in_race', 'is_current', 'superseded_at',
+    ],
+  },
+  {
+    name: 'recommendations',
+    columns: [
+      'id', 'model_run_id', 'race_id', 'runner_id', 'recommendation_rank',
+      'confidence_label', 'stake_pct', 'stake_amount', 'kelly_fraction_used',
+      'mandatory_floor_applied', 'daily_cap_restricted', 'rationale_json',
+      'is_current', 'superseded_at',
+    ],
+  },
+  {
+    name: 'bankroll_ledger',
+    columns: ['balance_after', 'entry_time'],
+  },
+  {
+    name: 'tipsters',
+    columns: [
+      'id', 'canonical_name', 'display_name', 'affiliation', 'source_profile_url',
+      'is_active', 'first_seen_at', 'last_seen_at', 'notes',
+    ],
+  },
+  {
+    name: 'tipster_aliases',
+    columns: ['id', 'tipster_id', 'alias_name', 'alias_affiliation'],
+  },
+  {
+    name: 'tipster_priors',
+    columns: [
+      'tipster_id', 'as_of_date', 'bets_count', 'wins_count', 'roi_bsp_gross',
+      'roi_bsp_net', 'ae_bsp', 'strike_rate', 'reliability', 'prior_score',
+      'prior_weight',
+    ],
+  },
+  {
+    name: 'tipster_review_queue',
+    columns: ['id', 'raw_name', 'raw_affiliation', 'created_at'],
+  },
+  {
+    name: 'tipster_selections',
+    columns: [
+      'id', 'race_id', 'runner_id', 'tipster_id', 'raw_tipster_name',
+      'raw_affiliation', 'created_at', 'source_label',
+    ],
+  },
+];
+
+/** Indexes the migrations create (verified MANUALLY — see header). */
+export const REQUIRED_INDEXES: readonly IndexSpec[] = [
+  { name: 'model_runs_race_current_idx', table: 'model_runs', columns: 'race_id, is_current' },
+  { name: 'model_runner_scores_run_current_idx', table: 'model_runner_scores', columns: 'model_run_id, is_current' },
+  { name: 'recommendations_race_current_idx', table: 'recommendations', columns: 'race_id, is_current' },
+  { name: 'tipster_selections_race_id_idx', table: 'tipster_selections', columns: 'race_id' },
+  { name: 'tipster_selections_tipster_id_idx', table: 'tipster_selections', columns: 'tipster_id' },
+  { name: 'tipster_selections_dedupe_idx', table: 'tipster_selections', columns: 'race_id, runner_id, raw_tipster_name' },
+];
+
+/** Tables whose `is_current` / `superseded_at` history columns are required. */
+export const MODEL_HISTORY_TABLES = ['model_runs', 'model_runner_scores', 'recommendations'] as const;
+
+export type ProbeOutcome = 'present' | 'missing' | 'indeterminate';
+
+/** The subset of a PostgREST error this module reasons about. */
+export interface PostgrestErrorLike {
+  code?: string | null;
+  message?: string | null;
+}
+
+const TABLE_MISSING_CODES = new Set(['42P01', 'PGRST205', 'PGRST106']);
+const COLUMN_MISSING_CODES = new Set(['42703', 'PGRST204']);
+
+/** Classifies a table-existence probe: null error = present. */
+export function classifyTableProbe(error: PostgrestErrorLike | null | undefined): ProbeOutcome {
+  if (!error) return 'present';
+  if (error.code && TABLE_MISSING_CODES.has(error.code)) return 'missing';
+  const msg = (error.message ?? '').toLowerCase();
+  if (
+    msg.includes('does not exist') ||
+    msg.includes('could not find the table') ||
+    msg.includes('schema cache')
+  ) {
+    return 'missing';
+  }
+  return 'indeterminate';
+}
+
+/** Classifies a single-column probe: null error = present. */
+export function classifyColumnProbe(error: PostgrestErrorLike | null | undefined): ProbeOutcome {
+  if (!error) return 'present';
+  if (error.code && COLUMN_MISSING_CODES.has(error.code)) return 'missing';
+  const msg = (error.message ?? '').toLowerCase();
+  if (
+    (msg.includes('column') && msg.includes('does not exist')) ||
+    (msg.includes('could not find') && msg.includes('column'))
+  ) {
+    return 'missing';
+  }
+  return 'indeterminate';
+}
+
+/** Per-table health, assembled by the script from probe results. */
+export interface TableHealth {
+  table: string;
+  status: ProbeOutcome;
+  rowCount: number | null;
+  missingColumns: string[];
+  indeterminateColumns: string[];
+}
+
+/** Aggregate PASS/FAIL verdict + the gaps that explain it. */
+export interface HealthSummary {
+  pass: boolean;
+  missingTables: string[];
+  indeterminateTables: string[];
+  missingColumns: { table: string; column: string }[];
+  presentTables: number;
+  totalTables: number;
+}
+
+/**
+ * Reduces per-table health into a PASS/FAIL verdict. FAIL when any required
+ * table or column is missing. Indeterminate results do NOT fail the run (they
+ * are surfaced separately) — a health check should not cry wolf on an
+ * unreadable probe.
+ */
+export function summarizeHealth(tables: readonly TableHealth[]): HealthSummary {
+  const missingTables = tables.filter((t) => t.status === 'missing').map((t) => t.table);
+  const indeterminateTables = tables
+    .filter((t) => t.status === 'indeterminate')
+    .map((t) => t.table);
+  const missingColumns: { table: string; column: string }[] = [];
+  for (const t of tables) {
+    for (const column of t.missingColumns) {
+      missingColumns.push({ table: t.table, column });
+    }
+  }
+  const presentTables = tables.filter((t) => t.status === 'present').length;
+  return {
+    pass: missingTables.length === 0 && missingColumns.length === 0,
+    missingTables,
+    indeterminateTables,
+    missingColumns,
+    presentTables,
+    totalTables: tables.length,
+  };
+}
+
+/**
+ * Builds additive, non-destructive SQL SUGGESTIONS for the gaps found — column
+ * adds are concrete; missing tables point to the schema baseline (this tool does
+ * not guess full CREATE TABLE DDL). Returns `[]` when nothing is missing. The
+ * caller prints these; nothing is applied.
+ */
+export function buildSuggestedSql(summary: HealthSummary): string[] {
+  const lines: string[] = [];
+  if (summary.missingTables.length > 0) {
+    lines.push(
+      `-- ${summary.missingTables.length} table(s) missing: ` +
+        `${summary.missingTables.join(', ')}.`,
+    );
+    lines.push(
+      '--   These have no CREATE TABLE in the repo migrations; create them from ' +
+        'your schema baseline before the app can use them.',
+    );
+  }
+  for (const { table, column } of summary.missingColumns) {
+    lines.push(
+      `alter table public.${table} add column if not exists ${column} <TYPE>; ` +
+        `-- set the correct type/nullability`,
+    );
+  }
+  return lines;
+}
+
+/**
+ * Read-only SQL the operator can run in the Supabase SQL editor to verify the
+ * things PostgREST cannot introspect: index existence and RLS status. Pure
+ * string builder — this tool never executes it.
+ */
+export function buildManualVerificationSql(): string[] {
+  const indexNames = REQUIRED_INDEXES.map((i) => `'${i.name}'`).join(', ');
+  const tableNames = REQUIRED_TABLES.map((t) => `'${t.name}'`).join(', ');
+  return [
+    '-- Indexes (expect one row per required index, incl. tipster_selections_dedupe_idx):',
+    `select indexname, tablename from pg_indexes`,
+    `where schemaname = 'public' and indexname in (${indexNames})`,
+    `order by indexname;`,
+    '',
+    '-- RLS enabled status per required table (relrowsecurity = true when RLS is on):',
+    `select c.relname as table, c.relrowsecurity as rls_enabled`,
+    `from pg_class c join pg_namespace n on n.oid = c.relnamespace`,
+    `where n.nspname = 'public' and c.relname in (${tableNames})`,
+    `order by c.relname;`,
+  ];
+}

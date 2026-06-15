@@ -43,6 +43,13 @@ import { supabaseAdmin } from '../src/lib/supabaseAdmin';
 import { normalizeCourse, normalizeHorseName } from '../src/lib/raceSync';
 import { matchRunnerId, type MatchableRunner } from '../src/lib/runnerMatch';
 import { resolveCanonicalTipster } from '../src/lib/raceData';
+import {
+  availableRunnerNames,
+  buildFixCsvSection,
+  formatRaceListingLines,
+  summarizeNearbyRaces,
+  type DiagRaceRow,
+} from '../src/lib/tipsterImportDiagnostics';
 
 const TIPSTER_SELECTIONS_TABLE = 'tipster_selections';
 const RACES_TABLE = 'races';
@@ -63,14 +70,23 @@ function loadEnv(): void {
 interface Args {
   file?: string;
   commit: boolean;
+  /** Read-only listing mode: print candidate races (no CSV needed). */
+  listRaces: boolean;
+  /** YYYY-MM-DD filter for --list-races (defaults to today, UTC). */
+  date?: string;
+  /** Course filter for --list-races (normalised match). */
+  course?: string;
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { commit: false };
+  const args: Args = { commit: false, listRaces: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--commit') args.commit = true;
+    else if (a === '--list-races') args.listRaces = true;
     else if (a === '--file') args.file = argv[++i];
+    else if (a === '--date') args.date = argv[++i];
+    else if (a === '--course') args.course = argv[++i];
   }
   return args;
 }
@@ -210,11 +226,22 @@ interface PreparedRow {
 }
 
 async function main(): Promise<void> {
-  const { file, commit } = parseArgs(process.argv.slice(2));
+  const args = parseArgs(process.argv.slice(2));
+  const { file, commit } = args;
+
+  // Read-only listing mode: print candidate races for a date/course and exit.
+  // Needs no CSV and never writes.
+  if (args.listRaces) {
+    loadEnv();
+    await listRacesMode(args);
+    return;
+  }
 
   if (!file) {
     console.error(
-      'Usage: npm run import:tipster-selections -- --file <path.csv> [--commit]',
+      'Usage:\n' +
+        '  npm run import:tipster-selections -- --file <path.csv> [--commit]\n' +
+        '  npm run import:tipster-selections -- --list-races [--date YYYY-MM-DD] [--course <name>]',
     );
     process.exitCode = 1;
     return;
@@ -251,6 +278,17 @@ async function main(): Promise<void> {
   const audit = newAudit();
   const skipReasons: string[] = [];
   let hasPlaceholder = false;
+
+  // Read-only diagnostic collections (Batch K1b): captured from data the matcher
+  // already fetched, to help the operator fix their CSV. They never change
+  // matching and are only printed in dry-run output.
+  const unmatchedHorseDiags: { line: number; horse: string; available: string[] }[] = [];
+  const unmatchedRaceDiags: {
+    line: number;
+    course: string;
+    date: string;
+    offTime: string;
+  }[] = [];
 
   // Per-day race cache and per-name tipster cache to avoid repeat lookups.
   const racesByDate = new Map<string, RaceRow[]>();
@@ -320,6 +358,7 @@ async function main(): Promise<void> {
     if (resolved.status === 'unmatched') {
       audit.skipped_unmatched_race++;
       skipReasons.push(`line ${lineNo}: no race for ${course} ${meetingDate} ${offTime}`);
+      unmatchedRaceDiags.push({ line: lineNo, course, date: meetingDate, offTime });
       continue;
     }
     if (resolved.status === 'ambiguous') {
@@ -344,6 +383,13 @@ async function main(): Promise<void> {
         audit.skipped_unmatched_horse++;
         skipReasons.push(`line ${lineNo}: no runner "${horseName}" in race`);
       }
+      // Capture the race's actual runner names (verbatim) so the operator can
+      // see what was available. Read-only; does not affect matching.
+      unmatchedHorseDiags.push({
+        line: lineNo,
+        horse: horseName,
+        available: availableRunnerNames(runners),
+      });
       continue;
     }
 
@@ -388,6 +434,12 @@ async function main(): Promise<void> {
   }
 
   if (!commit) {
+    printDryRunDiagnostics({
+      unmatchedHorseDiags,
+      unmatchedRaceDiags,
+      racesByDate,
+      audit,
+    });
     console.log('\n(dry run) No rows written. Re-run with --commit to insert.');
     return;
   }
@@ -538,6 +590,133 @@ function printSummary(
       console.log(`  - ${reason}`);
     }
   }
+}
+
+/**
+ * Prints READ-ONLY dry-run diagnostics (Batch K1b): for each unmatched race,
+ * nearby races on the same date (no auto-matching); for each unmatched horse,
+ * the race's actual runner names; then an actionable "Fix your CSV" section.
+ * All data was already fetched during matching — nothing here queries or writes,
+ * and no secrets are printed.
+ */
+function printDryRunDiagnostics(ctx: {
+  unmatchedHorseDiags: { line: number; horse: string; available: string[] }[];
+  unmatchedRaceDiags: { line: number; course: string; date: string; offTime: string }[];
+  racesByDate: Map<string, RaceRow[]>;
+  audit: Audit;
+}): void {
+  const { unmatchedHorseDiags, unmatchedRaceDiags, racesByDate, audit } = ctx;
+
+  if (unmatchedRaceDiags.length > 0) {
+    console.log('\nUnmatched races (informational only — never auto-matched):');
+    for (const d of unmatchedRaceDiags) {
+      console.log(`  line ${d.line}: "${d.course}" ${d.date} ${d.offTime}`);
+      const dayRaces = racesByDate.get(d.date) ?? [];
+      if (dayRaces.length === 0) {
+        console.log(`    no races found on ${d.date}.`);
+        continue;
+      }
+      const nearby = summarizeNearbyRaces(dayRaces, d.course, normalizeCourse);
+      if (nearby.sameCourseOffTimes.length > 0) {
+        console.log(
+          `    same course, available off-times: ${nearby.sameCourseOffTimes.join(', ')}`,
+        );
+      }
+      if (nearby.otherCourses.length > 0) {
+        console.log(`    other courses on ${d.date}: ${nearby.otherCourses.join(', ')}`);
+      }
+    }
+  }
+
+  if (unmatchedHorseDiags.length > 0) {
+    console.log('\nUnmatched horses (informational only — never auto-matched):');
+    for (const d of unmatchedHorseDiags) {
+      console.log(`  line ${d.line}: "${d.horse}" — available runners:`);
+      if (d.available.length === 0) {
+        console.log('    (no runners recorded for this race)');
+      } else {
+        for (const name of d.available) {
+          console.log(`    - ${name}`);
+        }
+      }
+    }
+  }
+
+  console.log('\nFix your CSV:');
+  for (const fix of buildFixCsvSection(audit)) {
+    console.log(`  - ${fix}`);
+  }
+}
+
+/**
+ * READ-ONLY listing mode: prints candidate races for a date (default today,
+ * UTC), optionally filtered by course, with each race's runner count — so an
+ * operator can copy the exact course/off_time their CSV needs. SELECT only;
+ * writes nothing.
+ */
+async function listRacesMode(args: Args): Promise<void> {
+  const date = args.date ?? new Date().toISOString().slice(0, 10);
+  if (!DATE_RE.test(date)) {
+    console.error(`--date must be YYYY-MM-DD (got "${date}").`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from(RACES_TABLE)
+    .select('id, course, off_time, race_name')
+    .eq('meeting_date', date);
+  if (error) {
+    throw new Error(`races lookup failed for ${date}: ${error.message}`);
+  }
+
+  let races = ((data ?? []) as {
+    id: string | number;
+    course: string;
+    off_time: string | null;
+    race_name: string | null;
+  }[]).map((r) => ({
+    id: String(r.id),
+    course: r.course,
+    off_time: r.off_time,
+    race_name: r.race_name,
+  }));
+
+  // Optional course filter using the same normaliser the importer matches with
+  // (a display filter only — it does not change matching semantics).
+  if (args.course && args.course.trim() !== '') {
+    const want = normalizeCourse(args.course);
+    races = races.filter((r) => normalizeCourse(r.course) === want);
+  }
+
+  // Runner counts per race: one read-only query, counted in memory.
+  const countByRace = new Map<string, number>();
+  const raceIds = races.map((r) => r.id);
+  if (raceIds.length > 0) {
+    const { data: runnerData, error: runnersError } = await supabaseAdmin
+      .from(RUNNERS_TABLE)
+      .select('race_id')
+      .in('race_id', raceIds);
+    if (runnersError) {
+      throw new Error(`runners lookup failed for ${date}: ${runnersError.message}`);
+    }
+    for (const row of (runnerData ?? []) as { race_id: string | number }[]) {
+      const key = String(row.race_id);
+      countByRace.set(key, (countByRace.get(key) ?? 0) + 1);
+    }
+  }
+
+  const diagRaces: DiagRaceRow[] = races.map((r) => ({
+    ...r,
+    runner_count: countByRace.get(r.id) ?? 0,
+  }));
+
+  const courseNote = args.course ? ` course~"${args.course}"` : '';
+  console.log(`Races on ${date}${courseNote} (read-only listing):\n`);
+  for (const listLine of formatRaceListingLines(diagRaces)) {
+    console.log(listLine);
+  }
+  console.log(`\n${diagRaces.length} race(s).`);
 }
 
 main().catch((error) => {

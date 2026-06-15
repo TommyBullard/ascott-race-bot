@@ -24,6 +24,10 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { discoverTipsters } from '@/lib/discoverTipsters';
 import { fetchRacingApiSignals } from '@/lib/racingApi';
+import {
+  buildCronErrorDiagnostic,
+  formatCronErrorLog,
+} from '@/lib/cronDiagnostics';
 
 export const dynamic = 'force-dynamic';
 // The analysis fan-out makes several throttled requests; give it headroom.
@@ -67,7 +71,13 @@ export async function GET(request: NextRequest) {
       asOfDate: result.asOfDate,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    const diag = buildCronErrorDiagnostic('cron/tipster-discovery', err);
+    console.error(formatCronErrorLog(diag));
+    return NextResponse.json(
+      diag.hint
+        ? { ok: false, error: diag.message, hint: diag.hint }
+        : { ok: false, error: diag.message },
+      { status: 500 },
+    );
   }
 }

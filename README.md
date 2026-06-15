@@ -9,6 +9,15 @@ dashboard and JSON APIs read that persisted output.
 > **Personal tool.** This is not a polished product, and it produces real
 > staking guidance. Review the math, and add authentication before exposing any
 > endpoint publicly.
+>
+> **No guarantees — responsible use.** This is a research / decision-support
+> tool. It does **not** predict winners and makes **no guarantee of profit**,
+> no "sure things", and no risk-free bets. All betting carries risk and you can
+> lose money. Treat every output as one input to your own judgement, stake only
+> what you can afford to lose, follow the laws in your jurisdiction, and seek
+> support if gambling stops being fun (e.g. GamCare / BeGambleAware). See
+> [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) and
+> [docs/RACE_DAY_RUNBOOK.md](docs/RACE_DAY_RUNBOOK.md) to run it locally.
 
 ## Tech stack
 
@@ -70,6 +79,7 @@ src/
   app/
     layout.tsx                       # Root layout
     page.tsx                         # Recommendations dashboard (client page)
+    how-it-works/page.tsx            # Static "how the model works" page
     leaderboard/page.tsx             # Tipster leaderboard (client page)
     api/
       recommendations/route.ts       # GET today's race cards (dashboard)
@@ -100,9 +110,11 @@ src/
     historicalRaceLoader.ts          # Validation core for the historical loader
     betfairBsp.ts                    # Betfair BSP CSV -> historical import
     backtestStats.ts                 # Backtest aggregation math
+  components/                        # Presentational UI (model flow, explanation panel)
 scripts/                            # CLI tools, simulations, backtests, tests
 supabase/migrations/                # SQL migrations
-data/                               # Example historical-race import
+data/                               # Example imports (historical races, tipster CSV)
+docs/                               # Setup + runbook + design docs
 vercel.json                         # Cron schedule
 ```
 
@@ -133,11 +145,15 @@ the result across three tables:
 - `model_runner_scores` — per-runner probability / edge / EV / rank.
 - `recommendations` — the run's recommended bet(s), keyed by `model_run_id`.
 
-Idempotency ("overwrite the run for this race") is achieved by inserting the new
-run and its children **first**, then deleting older runs for the race — so a
-failed insert never destroys existing data, and the reader always sees a complete
-run. (supabase-js cannot wrap multiple statements in one transaction, so this is
-best-effort rather than atomic — see Caveats.)
+**Append-only model history.** A fresh run inserts new rows stamped
+`is_current = true` (`superseded_at = null`), then **marks the race's prior
+current rows superseded** (`is_current = false`, `superseded_at = now`) — an
+UPDATE, never a DELETE. Historical runs are retained and remain queryable; the
+read paths filter on `is_current = true`. Insert-first means a failed insert
+never destroys existing output, and if the supersede step fails the readers
+still pick the newest run by `run_time`. (supabase-js cannot wrap multiple
+statements in one transaction, so this is best-effort rather than atomic — see
+Caveats.)
 
 The scoring pipeline:
 
@@ -162,6 +178,28 @@ min-max normalised across the cohort scored in a run).
 > [src/lib/recommendBet.ts](src/lib/recommendBet.ts) simply reads the latest
 > run's rank-1 recommendation.
 
+### Data quality, confidence adjustment & stake suppression
+
+Each run also computes an **observational data-quality layer** from data it
+actually has (never fabricated) and persists it alongside the run (in the
+`data_quality_flags` column + a `config_json` snapshot):
+
+- **Data-quality flags** — e.g. low market completeness, stale odds, missing
+  runner prices, no/unmatched tipster selections. Each carries a severity and a
+  human-readable summary.
+- **Confidence adjustment** — the run's headline confidence is scaled down when
+  data quality is weak (e.g. stale or incomplete odds). This is recorded for
+  display; it does **not** change the probability math.
+- **Stake suppression** — when data quality is insufficient, the selected bet's
+  stake is zeroed while the selection itself is preserved. Ranking, probabilities,
+  EV, and selection are untouched — only the stake is suppressed.
+- **Tipster consensus & alignment** — how much tipster support each runner has,
+  and whether that consensus agrees with the model's pick. Observational only.
+
+These layers are **additive and observational**: they inform and annotate the
+run but do not alter the core probability / EV / Kelly math above. They are
+surfaced read-only through the API and dashboard (see Frontend).
+
 ## Tipster discovery
 
 [src/lib/discoverTipsters.ts](src/lib/discoverTipsters.ts) turns **real, proofed**
@@ -177,6 +215,39 @@ source (it derives signals from real trainer/jockey analysis). The other
 platform adapters in `discoverTipsters.ts` are deliberately **left
 unimplemented** (they throw) so the integrity contract holds: a source must
 return verbatim proofed figures or nothing — never a guess.
+
+## Manual tipster CSV importer
+
+Because the live pipeline does not populate `tipster_selections`, real tipster
+picks are added with an **offline, operator-curated CSV importer**
+([scripts/importTipsterSelections.ts](scripts/importTipsterSelections.ts),
+`npm run import:tipster-selections`). It is deliberately conservative:
+
+- **Dry-run by default.** It writes nothing unless `--commit` is passed, and it
+  refuses `--commit` while any field still contains placeholder `EXAMPLE` text.
+- **Never fabricates.** A pick is stored only when its race **and** runner
+  resolve unambiguously — race by normalised (course + off-time), runner by
+  exact normalised horse name. Unmatched/ambiguous rows are **skipped and
+  reported**, never guessed; an unresolved tipster name is kept verbatim with
+  `tipster_id = null`.
+- **Idempotent.** Inserts upsert with `ignoreDuplicates` on
+  `(race_id, runner_id, raw_tipster_name)`, so re-importing the same pick never
+  double-counts it.
+- **Read-only diagnostics.** `--list-races [--date YYYY-MM-DD] [--course <name>]`
+  prints candidate races; the dry-run shows available runners for unmatched
+  horses, nearby races for unmatched races, and a "Fix your CSV" section.
+- **`source_label` rollback.** Each row carries the `source_label` you set, so a
+  bad batch is cleanly removable:
+  `delete from public.tipster_selections where source_label = '<your-label>';`
+  (preview with a `select count(*)` first).
+
+CSV columns: `meeting_date,course,off_time,horse_name,tipster_name` (required) +
+`raw_affiliation,source_label` (optional). Template:
+[data/tipster-selections.example.csv](data/tipster-selections.example.csv). Run
+the model **after** importing (or re-run it) so the consensus reflects the new
+picks. For local testing without live data, `npm run seed:demo -- --confirm-demo`
+seeds a clearly-synthetic race. Full walkthrough:
+[docs/RACE_DAY_RUNBOOK.md](docs/RACE_DAY_RUNBOOK.md).
 
 ## API
 
@@ -208,12 +279,19 @@ on failure.
 
 - **[/](src/app/page.tsx)** — recommendations dashboard: one card per race with a
   live countdown, the market favourite, the model's rank-1 pick (with a "Why"
-  rationale and stake), 1–2 alternatives, and a live accuracy tracker.
+  rationale and stake), 1–2 alternatives, a live accuracy tracker, and a
+  **Model explanation** panel that surfaces the run's data-quality + tipster
+  observability read-only (data-quality / stake-suppression / confidence /
+  consensus). It renders a safe empty state when a race has no usable
+  observability.
+- **[/how-it-works](src/app/how-it-works/page.tsx)** — a static, plain-language
+  explanation of how the model works (data → analysis → data-quality →
+  confidence + safeguards → recommendation), with a responsible-positioning note.
 - **[/leaderboard](src/app/leaderboard/page.tsx)** — sortable tipster leaderboard;
   active vs. demoted rows, signed ROI, and a reliability bar.
 
-Both pages are client components with inline styles (no UI library) and poll the
-read APIs for updates.
+The pages are client components with inline styles (no UI library) and poll the
+read APIs for updates; `/how-it-works` is static.
 
 ## Database schema
 
@@ -233,17 +311,37 @@ Schema details worth knowing:
 - `recommendations` is keyed by `model_run_id` (not by `race_id`).
 - `tipster_selections` is created by
   [supabase/migrations/20260612000000_create_tipster_selections.sql](supabase/migrations/20260612000000_create_tipster_selections.sql).
-  **It exists but the live pipeline does not populate it**, so live model runs
-  are **market-only** (no tipster weighting) unless selections are supplied
-  separately. `runModelForRace` handles empty tipster data gracefully.
+  The live cron pipeline does not populate it, so live model runs are
+  **market-only** unless selections are supplied via the **manual CSV importer**
+  (below). `runModelForRace` handles empty tipster data gracefully.
+
+> **Fresh-schema requirement.** The repo migrations only *ALTER* the model
+> tables and *create* `tipster_selections`; they do **not** contain
+> `CREATE TABLE` for the base tables (`races`, `runners`, `market_snapshots`,
+> `runner_quotes`, `model_runs`, `model_runner_scores`, `recommendations`,
+> `bankroll_ledger`, `tipsters`, `tipster_aliases`, `tipster_priors`,
+> `tipster_review_queue`). After a **fresh Supabase reset**, those base tables
+> must already exist. Verify what is present with the **read-only**
+> `npm run check:db` (it probes each required table/column, prints a PASS/FAIL
+> summary, and emits read-only SQL to confirm indexes + RLS).
 
 ## Getting started
 
 ### Prerequisites
 
 - Node.js >= 20.9.0 (see `engines` in [package.json](package.json))
-- A Supabase project
-- API credentials for The Racing API and Betfair (for the live pipeline)
+- A **Supabase** project. After a fresh reset, ensure the base tables exist and
+  verify with `npm run check:db` (see the fresh-schema note under Database
+  schema).
+- **The Racing API** credentials — needed for racecards, results, and tipster
+  discovery.
+- **Betfair** credentials — needed only for the live odds pipeline. Betfair uses
+  cert-based login and its **certificate setup is currently a manual step**; you
+  can run everything else (racecards, model runs, the tipster importer, the
+  dashboard, `/how-it-works`) without it.
+
+> See [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) for the full local setup and
+> [docs/RACE_DAY_RUNBOOK.md](docs/RACE_DAY_RUNBOOK.md) for the race-day runbook.
 
 ### Install
 
@@ -274,11 +372,9 @@ cp .env.example .env
 | `DEBUG_MODEL`               | optional              | Set to `1` to emit model trace logs.                                      |
 
 All credentials are validated **lazily, at request time**, so importing a module
-never throws and `next build` can statically analyse the routes.
-
-> **TODO:** `.env.example` currently lists only `SUPABASE_URL`,
-> `SUPABASE_SERVICE_ROLE_KEY`, and `CRON_SECRET`. The Racing API and Betfair
-> variables above are read by the code but are **not** yet in `.env.example`.
+never throws and `next build` can statically analyse the routes. Check which
+variables are set with `npm run check:env` (prints names + present/missing only —
+never values).
 
 ### Run
 
@@ -310,6 +406,10 @@ Then open http://localhost:3000.
 | `npm run verify:racing`   | Smoke-check The Racing API integration.                            |
 | `npm run verify:ingestion`| Verify pipeline ingestion.                                         |
 | `npm run inspect:schema`  | Inspect the live database schema.                                  |
+| `npm run check:env`       | Read-only: report which env vars are set (names only, no values).  |
+| `npm run check:db`        | Read-only: verify required tables/columns exist (PASS/FAIL).       |
+| `npm run import:tipster-selections` | Manual tipster-selection CSV importer (dry-run by default). |
+| `npm run seed:demo`       | Insert a clearly-synthetic local demo race (`--confirm-demo`).     |
 
 ## Deployment
 
@@ -334,17 +434,21 @@ all environment variables above in every environment.
 
 ## Caveats & TODOs
 
-- **Live runs are market-only.** Until `tipster_selections` is populated for
-  live races, the model scores from market odds alone (no tipster weighting).
-- **`/api/recommend-bet` and `/api/run-model` have no auth.** Add authentication
-  before exposing them, since they expose / trigger staking logic backed by
-  service-role data access.
+- **Live runs are market-only.** Until `tipster_selections` is populated for a
+  race (via the manual CSV importer), the model scores from market odds alone
+  (no tipster weighting).
+- **`/api/recommend-bet` has no auth.** Add authentication before exposing it,
+  since it reads staking logic backed by service-role data access.
+  `POST /api/run-model` and the cron routes are gated by `CRON_SECRET` when it
+  is set (open in local/dev when unset).
 - **Model writes are not atomic.** supabase-js can't run a multi-statement
-  transaction, so `runModelForRace` uses a best-effort insert-then-delete order.
-  For strict atomicity, move the logic into a Postgres function called via
+  transaction, so `runModelForRace` uses a best-effort insert-then-supersede
+  order (append-only history; older rows are UPDATED, not deleted). For strict
+  atomicity, move the logic into a Postgres function called via
   `supabaseAdmin.rpc(...)`.
-- **`.env.example` is incomplete** (missing the Racing API + Betfair variables;
-  see the environment table above).
+- **Fresh-schema baseline.** The repo migrations do not create the base tables;
+  a freshly-reset Supabase project must already have them (see Database schema).
+  Run `npm run check:db` to verify.
 - Some platform tipster-source adapters in `discoverTipsters.ts` are intentional
   unimplemented stubs and throw until real, ToS-compliant fetch/parse logic is
   supplied.

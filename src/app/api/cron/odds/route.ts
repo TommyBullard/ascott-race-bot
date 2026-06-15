@@ -24,6 +24,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { syncOddsFromBetfair } from '@/lib/liveSync';
+import {
+  buildCronErrorDiagnostic,
+  formatCronErrorLog,
+} from '@/lib/cronDiagnostics';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -40,7 +44,13 @@ export async function GET(request: NextRequest) {
     const summary = await syncOddsFromBetfair();
     return NextResponse.json({ ok: true, ...summary });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    const diag = buildCronErrorDiagnostic('cron/odds', err);
+    console.error(formatCronErrorLog(diag));
+    return NextResponse.json(
+      diag.hint
+        ? { ok: false, error: diag.message, hint: diag.hint }
+        : { ok: false, error: diag.message },
+      { status: 500 },
+    );
   }
 }
