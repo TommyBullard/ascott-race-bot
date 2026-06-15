@@ -35,6 +35,7 @@ import {
   fetchTipsterSelections,
   getTipsterStats,
   type RaceModelInputs,
+  type RaceModelInputsDiagnostics,
   type TipsterPriorStats,
 } from './raceData';
 import {
@@ -50,10 +51,18 @@ import {
 } from './modelProbabilities';
 import { buildModelRunMetadata } from './modelRunMetadata';
 import {
+  assessDataQuality,
+  MIN_MARKET_COMPLETENESS,
+  ODDS_REFRESH_INTERVAL_MS,
+  STALE_ODDS_THRESHOLD_MS,
+  MIN_RUNNER_COUNT,
+} from './modelDataQuality';
+import {
   buildSupersedePatch,
   currentMarker,
   selectRunIdsToSupersede,
 } from './modelRunHistory';
+import { logSkippedModelRun } from './modelRunAttempts';
 
 const MODEL_RUNS_TABLE = 'model_runs';
 const MODEL_RUNNER_SCORES_TABLE = 'model_runner_scores';
@@ -249,7 +258,9 @@ export async function runModelForRace(
 
   // 1. Fetch inputs. Runners+odds are required; tipster data is best-effort so
   //    the run still succeeds (unweighted) if those tables are empty/absent.
-  const inputs = await fetchRaceModelInputs(raceId);
+  //    `diagnostics` captures the precise skip reason for lightweight logging.
+  const diagnostics: RaceModelInputsDiagnostics = { skipReason: null };
+  const inputs = await fetchRaceModelInputs(raceId, diagnostics);
   traceModel(
     `[trace] fetchRaceModelInputs -> ${
       inputs === null
@@ -258,8 +269,15 @@ export async function runModelForRace(
     }`,
   );
   if (!inputs || inputs.runners.length === 0) {
+    // Log the skipped attempt (no model_runs row is written). When inputs is a
+    // non-null object with an empty field, the reason is NO_PRICED_RUNNERS;
+    // otherwise use the precise reason the fetch reported.
+    const reason =
+      diagnostics.skipReason ??
+      (inputs ? 'NO_PRICED_RUNNERS' : 'NO_MARKET_SNAPSHOT');
+    logSkippedModelRun(raceId, reason);
     traceModel(
-      '[trace] GUARD HIT -> returning null (inputs null or 0 priced runners)',
+      `[trace] GUARD HIT -> returning null (reason=${reason})`,
     );
     return null;
   }
@@ -274,12 +292,46 @@ export async function runModelForRace(
 
   const tipsterStats = tipsterStatsFromPriors(tipsterPriors);
 
-  // Audit/versioning metadata for this run. "Usable" tipster selections means at
-  // least one selection row was returned for the race; with none, the run is
-  // market-only and is flagged NO_TIPSTER_SELECTIONS (never fabricated).
+  // Audit/versioning metadata for this run. `input_mode` follows whether any
+  // tipster selections were returned. The data-quality flags are the single-
+  // source output of `assessDataQuality`, computed only from data we actually
+  // have (never fabricated): the declared-vs-priced field, the latest snapshot's
+  // age, and tipster-selection matching.
+  //
+  // NOTE: NO_MARKET_SNAPSHOT / NO_PRICED_RUNNERS cannot fire here — the guard
+  // above already returned null when there is no snapshot or no priced runner,
+  // so a run is only written when both exist. They remain implemented in the
+  // pure helper for other/future callers.
+  const pricedRunnerIds = inputs.runners.map((r) => r.runner_id);
+  const snapshotAgeMs = (() => {
+    if (!inputs.snapshot_time) return null;
+    const t = Date.parse(inputs.snapshot_time);
+    return Number.isNaN(t) ? null : Math.max(0, Date.now() - t);
+  })();
+  const dataQuality = assessDataQuality({
+    declaredRunnerCount: inputs.declared_runner_count,
+    pricedRunnerIds,
+    hasMarketSnapshot: true,
+    snapshotAgeMs,
+    tipsterSelectionRunnerIds: tipsterSelections.map((s) => String(s.runner_id)),
+  });
+  traceModel(`[trace] data_quality_flags=${JSON.stringify(dataQuality.flags)}`);
+
   const metadata = buildModelRunMetadata({
     hasUsableTipsterSelections: tipsterSelections.length > 0,
+    dataQualityFlags: dataQuality.flags,
     modelVersion: options.modelVersion,
+    // Record the thresholds used to interpret the flags + the computed metrics,
+    // for audit/visibility. Stored in config_json (no new DB columns).
+    config: {
+      data_quality_thresholds: {
+        min_market_completeness: MIN_MARKET_COMPLETENESS,
+        odds_refresh_interval_ms: ODDS_REFRESH_INTERVAL_MS,
+        stale_odds_threshold_ms: STALE_ODDS_THRESHOLD_MS,
+        min_runner_count: MIN_RUNNER_COUNT,
+      },
+      data_quality_metrics: dataQuality.metrics,
+    },
   });
 
   // 2. Score the field. Shared with the backtest harness (`scoreRaceRunners`)

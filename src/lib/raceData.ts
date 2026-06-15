@@ -28,6 +28,7 @@
  */
 
 import { supabaseAdmin } from './supabaseAdmin';
+import type { SkippedRunReason } from './modelRunAttempts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { TipsterSelection } from './modelProbabilities';
 
@@ -211,7 +212,28 @@ export interface ModelInputRunner {
 export interface RaceModelInputs {
   /** `market_snapshots.id` the odds came from (required by `model_runs`). */
   snapshot_id: string;
+  /**
+   * `market_snapshots.snapshot_time` of the snapshot the odds came from (ISO),
+   * or `null` when the snapshot has no timestamp. Used to assess odds staleness.
+   */
+  snapshot_time: string | null;
+  /**
+   * Total runners DECLARED for the race (priced or not). `runners.length` below
+   * counts only the PRICED field, so this is kept separately to assess market
+   * completeness (declared vs priced) without re-querying.
+   */
+  declared_runner_count: number;
   runners: ModelInputRunner[];
+}
+
+/**
+ * Optional out-param for {@link fetchRaceModelInputs} that reports WHY a model
+ * run would be skipped, so the caller can log a precise reason. Mutated in place
+ * (the function's return type is unchanged, so existing callers are unaffected):
+ * `skipReason` is set to the cause when the inputs are unusable, else `null`.
+ */
+export interface RaceModelInputsDiagnostics {
+  skipReason: SkippedRunReason | null;
 }
 
 /**
@@ -224,13 +246,19 @@ export interface RaceModelInputs {
  * the priced field so they sum to 1 (strips the book overround).
  *
  * Returns `null` when the race has no runners or no market snapshot (a model
- * run cannot be created without a snapshot to anchor it).
+ * run cannot be created without a snapshot to anchor it). When `diagnostics` is
+ * supplied, its `skipReason` is set to the precise cause (or `null` on success)
+ * for lightweight logging — this does not change the return value.
  *
  * @throws if any Supabase query fails.
  */
 export async function fetchRaceModelInputs(
   raceId: string,
+  diagnostics?: RaceModelInputsDiagnostics,
 ): Promise<RaceModelInputs | null> {
+  if (diagnostics) {
+    diagnostics.skipReason = null;
+  }
   const { data: runnerData, error: runnersError } = await supabaseAdmin
     .from(RUNNERS_TABLE)
     .select('id, horse_name')
@@ -247,12 +275,15 @@ export async function fetchRaceModelInputs(
     `[trace] step1 runners (runners.race_id=${raceId}): ${runnerRows.length} row(s)`,
   );
   if (runnerRows.length === 0) {
+    if (diagnostics) {
+      diagnostics.skipReason = 'NO_DECLARED_RUNNERS';
+    }
     return null;
   }
 
   const { data: snapshotData, error: snapshotError } = await supabaseAdmin
     .from(MARKET_SNAPSHOTS_TABLE)
-    .select('id')
+    .select('id, snapshot_time')
     .eq('race_id', raceId)
     .order(SNAPSHOT_TIME_COLUMN, { ascending: false })
     .limit(1);
@@ -263,13 +294,19 @@ export async function fetchRaceModelInputs(
     );
   }
 
-  const latestSnapshot = ((snapshotData ?? []) as { id: Id }[])[0];
+  const latestSnapshot = ((snapshotData ?? []) as {
+    id: Id;
+    snapshot_time: string | null;
+  }[])[0];
   traceModel(
     `[trace] step2 market_snapshots (race_id=${raceId}): ${
       (snapshotData ?? []).length
     } row(s); latest id=${latestSnapshot ? latestSnapshot.id : 'NONE'}`,
   );
   if (!latestSnapshot) {
+    if (diagnostics) {
+      diagnostics.skipReason = 'NO_MARKET_SNAPSHOT';
+    }
     return null;
   }
 
@@ -323,7 +360,21 @@ export async function fetchRaceModelInputs(
     market_prob: totalImplied > 0 ? 1 / r.odds_decimal / totalImplied : 0,
   }));
 
-  return { snapshot_id: String(latestSnapshot.id), runners };
+  // Snapshot + declared runners exist, but none are priced: a usable model run
+  // cannot be built. Reported for logging; the return value is unchanged (an
+  // inputs object with an empty `runners` field, as before).
+  if (diagnostics && runners.length === 0) {
+    diagnostics.skipReason = 'NO_PRICED_RUNNERS';
+  }
+
+  return {
+    snapshot_id: String(latestSnapshot.id),
+    snapshot_time: latestSnapshot.snapshot_time
+      ? String(latestSnapshot.snapshot_time)
+      : null,
+    declared_runner_count: runnerRows.length,
+    runners,
+  };
 }
 
 /**

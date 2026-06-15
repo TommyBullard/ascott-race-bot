@@ -6,11 +6,20 @@
  * deterministic function of its inputs, so it is unit-tested in isolation and
  * shared by the producer ({@link import('./runModelForRace')}).
  *
- * INTEGRITY: never fabricates. The input mode and data-quality flags are derived
- * only from whether usable tipster selections were actually provided; missing
- * tipster data yields `market_only` + a `NO_TIPSTER_SELECTIONS` flag rather than
- * any invented support.
+ * INTEGRITY: never fabricates. `input_mode` is derived only from whether usable
+ * tipster selections were actually provided. The `data_quality_flags` are the
+ * single-source output of {@link import('./modelDataQuality').assessDataQuality}
+ * and are passed in by the caller; this module only stores them.
  */
+
+export { DATA_QUALITY_FLAG, type DataQualityFlag } from './modelDataQuality';
+import {
+  evaluateRunQuality,
+  determineModelAdjustments,
+  type RunQuality,
+  type ModelAdjustments,
+} from './modelDataQuality';
+export type { RunQuality, ModelAdjustments } from './modelDataQuality';
 
 /** Engine identity tag stored in `model_runs.model_version`. */
 export const DEFAULT_MODEL_VERSION = 'market-v1';
@@ -29,15 +38,6 @@ export const DEFAULT_STAKING_ENGINE_VERSION = 'fractional_kelly_0_2_v1';
  */
 export type InputMode = 'market_only' | 'market_plus_tipsters';
 
-/** Structured data-quality flags persisted on `model_runs.data_quality_flags`. */
-export const DATA_QUALITY_FLAG = {
-  /** No usable tipster selections were available, so the run is market-only. */
-  NO_TIPSTER_SELECTIONS: 'NO_TIPSTER_SELECTIONS',
-} as const;
-
-export type DataQualityFlag =
-  (typeof DATA_QUALITY_FLAG)[keyof typeof DATA_QUALITY_FLAG];
-
 /** The audit/versioning fields written to a `model_runs` row. */
 export interface ModelRunMetadata {
   model_version: string;
@@ -46,6 +46,20 @@ export interface ModelRunMetadata {
   input_mode: InputMode;
   config_json: Record<string, unknown>;
   data_quality_flags: string[];
+  /**
+   * Overall run-quality verdict derived from `data_quality_flags`
+   * (`OK | DEGRADED | STALE | INVALID`). Part of the metadata-builder output;
+   * NOT yet persisted as its own `model_runs` column (no migration in this
+   * batch).
+   */
+  run_quality: RunQuality;
+  /**
+   * Advisory, non-invasive adjustments derived from `data_quality_flags`
+   * (`{ suppressStaking, reduceConfidence, notes }`). Recorded for VISIBILITY
+   * only — downstream probability/staking/selection logic does not consume it
+   * yet. Part of the metadata-builder output; not persisted as its own column.
+   */
+  model_adjustments: ModelAdjustments;
 }
 
 export interface BuildModelRunMetadataInput {
@@ -53,14 +67,18 @@ export interface BuildModelRunMetadataInput {
    * Whether the race has at least one usable tipster selection. "Usable"
    * currently means "≥ 1 selection row was returned for the race". This is a
    * deliberately conservative, reliable signal — it does not attempt to infer
-   * partial validity.
-   *
-   * TODO: if needed later, tighten "usable" to "selections that reference a
-   * priced runner in this race" and add a distinct flag for the fetch-failed
-   * case. Both are intentionally left as a single market-only signal for now to
-   * avoid inventing behaviour.
+   * partial validity. It drives `input_mode` only; the corresponding
+   * `NO_TIPSTER_SELECTIONS` data-quality flag is produced by
+   * {@link import('./modelDataQuality').assessDataQuality} and passed in via
+   * {@link BuildModelRunMetadataInput.dataQualityFlags}.
    */
   hasUsableTipsterSelections: boolean;
+  /**
+   * Data-quality flags for the run (the single-source output of
+   * `assessDataQuality`). Stored verbatim on `model_runs.data_quality_flags`.
+   * Defaults to `[]` when omitted; never fabricated here.
+   */
+  dataQualityFlags?: string[];
   /** Override `model_version` (defaults to {@link DEFAULT_MODEL_VERSION}). */
   modelVersion?: string;
   /** Override the probability-engine version tag. */
@@ -78,24 +96,22 @@ export interface BuildModelRunMetadataInput {
  * Builds the audit/versioning metadata for one model run.
  *
  * The engine version tags default to the constants above (overridable for
- * tests / future engines). `input_mode` and `data_quality_flags` are derived
- * purely from {@link BuildModelRunMetadataInput.hasUsableTipsterSelections}:
- *
- *   - usable selections  -> `market_plus_tipsters`, no flag
- *   - none               -> `market_only`, flag `NO_TIPSTER_SELECTIONS`
+ * tests / future engines). `input_mode` is derived from
+ * {@link BuildModelRunMetadataInput.hasUsableTipsterSelections}
+ * (usable -> `market_plus_tipsters`, none -> `market_only`). The
+ * `data_quality_flags` are supplied by the caller (from `assessDataQuality`)
+ * and stored verbatim, so flag detection lives in one place; `run_quality` is
+ * the single verdict {@link evaluateRunQuality} derives from those flags, and
+ * `model_adjustments` is the advisory (non-invasive) action set
+ * {@link determineModelAdjustments} derives from them.
  */
 export function buildModelRunMetadata(
   input: BuildModelRunMetadataInput,
 ): ModelRunMetadata {
-  const data_quality_flags: string[] = [];
-
-  let input_mode: InputMode;
-  if (input.hasUsableTipsterSelections) {
-    input_mode = 'market_plus_tipsters';
-  } else {
-    input_mode = 'market_only';
-    data_quality_flags.push(DATA_QUALITY_FLAG.NO_TIPSTER_SELECTIONS);
-  }
+  const input_mode: InputMode = input.hasUsableTipsterSelections
+    ? 'market_plus_tipsters'
+    : 'market_only';
+  const data_quality_flags = input.dataQualityFlags ?? [];
 
   return {
     model_version: input.modelVersion ?? DEFAULT_MODEL_VERSION,
@@ -106,5 +122,7 @@ export function buildModelRunMetadata(
     input_mode,
     config_json: input.config ?? {},
     data_quality_flags,
+    run_quality: evaluateRunQuality(data_quality_flags),
+    model_adjustments: determineModelAdjustments(data_quality_flags),
   };
 }
