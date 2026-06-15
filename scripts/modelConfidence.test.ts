@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 
 import {
   computeAdjustedConfidence,
+  selectRunBaseConfidence,
   MISSING_RUNNER_ODDS_CONFIDENCE_FACTOR,
   STALE_ODDS_CONFIDENCE_FACTOR,
 } from '../src/lib/modelConfidence';
@@ -105,4 +106,38 @@ test('missing metrics -> only flag-driven factors apply (no fabrication)', () =>
 
 test('non-finite base confidence -> returned unchanged', () => {
   assert.ok(Number.isNaN(computeAdjustedConfidence(Number.NaN, [], NO_METRICS)));
+});
+
+// --- selectRunBaseConfidence (Batch G3) -------------------------------------
+
+test('selectRunBaseConfidence: topBet exists & differs from scored[0] -> uses topBet', () => {
+  const scored = [{ confidence: 0.9 }, { confidence: 0.4 }];
+  const topBet = scored[1]; // a different runner than scored[0]
+  assert.equal(selectRunBaseConfidence(scored, topBet), 0.4);
+});
+
+test('selectRunBaseConfidence: topBet missing -> falls back to scored[0]', () => {
+  const scored = [{ confidence: 0.8 }, { confidence: 0.3 }];
+  assert.equal(selectRunBaseConfidence(scored, undefined), 0.8);
+});
+
+test('selectRunBaseConfidence: scored empty & no topBet -> undefined', () => {
+  assert.equal(selectRunBaseConfidence([], undefined), undefined);
+});
+
+test('selectRunBaseConfidence: non-finite topBet confidence -> falls back to scored[0]', () => {
+  const scored = [{ confidence: 0.7 }, { confidence: Number.NaN }];
+  const topBet = scored[1];
+  assert.equal(selectRunBaseConfidence(scored, topBet), 0.7);
+});
+
+test('selectRunBaseConfidence: non-finite topBet AND non-finite scored[0] -> undefined', () => {
+  const scored = [{ confidence: Number.NaN }];
+  assert.equal(selectRunBaseConfidence(scored, scored[0]), undefined);
+});
+
+test('selectRunBaseConfidence: normal case unchanged when topBet === scored[0]', () => {
+  const scored = [{ confidence: 0.75 }, { confidence: 0.2 }];
+  const topBet = scored[0];
+  assert.equal(selectRunBaseConfidence(scored, topBet), 0.75);
 });

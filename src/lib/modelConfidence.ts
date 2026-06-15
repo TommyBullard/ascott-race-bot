@@ -84,3 +84,33 @@ export function computeAdjustedConfidence(
 
   return clamp01(confidence);
 }
+
+/** Minimal shape carrying a confidence value (a scored runner / selected bet). */
+export interface ConfidenceBearer {
+  confidence: number;
+}
+
+/**
+ * Selects the run-level base confidence (Batch G3 — observability alignment):
+ * the confidence that best describes the run.
+ *
+ *   - the recommended bet's confidence when a `topBet` exists (and is finite);
+ *   - else the top scored runner's confidence (`scored[0]`, when finite);
+ *   - else `undefined` (empty field / no usable confidence) — never fabricated.
+ *
+ * Pure and side-effect free. This only affects the OBSERVATIONAL confidence
+ * reported for the run; it does not influence selection, ranking, or staking.
+ */
+export function selectRunBaseConfidence(
+  scored: readonly ConfidenceBearer[],
+  topBet: ConfidenceBearer | undefined,
+): number | undefined {
+  if (topBet && isFiniteNumber(topBet.confidence)) {
+    return topBet.confidence;
+  }
+  const first = scored[0];
+  if (first && isFiniteNumber(first.confidence)) {
+    return first.confidence;
+  }
+  return undefined;
+}

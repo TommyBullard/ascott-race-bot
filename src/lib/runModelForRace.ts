@@ -59,7 +59,7 @@ import {
   STALE_ODDS_THRESHOLD_MS,
   MIN_RUNNER_COUNT,
 } from './modelDataQuality';
-import { computeAdjustedConfidence } from './modelConfidence';
+import { computeAdjustedConfidence, selectRunBaseConfidence } from './modelConfidence';
 import { applyStakeSuppression } from './modelStakeSuppression';
 import { buildDataQualitySummary } from './modelDataQualitySummary';
 import {
@@ -335,16 +335,27 @@ export async function runModelForRace(
     bankroll,
   );
 
-  // Observational only (Batch F1): scale the rank-1 (highest-EV) runner's
-  // confidence by data quality. Recorded for monitoring/future use; it does NOT
-  // feed probabilities, selection, or staking (those are already computed in
-  // `scored` above and are not modified here).
-  const baseConfidence = scored.length > 0 ? scored[0].confidence : 0;
-  const adjustedConfidence = computeAdjustedConfidence(
-    baseConfidence,
-    dataQuality.flags,
-    dataQuality.metrics,
-  );
+  // Selection (UNCHANGED): the highest-EV runner worth staking. `scored` is
+  // already sorted by EV descending, so the first staked runner is the top pick.
+  // Derived here — before the confidence alignment below — so the run-level
+  // confidence can describe the ACTUAL recommended bet. The stake-suppression
+  // step later mutates only `topBet.stake` (never confidence or selection), so
+  // reading `topBet.confidence` now is identical to reading it after suppression.
+  const topBet = scored.find((s) => s.stake > 0);
+
+  // Observational only (Batch F1 + G3): the run-level confidence describes the
+  // recommended bet when one exists, else the rank-1 runner; `undefined` when no
+  // usable confidence (never fabricated). It is then scaled by data quality.
+  // This does NOT feed probabilities, selection, or staking.
+  const baseConfidence = selectRunBaseConfidence(scored, topBet);
+  const adjustedConfidence =
+    baseConfidence === undefined
+      ? undefined
+      : computeAdjustedConfidence(
+          baseConfidence,
+          dataQuality.flags,
+          dataQuality.metrics,
+        );
   traceModel(
     `[trace] adjusted_confidence=${adjustedConfidence} (base=${baseConfidence})`,
   );
@@ -454,10 +465,9 @@ export async function runModelForRace(
 
   // 3c. Recommendation: the `recommendations` table is keyed by `model_run_id`
   //     alone (one row per run), so persist only the SINGLE best bet — the
-  //     highest-EV runner worth staking. `scored` is already sorted by EV
-  //     descending, so the first staked runner is the top pick. The full
-  //     per-runner detail remains in `model_runner_scores`.
-  const topBet = scored.find((s) => s.stake > 0);
+  //     highest-EV runner worth staking (`topBet`, derived above before the
+  //     confidence alignment). The full per-runner detail remains in
+  //     `model_runner_scores`.
 
   // Batch F2 — stake suppression safeguard: when data quality is insufficient
   // (`suppressStaking`), zero the selected bet's STAKE while preserving the
