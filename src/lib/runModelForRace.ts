@@ -63,6 +63,11 @@ import { computeAdjustedConfidence, selectRunBaseConfidence } from './modelConfi
 import { applyStakeSuppression } from './modelStakeSuppression';
 import { buildDataQualitySummary } from './modelDataQualitySummary';
 import {
+  buildTipsterConsensus,
+  buildTipsterModelAlignment,
+  buildTipsterConsensusSummary,
+} from './modelTipsterConsensus';
+import {
   buildSupersedePatch,
   currentMarker,
   selectRunIdsToSupersede,
@@ -380,6 +385,36 @@ export async function runModelForRace(
     modelAdjustments,
   );
 
+  // Observational tipster consensus (Batch H1): how much support each runner
+  // has from tipsters, aggregated across the race's selections. Purely
+  // observational — it does NOT feed probabilities, confidence, staking,
+  // selection, or ranking; it is persisted in config_json only. Runner IDs come
+  // from the priced field (the race's known runners); selections matching no
+  // known runner are counted as unmatched, never attributed to a runner.
+  const tipsterConsensus = buildTipsterConsensus({
+    runnerIds: inputs.runners.map((r) => r.runner_id),
+    tipsterSelections,
+  });
+
+  // Observational tipster-vs-model alignment (Batch H2): does the tipster
+  // consensus agree with the model's recommendation (topBet) and its top-rated
+  // runner (scored[0])? Purely observational — it does NOT feed probabilities,
+  // confidence, staking, selection, or ranking; persisted in config_json only.
+  const tipsterModelAlignment = buildTipsterModelAlignment({
+    tipsterConsensus,
+    recommendedRunner: topBet,
+    topModelRunner: scored[0],
+  });
+
+  // Read-only tipster consensus summary (Batch H3): a human-readable view of
+  // the consensus + alignment, for monitoring/dashboards. Purely observational
+  // — it does NOT feed probabilities, confidence, staking, selection, or
+  // ranking; persisted in config_json only.
+  const tipsterConsensusSummary = buildTipsterConsensusSummary(
+    tipsterConsensus,
+    tipsterModelAlignment,
+  );
+
   const metadata = buildModelRunMetadata({
     hasUsableTipsterSelections: tipsterSelections.length > 0,
     dataQualityFlags: dataQuality.flags,
@@ -407,6 +442,10 @@ export async function runModelForRace(
       model_adjustments: modelAdjustments,
       data_quality_summary: dqSummary.summary,
       data_quality_short_summary: dqSummary.short_summary,
+      tipster_consensus: tipsterConsensus,
+      tipster_model_alignment: tipsterModelAlignment,
+      tipster_consensus_summary: tipsterConsensusSummary.summary,
+      tipster_consensus_short_summary: tipsterConsensusSummary.short_summary,
     },
   });
 

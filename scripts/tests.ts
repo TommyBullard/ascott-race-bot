@@ -24,3 +24,5 @@ import './modelConfidence.test';
 import './modelStakeSuppression.test';
 import './modelDataQualitySummary.test';
 import './dataQualityUtils.test';
+import './modelTipsterConsensus.test';
+import './modelRunConfigReaders.test';
