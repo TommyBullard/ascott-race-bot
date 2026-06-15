@@ -839,9 +839,14 @@ export default function RecommendationsPage() {
         }}
       >
         <h1>Bet Recommendations</h1>
-        <a href="/leaderboard" style={{ fontSize: 14, color: '#0969da', textDecoration: 'none' }}>
-          Tipster Leaderboard →
-        </a>
+        <span style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          <a href="/how-it-works" style={{ fontSize: 14, color: '#0969da', textDecoration: 'none' }}>
+            How it works
+          </a>
+          <a href="/leaderboard" style={{ fontSize: 14, color: '#0969da', textDecoration: 'none' }}>
+            Tipster Leaderboard →
+          </a>
+        </span>
       </div>
 
       <AccuracyBar accuracy={accuracy} />
