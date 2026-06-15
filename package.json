@@ -18,6 +18,7 @@
     "simulate:novalue": "tsx scripts/noValueSimulation.ts",
     "verify:ingestion": "tsx scripts/verifyIngestion.ts",
     "inspect:schema": "tsx scripts/inspectSchema.ts",
+    "inspect:model-observability": "tsx scripts/inspectModelRunObservability.ts",
     "run:model": "tsx scripts/runModel.ts",
     "backtest": "tsx scripts/backtest.ts",
     "seed:tipsters": "tsx scripts/seedInFormTipsters.ts",
