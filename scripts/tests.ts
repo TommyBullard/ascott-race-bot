@@ -38,3 +38,5 @@ import './modelPersistenceMapping.test';
 import './relativeTime.test';
 import './modelDayRun.test';
 import './raceDayPipeline.test';
+import './raceDayPipelineRunner.test';
+import './raceDayWatch.test';

@@ -14,6 +14,7 @@ import {
   parsePipelineArgs,
   dayParamForDate,
   buildUrl,
+  buildPipelineUrls,
   dashboardUrl,
   readOddsCounts,
   formatPipelineSummary,
@@ -117,6 +118,25 @@ test('dashboardUrl: separates params with a literal "&", never "&amp;"', () => {
   assert.ok(url.includes('&'), 'expected a literal ampersand');
   assert.ok(!url.includes('&amp;'), 'must not HTML-escape the ampersand');
   assert.equal(url, 'http://localhost:3000/?date=2026-06-16&course=Ascot');
+});
+
+test('buildPipelineUrls: today -> racecards built; neither -> racecards null', () => {
+  const now = new Date('2026-06-15T12:00:00Z');
+  const today = buildPipelineUrls('http://localhost:3000', '2026-06-15', 'Ascot', now);
+  assert.equal(today.dayParam, 'today');
+  assert.equal(today.racecardsUrl, 'http://localhost:3000/api/cron/racecards?day=today');
+  assert.equal(today.oddsUrl, 'http://localhost:3000/api/cron/odds?date=2026-06-15');
+  assert.equal(today.dashboardUrl, 'http://localhost:3000/?date=2026-06-15&course=Ascot');
+
+  const tomorrow = buildPipelineUrls('http://localhost:3000', '2026-06-16', undefined, now);
+  assert.equal(tomorrow.dayParam, 'tomorrow');
+  assert.equal(tomorrow.racecardsUrl, 'http://localhost:3000/api/cron/racecards?day=tomorrow');
+  assert.equal(tomorrow.dashboardUrl, 'http://localhost:3000/?date=2026-06-16');
+
+  const neither = buildPipelineUrls('http://localhost:3000', '2026-06-20', 'Ascot', now);
+  assert.equal(neither.dayParam, null);
+  assert.equal(neither.racecardsUrl, null); // racecards refresh skipped
+  assert.equal(neither.oddsUrl, 'http://localhost:3000/api/cron/odds?date=2026-06-20'); // odds still built
 });
 
 test('readOddsCounts: reads numeric fields, null-safe (missing -> 0, never fabricated)', () => {

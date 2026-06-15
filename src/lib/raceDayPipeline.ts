@@ -104,6 +104,41 @@ export function dashboardUrl(
   return buildUrl(baseUrl, '/', { date, course });
 }
 
+/** The set of URLs one pipeline cycle works with. */
+export interface PipelineUrls {
+  /** `?day` value for the racecards cron, or null when the date isn't today/tomorrow. */
+  dayParam: 'today' | 'tomorrow' | null;
+  /** Racecards cron URL, or null when the date isn't today/tomorrow (refresh skipped). */
+  racecardsUrl: string | null;
+  /** Odds cron URL (always built; the odds route supports `?date`). */
+  oddsUrl: string;
+  /** Dashboard deep link for the date (+ optional course). */
+  dashboardUrl: string;
+}
+
+/**
+ * Builds the racecards / odds / dashboard URLs for one date in a single place,
+ * so the single-run script, the watch loop, and the commit cycle all agree.
+ * Racecards is null when the date is neither today nor tomorrow (the Racing API
+ * can't serve it, so that refresh is skipped). Pure; `now` is injectable.
+ */
+export function buildPipelineUrls(
+  baseUrl: string,
+  date: string,
+  course: string | undefined,
+  now: Date,
+): PipelineUrls {
+  const dayParam = dayParamForDate(date, now);
+  return {
+    dayParam,
+    racecardsUrl: dayParam
+      ? buildUrl(baseUrl, '/api/cron/racecards', { day: dayParam })
+      : null,
+    oddsUrl: buildUrl(baseUrl, '/api/cron/odds', { date }),
+    dashboardUrl: dashboardUrl(baseUrl, date, course),
+  };
+}
+
 /** Outcome of one HTTP cron step. */
 export type CronStepStatus = 'ok' | 'failed' | 'skipped';
 

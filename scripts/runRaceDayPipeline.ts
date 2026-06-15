@@ -30,29 +30,18 @@
  * is NEVER printed. This script does not place bets.
  */
 
-import { supabaseAdmin } from '../src/lib/supabaseAdmin';
 import { runModelForRace } from '../src/lib/runModelForRace';
 import {
-  prepareMeetingRaces,
-  runModelForMeetingRaces,
-  summarizeModelDayOutcomes,
-  type MeetingRace,
-} from '../src/lib/modelDayRun';
-import {
   parsePipelineArgs,
-  dayParamForDate,
-  buildUrl,
-  dashboardUrl,
-  readOddsCounts,
+  buildPipelineUrls,
   formatPipelineSummary,
-  shouldRunModelAfterCron,
-  ODDS_FAILED_SKIP_MESSAGE,
-  type CronStepStatus,
-  type PipelineSummary,
 } from '../src/lib/raceDayPipeline';
-
-const RACES_TABLE = 'races';
-const RACE_MEETING_DATE_COLUMN = 'meeting_date';
+import {
+  runPipelineCommitCycle,
+  createCallCron,
+  createFetchRaceRows,
+  type PipelineRunnerDeps,
+} from '../src/lib/raceDayPipelineRunner';
 
 /** Loads env from .env.local then .env (first found wins). */
 function loadEnv(): void {
@@ -64,37 +53,6 @@ function loadEnv(): void {
       // Try the next; fall back to the shell environment.
     }
   }
-}
-
-interface RaceRow {
-  id: string;
-  course: string | null;
-  off_time: string | null;
-  race_name: string | null;
-}
-
-/** Authorization header from CRON_SECRET (never logs the value). */
-function authHeaders(): Record<string, string> {
-  const secret = process.env.CRON_SECRET;
-  return secret ? { Authorization: `Bearer ${secret}` } : {};
-}
-
-/** GETs a cron route; returns ok + parsed JSON body (best-effort). */
-async function callCron(
-  url: string,
-): Promise<{ ok: boolean; body: unknown }> {
-  const res = await fetch(url, { method: 'GET', headers: authHeaders() });
-  let body: unknown = null;
-  try {
-    body = await res.json();
-  } catch {
-    // Non-JSON body; leave null.
-  }
-  const okFlag =
-    body && typeof body === 'object' && 'ok' in (body as Record<string, unknown>)
-      ? (body as { ok?: unknown }).ok === true
-      : res.ok;
-  return { ok: res.ok && okFlag, body };
 }
 
 async function main(): Promise<void> {
@@ -112,12 +70,13 @@ async function main(): Promise<void> {
 
   loadEnv();
 
-  const dayParam = dayParamForDate(args.date, new Date());
-  const racecardsUrl = dayParam
-    ? buildUrl(args.baseUrl, '/api/cron/racecards', { day: dayParam })
-    : null;
-  const oddsUrl = buildUrl(args.baseUrl, '/api/cron/odds', { date: args.date });
-  const dashUrl = dashboardUrl(args.baseUrl, args.date, args.course);
+  const now = new Date();
+  const { racecardsUrl, oddsUrl, dashboardUrl: dashUrl } = buildPipelineUrls(
+    args.baseUrl,
+    args.date,
+    args.course,
+    now,
+  );
   const scope = `${args.date}${args.course ? ` course~"${args.course}"` : ''}`;
 
   console.log(
@@ -155,92 +114,25 @@ async function main(): Promise<void> {
     return;
   }
 
-  // 1. Racecards (only when the date is today/tomorrow).
-  let racecards: CronStepStatus = 'skipped';
-  if (racecardsUrl) {
-    try {
-      const { ok, body } = await callCron(racecardsUrl);
-      racecards = ok ? 'ok' : 'failed';
-      const b = body as { tier?: string; racesInserted?: number; runnersInserted?: number } | null;
-      console.log(
-        `  racecards: ${racecards}` +
-          (b ? `  (tier=${b.tier ?? '?'} racesInserted=${b.racesInserted ?? '?'} runnersInserted=${b.runnersInserted ?? '?'})` : ''),
-      );
-    } catch (err) {
-      racecards = 'failed';
-      console.error(`  racecards: failed  ${err instanceof Error ? err.message : String(err)}`);
-    }
-  } else {
-    console.log(`  racecards: skipped  (${args.date} is not today/tomorrow)`);
-  }
-
-  // 2. Odds.
-  let odds: CronStepStatus = 'failed';
-  let oddsCounts = readOddsCounts(null);
-  try {
-    const { ok, body } = await callCron(oddsUrl);
-    odds = ok ? 'ok' : 'failed';
-    oddsCounts = readOddsCounts(body);
-    console.log(
-      `  odds:      ${odds}  (considered=${oddsCounts.races_considered} matched=${oddsCounts.markets_matched} snapshots=${oddsCounts.snapshots_written} quotes=${oddsCounts.quotes_written})`,
-    );
-  } catch (err) {
-    odds = 'failed';
-    console.error(`  odds:      failed  ${err instanceof Error ? err.message : String(err)}`);
-  }
-
-  // 3. Model (in-process; same path as model:day) — gated on a fresh odds
-  //    refresh so we never re-score against stale odds (override: --allow-stale).
-  //    A failed racecards step alone does NOT block the model (cards may already
-  //    be in the DB); only a failed/absent odds refresh does.
-  let modelSummary = summarizeModelDayOutcomes([]);
-  if (shouldRunModelAfterCron(odds, args.allowStale)) {
-    const { data, error } = await supabaseAdmin
-      .from(RACES_TABLE)
-      .select('id, course, off_time, race_name')
-      .eq(RACE_MEETING_DATE_COLUMN, args.date);
-    if (error) {
-      throw new Error(`races lookup failed for ${args.date}: ${error.message}`);
-    }
-    const rows = ((data ?? []) as RaceRow[]).map((r) => ({
-      id: String(r.id),
-      course: r.course,
-      off_time: r.off_time,
-      race_name: r.race_name,
-    }));
-    const races = prepareMeetingRaces(rows, args.course);
-    console.log(
-      `\n  model: running ${races.length} race(s)…` +
-        (args.allowStale && odds !== 'ok' ? ' (--allow-stale: odds not fresh)' : ''),
-    );
-    const outcomes = await runModelForMeetingRaces(races, runModelForRace, (race: MeetingRace, o) => {
-      if (o.status === 'run') console.log(`    run     ${race.id}  scored=${o.scored} recommended=${o.recommended}`);
-      else if (o.status === 'skipped') console.log(`    skipped ${race.id}  (no priced runners / market snapshot)`);
-      else console.error(`    FAILED  ${race.id}  ${o.error}`);
-    });
-    modelSummary = summarizeModelDayOutcomes(outcomes);
-  } else {
-    console.log(`\n${ODDS_FAILED_SKIP_MESSAGE}`);
-  }
-
-  // Final summary.
-  const summary: PipelineSummary = {
-    racecards,
-    odds,
-    races_considered: oddsCounts.races_considered,
-    markets_matched: oddsCounts.markets_matched,
-    snapshots_written: oddsCounts.snapshots_written,
-    quotes_written: oddsCounts.quotes_written,
-    model_races_found: modelSummary.races_found,
-    model_races_run: modelSummary.races_run,
-    recommendations_created: modelSummary.recommendations_created,
-    no_bet_races: modelSummary.no_bet_races,
-    failures: modelSummary.failures,
+  // Run one pipeline cycle (racecards + odds + gated model run), reusing the
+  // shared runner so this script and pipeline:watch behave identically.
+  const deps: PipelineRunnerDeps = {
+    callCron: createCallCron(),
+    fetchRaceRows: createFetchRaceRows(),
+    runOneRace: runModelForRace,
   };
-  console.log('\nSummary:');
-  for (const line of formatPipelineSummary(summary, dashUrl)) console.log(line);
+  const result = await runPipelineCommitCycle(deps, {
+    date: args.date,
+    course: args.course,
+    baseUrl: args.baseUrl,
+    allowStale: args.allowStale,
+    now,
+  });
 
-  if (racecards === 'failed' || odds === 'failed' || summary.failures > 0) {
+  console.log('\nSummary:');
+  for (const line of formatPipelineSummary(result.summary, result.dashboardUrl)) console.log(line);
+
+  if (result.racecards === 'failed' || result.odds === 'failed' || result.summary.failures > 0) {
     process.exitCode = 1;
   }
 }
