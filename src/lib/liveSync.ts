@@ -19,7 +19,11 @@ import { supabaseAdmin } from './supabaseAdmin';
 import { runModelForRace } from './runModelForRace';
 import {
   createRacingApiClient,
+  isStandardPlanRequiredError,
+  resolveRacecardsTier,
   type RacingApiClient,
+  type RacecardsTier,
+  type StandardRacecard,
 } from './racingApi';
 import {
   createBetfairExchangeClient,
@@ -66,6 +70,50 @@ export interface RacecardsSyncSummary {
   racesExisting: number;
   runnersInserted: number;
   skipped: number;
+  /** Which racecards endpoint actually produced the cards ('standard'|'basic'). */
+  tier: RacecardsTier;
+}
+
+/**
+ * Fetches racecards honouring the configured tier, with a SAFE fallback:
+ *  - `basic`: calls the basic/free endpoint directly (works on any plan; no odds).
+ *  - `standard` (default): calls `/racecards/standard`; if the plan lacks it
+ *    ("Standard Plan required"), logs a hint and falls back to the basic
+ *    endpoint. Any OTHER error (bad credentials, rate limit, network) is
+ *    rethrown — never masked.
+ *
+ * Returns the cards plus which tier actually produced them. Basic cards have NO
+ * bundled odds, which does not affect racecard ingestion (it writes only races +
+ * runners; odds are sourced separately by the Betfair odds pipeline).
+ */
+async function fetchRacecards(
+  client: RacingApiClient,
+  params: { day: 'today' | 'tomorrow'; regionCodes: string[] },
+  tier: RacecardsTier,
+): Promise<{ cards: StandardRacecard[]; usedTier: RacecardsTier }> {
+  if (tier === 'basic') {
+    console.info(
+      '[racecards] Using BASIC racecards endpoint (/racecards/free) — no odds ' +
+        '(RACING_API_RACECARDS_TIER=basic).',
+    );
+    const res = await client.getBasicRacecards(params);
+    return { cards: res.racecards ?? [], usedTier: 'basic' };
+  }
+
+  try {
+    const res = await client.getStandardRacecards(params);
+    return { cards: res.racecards ?? [], usedTier: 'standard' };
+  } catch (err) {
+    if (!isStandardPlanRequiredError(err)) throw err;
+    console.warn(
+      '[racecards] /racecards/standard requires the Standard plan; falling back ' +
+        'to the basic endpoint (/racecards/free). Basic cards carry NO odds — the ' +
+        'model still prices from the Betfair odds pipeline. Set ' +
+        'RACING_API_RACECARDS_TIER=basic to skip this attempt.',
+    );
+    const res = await client.getBasicRacecards(params);
+    return { cards: res.racecards ?? [], usedTier: 'basic' };
+  }
 }
 
 /**
@@ -73,23 +121,38 @@ export interface RacecardsSyncSummary {
  * their runners. Idempotent: a race already present (course+off_time) is reused
  * and its status is NOT downgraded; only runners missing by normalised name are
  * inserted, so re-running mid-day never duplicates.
+ *
+ * Endpoint tier follows `options.tier` ?? `RACING_API_RACECARDS_TIER` ??
+ * 'standard'. On the standard tier, a "Standard Plan required" response falls
+ * back to the basic endpoint automatically (see {@link fetchRacecards}).
  */
 export async function syncRacecards(
-  options: { day?: 'today' | 'tomorrow'; regionCodes?: string[] } = {},
+  options: {
+    day?: 'today' | 'tomorrow';
+    regionCodes?: string[];
+    tier?: RacecardsTier;
+  } = {},
   client: RacingApiClient = createRacingApiClient(),
 ): Promise<RacecardsSyncSummary> {
   const day = options.day ?? 'today';
   const regionCodes = options.regionCodes ?? DEFAULT_REGIONS;
+  const tier =
+    options.tier ?? resolveRacecardsTier(process.env.RACING_API_RACECARDS_TIER);
   const summary: RacecardsSyncSummary = {
     cardsFetched: 0,
     racesInserted: 0,
     racesExisting: 0,
     runnersInserted: 0,
     skipped: 0,
+    tier,
   };
 
-  const res = await client.getStandardRacecards({ day, regionCodes });
-  const cards = res.racecards ?? [];
+  const { cards, usedTier } = await fetchRacecards(
+    client,
+    { day, regionCodes },
+    tier,
+  );
+  summary.tier = usedTier;
   summary.cardsFetched = cards.length;
 
   for (const card of cards) {
@@ -138,6 +201,8 @@ export async function syncRacecards(
 }
 
 export interface OddsSyncSummary {
+  /** The meeting date (YYYY-MM-DD, UTC) whose races were considered. */
+  meetingDate: string;
   racesConsidered: number;
   marketsMatched: number;
   snapshotsWritten: number;
@@ -146,11 +211,17 @@ export interface OddsSyncSummary {
 }
 
 /**
- * Polls Betfair Exchange for today's UK/IRE win markets and writes a fresh
- * market_snapshot + runner_quotes for each of today's not-yet-settled races it
- * can match. Snapshots are intentionally append-only time-series (the model
- * reads the latest), so each 5-min run adds one snapshot per matched race;
+ * Polls Betfair Exchange for a meeting day's UK/IRE win markets and writes a
+ * fresh market_snapshot + runner_quotes for each of that day's not-yet-settled
+ * races it can match. Snapshots are intentionally append-only time-series (the
+ * model reads the latest), so each 5-min run adds one snapshot per matched race;
  * re-running within a run never double-writes a race.
+ *
+ * The target meeting day defaults to today (UTC); pass `options.meetingDate`
+ * (YYYY-MM-DD) to target another day (e.g. tomorrow / a specific date). The
+ * meeting date drives BOTH the race query and the Betfair market time window;
+ * `now` remains the real poll time stamped on each snapshot, so targeting a
+ * future day still records when the odds were actually captured.
  *
  * Matching is fuzzy by design (course + off-time for the market, normalised
  * horse name for the runner); unmatched races/runners are SKIPPED, never guessed.
@@ -158,17 +229,19 @@ export interface OddsSyncSummary {
 export async function syncOddsFromBetfair(
   now: Date = new Date(),
   client: BetfairExchangeClient = createBetfairExchangeClient(),
+  options: { meetingDate?: string } = {},
 ): Promise<OddsSyncSummary> {
+  const meetingDate = options.meetingDate ?? todayUtc(now);
   const summary: OddsSyncSummary = {
+    meetingDate,
     racesConsidered: 0,
     marketsMatched: 0,
     snapshotsWritten: 0,
     quotesWritten: 0,
     unmatchedRaces: 0,
   };
-  const meetingDate = todayUtc(now);
 
-  // Today's not-yet-settled races.
+  // The target day's not-yet-settled races.
   const { data: raceData, error: raceErr } = await supabaseAdmin
     .from('races')
     .select('id, course, off_time, status')
@@ -184,7 +257,7 @@ export async function syncOddsFromBetfair(
   summary.racesConsidered = races.length;
   if (races.length === 0) return summary;
 
-  // Betfair's win markets across today (UTC bounds).
+  // Betfair's win markets across the target meeting day (UTC bounds).
   const fromIso = `${meetingDate}T00:00:00Z`;
   const toIso = `${meetingDate}T23:59:59Z`;
   const catalogues = (

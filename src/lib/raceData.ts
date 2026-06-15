@@ -468,6 +468,31 @@ export async function fetchTodaysRaceIds(now: Date = new Date()): Promise<string
 }
 
 /**
+ * Fetches the IDs of all races on a specific `meetingDate` (`YYYY-MM-DD`
+ * calendar date). Unlike {@link fetchTodaysRaceIds} (which derives "today" from
+ * the clock), the date is supplied by the caller, so the dashboard / read API
+ * can show another day (e.g. tomorrow) without changing default behaviour.
+ *
+ * @throws if the Supabase query fails.
+ */
+export async function fetchRaceIdsForMeeting(
+  meetingDate: string,
+): Promise<string[]> {
+  const { data, error } = await supabaseAdmin
+    .from(RACES_TABLE)
+    .select('id')
+    .eq(RACE_MEETING_DATE_COLUMN, meetingDate);
+
+  if (error) {
+    throw new Error(
+      `Failed to fetch races for meeting ${meetingDate}: ${error.message}`,
+    );
+  }
+
+  return ((data ?? []) as { id: Id }[]).map((row) => String(row.id));
+}
+
+/**
  * Fetches the IDs of all races whose `meeting_date` falls within the inclusive
  * `[fromDate, toDate]` range (both `YYYY-MM-DD` calendar dates), ordered by
  * date. Used by the backtest harness to evaluate a window of meetings.
@@ -696,6 +721,12 @@ export interface RaceCard {
   /** Up to two alternative runners (EV rank 2-3), excluding the model pick. */
   alternatives: RaceCardRunner[];
   /**
+   * True when a CURRENT model run exists for this race. Lets readers tell apart
+   * "a run happened but produced no bet" (`hasModelRun` true, `modelPick` null)
+   * from "no run yet" (`hasModelRun` false). Read-only; not a decision input.
+   */
+  hasModelRun: boolean;
+  /**
    * Observational model outputs read from the current run's `config_json`
    * (data quality + tipster consensus). Always present but null-safe: every
    * field is null / `[]` when the run is missing or lacks the key. Read-only;
@@ -760,6 +791,7 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
     favourite: null,
     modelPick: null,
     alternatives: [],
+    hasModelRun: false,
     // Empty/null-safe default; populated from the current run's config_json below
     // (stays empty when the race has no current model run).
     observability: getModelObservabilityFromConfig(null),
@@ -817,6 +849,7 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
   }
 
   // Surface the run's observational outputs (read-only, null-safe).
+  card.hasModelRun = true;
   card.observability = getModelObservabilityFromConfig(latestRun.config_json);
 
   // 4. The run's staking decision (rank-1 rec) + per-runner scores.

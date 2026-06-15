@@ -216,6 +216,17 @@ export interface RacecardsQuery {
   regionCodes?: string[];
 }
 
+/**
+ * Which racecards endpoint to use:
+ * - `standard` — `/racecards/standard` (requires the Standard plan; includes the
+ *   bundled per-bookmaker odds).
+ * - `basic` — `/racecards/free` (available on any plan; SAME card/runner shape
+ *   minus the odds). Sufficient for ingesting `races` + `runners` because odds
+ *   are sourced separately by the Betfair odds pipeline.
+ */
+export type RacecardsTier = 'standard' | 'basic';
+
+
 /** Query for `/results`. */
 export interface ResultsQuery {
   startDate?: string;
@@ -252,6 +263,12 @@ export interface RacingApiClient {
   ): Promise<JockeyAnalysisResponse>;
   /** `/racecards/standard` — today's/tomorrow's cards incl. runner odds (Standard plan). */
   getStandardRacecards(params: RacecardsQuery): Promise<RacecardsStandardResponse>;
+  /**
+   * `/racecards/free` — basic cards on ANY plan. Same response shape as
+   * `/racecards/standard` minus the bundled `odds` (which this typing omits as
+   * `undefined`), so the standard race/runner mappers can consume it unchanged.
+   */
+  getBasicRacecards(params: RacecardsQuery): Promise<RacecardsStandardResponse>;
   /** `/results` — settled races incl. finishing position, SP and BSP (Standard plan). */
   getResults(params: ResultsQuery): Promise<ResultsResponse>;
 }
@@ -379,6 +396,16 @@ export function createRacingApiClient(
         fetchImpl,
         minIntervalMs,
       ),
+    getBasicRacecards: ({ day, regionCodes }) =>
+      // The basic/free endpoint returns the same card/runner shape as standard
+      // minus `odds`; typed as RacecardsStandardResponse so the standard mappers
+      // consume it unchanged (missing fields stay undefined -> mapped to null).
+      racingApiGet<RacecardsStandardResponse>(
+        '/racecards/free',
+        { day, region_codes: regionCodes },
+        fetchImpl,
+        minIntervalMs,
+      ),
     getResults: ({ startDate, endDate, regionCodes, limit, skip }) =>
       racingApiGet<ResultsResponse>(
         '/results',
@@ -396,6 +423,30 @@ export function createRacingApiClient(
 }
 
 // --- Pure helpers (aggregation + mapping; unit-tested on fixtures) ----------
+
+/**
+ * Resolves the configured racecards tier (e.g. from `RACING_API_RACECARDS_TIER`).
+ * Only an explicit, case-insensitive `basic` selects the basic/free endpoint;
+ * anything else (including unset/unknown) defaults to `standard`, so the richer
+ * endpoint stays the default and existing setups are unaffected. Pure.
+ */
+export function resolveRacecardsTier(
+  value: string | undefined | null,
+): RacecardsTier {
+  return (value ?? '').trim().toLowerCase() === 'basic' ? 'basic' : 'standard';
+}
+
+/**
+ * True only when an error is the Racing API's "Standard Plan required" response
+ * (the plan lacks `/racecards/standard`), so the caller may safely fall back to
+ * the basic endpoint. Any OTHER error — bad credentials, rate limit, network —
+ * returns false and must NOT trigger a fallback (so a real failure is not
+ * masked). Pure.
+ */
+export function isStandardPlanRequiredError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /standard plan required/i.test(message);
+}
 
 /** Coerces an unknown numeric field to a finite number, else 0. */
 function toFiniteNumber(value: unknown): number {

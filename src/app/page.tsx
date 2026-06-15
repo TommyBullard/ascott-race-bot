@@ -51,6 +51,12 @@ interface RaceCard {
   modelPick: RaceCardPick | null;
   alternatives: RaceCardRunner[];
   /**
+   * True when a current model run exists for this race. Distinguishes
+   * "ran but no qualifying bet" (true + `modelPick` null) from "no run yet"
+   * (false). Optional for back-compat with older responses.
+   */
+  hasModelRun?: boolean;
+  /**
    * Read-only model observability for this race (from the current run's
    * config_json, surfaced by the API in Batch J1). Optional/null-safe: absent or
    * empty for races without a current run, in which case the explanation panel
@@ -590,6 +596,10 @@ function RaceCardView({ card, nowMs }: { card: RaceCard; nowMs: number }) {
               </div>
             )}
           </>
+        ) : card.hasModelRun ? (
+          <span style={styles.muted}>
+            No bet — the model ran but found no qualifying recommendation.
+          </span>
         ) : (
           <span style={styles.muted}>No model pick for this race yet.</span>
         )}
@@ -754,7 +764,11 @@ export default function RecommendationsPage() {
     async function load() {
       try {
         setStatus('loading');
-        const res = await fetch('/api/recommendations', {
+        // Forward the dashboard's own URL query (?day / ?date / ?course) to the
+        // read API so deep links like /?date=2026-06-16&course=Ascot work.
+        const query =
+          typeof window !== 'undefined' ? window.location.search : '';
+        const res = await fetch(`/api/recommendations${query}`, {
           signal: controller.signal,
         });
 

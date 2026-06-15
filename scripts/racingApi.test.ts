@@ -18,7 +18,9 @@ import {
   collectEntitiesFromRacecards,
   createRacingApiClient,
   fetchRacingApiSignals,
+  isStandardPlanRequiredError,
   mapAggregatesToSignal,
+  resolveRacecardsTier,
   roiFromAggregate,
   strikeRateFromAggregate,
   windowDates,
@@ -259,6 +261,9 @@ function makeFakeClient(): RacingApiClient {
     async getStandardRacecards() {
       return { racecards: [] };
     },
+    async getBasicRacecards() {
+      return { racecards: [] };
+    },
     async getResults() {
       return { results: [] };
     },
@@ -324,4 +329,37 @@ test('fetchRacingApiSignals: shortWindowDays=null omits the 7d signal entirely',
 test('createRacingApiClient: real client is constructable without credentials', () => {
   // Construction must not touch env (lazy); only a real request would validate.
   assert.equal(typeof createRacingApiClient().getFreeRacecards, 'function');
+  // The basic racecards method exists for the plan-fallback path.
+  assert.equal(typeof createRacingApiClient().getBasicRacecards, 'function');
 });
+
+// --- racecards tier + plan-fallback (Batch: plan compatibility) ------------
+
+test('resolveRacecardsTier: only explicit "basic" selects basic; else standard', () => {
+  assert.equal(resolveRacecardsTier('basic'), 'basic');
+  assert.equal(resolveRacecardsTier('BASIC'), 'basic');
+  assert.equal(resolveRacecardsTier('  Basic  '), 'basic');
+  assert.equal(resolveRacecardsTier('standard'), 'standard');
+  assert.equal(resolveRacecardsTier(undefined), 'standard');
+  assert.equal(resolveRacecardsTier(null), 'standard');
+  assert.equal(resolveRacecardsTier(''), 'standard');
+  assert.equal(resolveRacecardsTier('pro'), 'standard'); // unknown -> default
+});
+
+test('isStandardPlanRequiredError: true only for the plan-required message', () => {
+  assert.equal(
+    isStandardPlanRequiredError(
+      new Error('Racing API 401 Unauthorized for /racecards/standard — {"detail":"Standard Plan required"}'),
+    ),
+    true,
+  );
+  // Case-insensitive.
+  assert.equal(isStandardPlanRequiredError(new Error('standard plan required')), true);
+  // Other failures must NOT trigger a fallback.
+  assert.equal(isStandardPlanRequiredError(new Error('Racing API 401 Unauthorized — bad credentials')), false);
+  assert.equal(isStandardPlanRequiredError(new Error('Racing API 429 rate-limited')), false);
+  assert.equal(isStandardPlanRequiredError('some string'), false);
+  assert.equal(isStandardPlanRequiredError(null), false);
+  assert.equal(isStandardPlanRequiredError(undefined), false);
+});
+

@@ -59,18 +59,32 @@ export function normalizeHorseName(name: string | undefined | null): string {
 }
 
 /**
+ * Exact, deterministic course/venue aliases, applied AFTER the base
+ * normalisation below. Keys/values are already-normalised strings. This exists
+ * because providers label the same physical course differently: The Racing API
+ * calls it "Ascot", while Betfair labels the Royal Ascot meeting "Royal Ascot".
+ * Only EXACT normalised matches are rewritten — this is not fuzzy matching, and
+ * unrelated courses are untouched. Add a new line here per confirmed alias.
+ */
+const COURSE_ALIASES: Record<string, string> = {
+  'royal ascot': 'ascot',
+};
+
+/**
  * Normalises a course/venue name for matching: lower-cased, an "(AW)" all-
- * weather marker stripped, punctuation removed, whitespace collapsed.
- * e.g. "Lingfield (AW)" -> "lingfield".
+ * weather marker stripped, punctuation removed, whitespace collapsed, then a
+ * known exact alias applied ({@link COURSE_ALIASES}).
+ * e.g. "Lingfield (AW)" -> "lingfield"; "Royal Ascot" -> "ascot".
  */
 export function normalizeCourse(name: string | undefined | null): string {
   if (!name) return '';
-  return name
+  const base = name
     .toLowerCase()
     .replace(/\(aw\)/g, ' ')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
     .replace(/\s+/g, ' ');
+  return COURSE_ALIASES[base] ?? base;
 }
 
 /** True when a race name/class denotes a handicap. */

@@ -42,7 +42,6 @@ import {
   calculateEV,
   confidenceScore,
   kellyStake,
-  labelConfidence,
 } from './bettingEngine';
 import {
   calculateModelProbabilities,
@@ -50,6 +49,10 @@ import {
   type TipsterStats,
 } from './modelProbabilities';
 import { buildModelRunMetadata } from './modelRunMetadata';
+import {
+  buildModelRunnerScoreFields,
+  buildRecommendationFields,
+} from './modelPersistenceMapping';
 import {
   assessDataQuality,
   determineModelAdjustments,
@@ -135,6 +138,8 @@ export interface RunModelResult {
 
 export interface ScoredRunner {
   runner_id: string;
+  /** The real decimal odds the runner was priced + scored on (from the quote). */
+  odds: number;
   market_prob: number;
   model_prob: number;
   edge: number;
@@ -201,6 +206,7 @@ export function scoreRaceRunners(
     const stake = kellyStake(model_prob, r.odds_decimal, bankroll, confidence);
     return {
       runner_id: r.runner_id,
+      odds: r.odds_decimal,
       market_prob: r.market_prob,
       model_prob,
       edge: model_prob - r.market_prob,
@@ -477,19 +483,17 @@ export async function runModelForRace(
   }
   const modelRunId = String((runData as { id: string }).id);
 
-  // 3b. Per-runner scores (all runners), stamped current. The richer columns the
-  //     upstream model emits (support_raw, support_deherded, disagreement_bonus,
-  //     p_ev_positive) are nullable and not produced by this engine, so they
-  //     are left null.
-  const scoreRows = scored.map((s) => ({
+  // 3b. Per-runner scores (all runners), stamped current. Populates BOTH the
+  //     canonical/display columns and the older compatibility columns from the
+  //     same scored values (see modelPersistenceMapping). The richer upstream-
+  //     model columns (support_raw, support_deherded, disagreement_bonus,
+  //     p_ev_positive) are not produced by this engine, so they stay null.
+  //     Built BEFORE stake suppression below, so each runner's `stake` is its raw
+  //     computed Kelly stake; the recommendation reflects the post-suppression
+  //     actioned stake.
+  const scoreRows = buildModelRunnerScoreFields(scored).map((fields) => ({
     model_run_id: modelRunId,
-    runner_id: s.runner_id,
-    market_prob: s.market_prob,
-    model_prob: s.model_prob,
-    edge: s.edge,
-    ev_per_1: s.ev,
-    confidence_score: s.confidence,
-    rank_in_race: s.rank,
+    ...fields,
     ...currentMarker(),
   }));
 
@@ -524,23 +528,9 @@ export async function runModelForRace(
         model_run_id: modelRunId,
         race_id: raceId,
         runner_id: topBet.runner_id,
-        recommendation_rank: 1,
-        confidence_label: labelConfidence(topBet.confidence),
-        // `stake_pct` is a PERCENTAGE of bankroll (e.g. 2.0 => 2%), matching the
-        // schema's `_pct` naming convention (cf. `kelly_fraction_used`, a
-        // fraction). stake_amount / bankroll * 100 yields that percentage.
-        stake_pct: bankroll > 0 ? (topBet.stake / bankroll) * 100 : 0,
-        stake_amount: topBet.stake,
-        kelly_fraction_used: baseKellyFraction,
-        mandatory_floor_applied: false,
-        daily_cap_restricted: false,
-        rationale_json: {
-          ev: topBet.ev,
-          model_prob: topBet.model_prob,
-          market_prob: topBet.market_prob,
-          edge: topBet.edge,
-          confidence: topBet.confidence,
-        },
+        // Canonical/display + compatibility columns from the same values, so
+        // SQL/dashboards see a complete row (see modelPersistenceMapping).
+        ...buildRecommendationFields({ topBet, bankroll, baseKellyFraction }),
         ...currentMarker(),
       });
     if (recsError) {

@@ -33,3 +33,5 @@ import './tipsterImportDiagnostics.test';
 import './demoSeed.test';
 import './dbHealthSpec.test';
 import './cronDiagnostics.test';
+import './cronDate.test';
+import './modelPersistenceMapping.test';
