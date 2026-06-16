@@ -227,7 +227,112 @@ None of these are guarantees. Always apply your own judgement and risk limits.
 
 ---
 
-## 7. Settle results (manual fallback)
+## 7. Race-lock / off-time safety
+
+A race's **decision record is its final pre-off run** — the latest model run with
+`run_time <= off_time`. Performance / accuracy is evaluated on that run, so a
+run produced after the off can't change what the model "decided" for the race.
+Keep live operation consistent with that rule.
+
+> **Why this section exists.** On Ascot Day 1, `pipeline:watch` kept running after
+> races had gone off. Post-off reruns on stale odds produced **no-bet** runs that
+> became the current run and **superseded the valid pre-off runs**, so the
+> dashboard showed **3 no-bet races** instead of the true pre-off decision record.
+> A producer guard now skips post-off / resulted races and evaluation reads the
+> pre-off run — but the safest habit is still to stop the pipeline once racing is
+> done.
+
+- **The final decision snapshot is the latest valid run before the off.** Treat
+  the pre-off run as the source of truth for what the model decided on a race;
+  anything produced after the off is not part of that record.
+- **Do not run `pipeline:day` or `pipeline:watch` after races have gone off**
+  unless you are explicitly doing diagnostics. Re-scoring a started race adds
+  nothing — the odds are stale and the decision is already locked.
+- **Stop watch mode after the final race** (or rely on the off-time guard). The
+  guard skips post-off / resulted races — reported as `skipped_post_off` /
+  `skipped_resulted` in the summary — and never lets a post-off run supersede the
+  pre-off run, but stopping the loop is cleaner and avoids needless work.
+- **Import results after the official result is known — but do not re-run the
+  model for completed races.** Settling records results into `runners` / `races`;
+  it neither needs nor should trigger a fresh model run for a finished race.
+- **If the dashboard's "current" pick disagrees with your pre-race notes, trust
+  the pre-off / as-of-off-time evaluation.** The pre-off run is the decision
+  record; a differing "current" run is a later (often post-off) recompute, not the
+  race-day decision.
+
+### Safe commands
+
+```powershell
+# Start the app (serves the dashboard / API; no model writes itself)
+npm run dev
+
+# Pre-race pipeline: refresh racecards + odds + run models for the meeting.
+# Dry-run first (omit --commit) to preview. Run ONLY while races are upcoming.
+npm run pipeline:day -- --date 2026-06-16 --course Ascot --commit
+
+# Keep the meeting fresh on an interval (writes). Run ONLY before/during the
+# pre-off window, then stop it once the last race has gone off.
+npm run pipeline:watch -- --date 2026-06-16 --course Ascot --interval-minutes 5 --commit
+```
+
+To **stop watch mode**, press **Ctrl+C** in its terminal once the final race of
+the meeting has gone off (or whenever you want to lock the day's decision record).
+
+```powershell
+# After official results are published: settle from an operator-curated CSV.
+# Dry-run first (writes nothing), then commit.
+npm run import:results -- --file data/results-2026-06-16-ascot.csv
+npm run import:results -- --file data/results-2026-06-16-ascot.csv --commit
+
+# Check the day's accuracy (read-only; reads the pre-off decision record).
+curl "http://localhost:3000/api/accuracy?date=2026-06-16&course=Ascot"
+```
+
+The `performance` object is evaluated as-of off time; its response shape and the
+settled / pending / no-bet counting rules are documented in [API.md](API.md).
+
+> Decision-support only. The tool never places a bet, and none of this is betting
+> advice or a guarantee of profit. If `CRON_SECRET` is set, add the bearer header
+> noted at the top of this runbook to any `curl` call — never paste the secret into
+> shared output.
+
+### Manual notes vs the final pre-off run
+
+Hand-written pre-race notes are useful **audit evidence**, but a note may not
+equal the race's **final pre-off run**. If `pipeline:watch` keeps running, the
+model can run again closer to the off and change its rank-1 pick — so a note
+captured 5–9 minutes before the off can differ from the last run before the off,
+even though both are pre-off.
+
+- **Official evaluation uses the latest `model_run` with `run_time <= off_time`**
+  (the final pre-off run), not whichever snapshot a note happened to capture.
+- **Record the snapshot time in every note** (e.g. "~5m before off"), so a note
+  can be placed against the run timeline later.
+- **If a note and the final pre-off run differ, record both** — label them
+  clearly as the **user-captured snapshot** and the **final pre-off model run**.
+  Neither is "wrong"; they are two points on the same pre-off timeline.
+- **End-of-day analysis should distinguish four things per race:** the
+  **user-snapshot pick**, the **final pre-off pick**, the **current dashboard
+  pick** (which, post-fix, equals the final pre-off pick), and the **official
+  winner**. See [end-of-day-analysis.md](../ascot-day-1/end-of-day-analysis.md).
+
+Observed on Ascot Day 1 (notes captured an earlier snapshot than the final
+pre-off run):
+
+| Race | User-captured snapshot | Final pre-off model run |
+| --- | --- | --- |
+| 17:00 | Small Fry | Puturhandstogether |
+| 17:35 | Ghostwriter | Haatem |
+| 18:10 | Gamrai | Sing Us A Song |
+
+In each case the model re-ranked in its final pre-off run. The official record
+uses the final pre-off pick; the note is kept as evidence of what was seen at the
+earlier snapshot. (None of either set won — this is about *which run is the record*,
+not about results, and it is decision-support only.)
+
+---
+
+## 8. Settle results (manual fallback)
 
 After the races are run, record official finishing positions so the dashboard's
 accuracy tracker updates. The automated `/api/cron/results` route needs the
@@ -286,7 +391,7 @@ record (see the post-off guard note in step 5).
 
 ---
 
-## 8. Rollback (remove a bad import by `source_label`)
+## 9. Rollback (remove a bad import by `source_label`)
 
 Tipster rows you imported carry the `source_label` you set, so a specific batch
 is cleanly removable (**read this before running; it deletes only that batch**):

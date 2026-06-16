@@ -237,7 +237,7 @@ unset; bearer token required when set):
 - `GET /api/accuracy` — lifetime accuracy + per-day performance (`?date` /
   `?course`). Per-day performance is evaluated **as-of off time** (each race's
   latest model run with `run_time <= off_time`), so post-off reruns don't skew
-  it.
+  it. Response shape + pre-off semantics: [API.md](API.md).
 - `GET /api/tipsters/status` — approved / pending / candidate counts.
 - `GET /api/tipsters/in-form` — top in-form tipsters.
 - `GET /api/tipsters/leaderboard` — tipster leaderboard.
