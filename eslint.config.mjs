@@ -17,7 +17,7 @@ const eslintConfig = [
   ...nextCoreWebVitals,
   prettier,
   {
-    ignores: ['.next/**', 'node_modules/**'],
+    ignores: ['.next/**', 'node_modules/**', 'references/**'],
   },
 ];
 
