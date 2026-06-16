@@ -126,6 +126,7 @@ test('spec sanity: required tables + history columns + dedupe index are declared
     'races', 'runners', 'market_snapshots', 'runner_quotes', 'model_runs',
     'model_runner_scores', 'recommendations', 'bankroll_ledger', 'tipsters',
     'tipster_aliases', 'tipster_priors', 'tipster_review_queue', 'tipster_selections',
+    'tipster_source_registry', 'tipster_selection_candidates',
   ]) {
     assert.ok(names.includes(t), `missing required table in spec: ${t}`);
   }

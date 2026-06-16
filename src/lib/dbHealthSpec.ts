@@ -118,6 +118,22 @@ export const REQUIRED_TABLES: readonly TableSpec[] = [
       'raw_affiliation', 'created_at', 'source_label',
     ],
   },
+  {
+    name: 'tipster_source_registry',
+    columns: [
+      'id', 'source_label', 'source_name', 'source_url', 'is_approved',
+      'notes', 'created_at', 'approved_at',
+    ],
+  },
+  {
+    name: 'tipster_selection_candidates',
+    columns: [
+      'id', 'meeting_date', 'course', 'off_time', 'horse_name', 'tipster_name',
+      'raw_affiliation', 'source_label', 'source_url', 'source_name', 'status',
+      'race_id', 'runner_id', 'tipster_id', 'reviewed_at', 'review_notes',
+      'created_at',
+    ],
+  },
 ];
 
 /** Indexes the migrations create (verified MANUALLY — see header). */
@@ -128,6 +144,8 @@ export const REQUIRED_INDEXES: readonly IndexSpec[] = [
   { name: 'tipster_selections_race_id_idx', table: 'tipster_selections', columns: 'race_id' },
   { name: 'tipster_selections_tipster_id_idx', table: 'tipster_selections', columns: 'tipster_id' },
   { name: 'tipster_selections_dedupe_idx', table: 'tipster_selections', columns: 'race_id, runner_id, raw_tipster_name' },
+  { name: 'tipster_selection_candidates_status_idx', table: 'tipster_selection_candidates', columns: 'status' },
+  { name: 'tipster_selection_candidates_source_idx', table: 'tipster_selection_candidates', columns: 'source_label' },
 ];
 
 /** Tables whose `is_current` / `superseded_at` history columns are required. */
