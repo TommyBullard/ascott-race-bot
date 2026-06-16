@@ -131,7 +131,8 @@ export const REQUIRED_TABLES: readonly TableSpec[] = [
       'id', 'meeting_date', 'course', 'off_time', 'horse_name', 'tipster_name',
       'raw_affiliation', 'source_label', 'source_url', 'source_name', 'status',
       'race_id', 'runner_id', 'tipster_id', 'reviewed_at', 'review_notes',
-      'created_at',
+      'created_at', 'race_name', 'proof_url', 'confidence_text',
+      'evidence_confidence', 'notes',
     ],
   },
 ];

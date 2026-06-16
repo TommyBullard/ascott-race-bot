@@ -33,6 +33,14 @@ import {
   getModelObservabilityFromConfig,
   type ModelRunObservability,
 } from './modelRunConfigReaders';
+import {
+  summarizeModelPerformance,
+  type ModelPerformance,
+  type RecommendationOutcome,
+} from './modelPerformance';
+import { normalizeCourse } from './raceSync';
+import { classifyTableProbe } from './dbHealthSpec';
+import type { TipsterStatusSummary } from './tipsterStatus';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { TipsterSelection } from './modelProbabilities';
 
@@ -44,6 +52,7 @@ const MODEL_RUNS_TABLE = 'model_runs';
 const MODEL_RUNNER_SCORES_TABLE = 'model_runner_scores';
 const RECOMMENDATIONS_TABLE = 'recommendations';
 const TIPSTER_SELECTIONS_TABLE = 'tipster_selections';
+const TIPSTER_SELECTION_CANDIDATES_TABLE = 'tipster_selection_candidates';
 const TIPSTER_PRIORS_TABLE = 'tipster_priors';
 const TIPSTERS_TABLE = 'tipsters';
 const TIPSTER_ALIASES_TABLE = 'tipster_aliases';
@@ -1235,6 +1244,211 @@ export async function computeModelAccuracy(
     roiPct: (profitPoints / racesSettled) * 100,
     computedAt: now.toISOString(),
   };
+}
+
+/** {@link ModelPerformance} plus the scope it was computed for. */
+export interface ModelPerformanceResult extends ModelPerformance {
+  /** The meeting date (YYYY-MM-DD) this snapshot covers. */
+  date: string;
+  /** The course filter applied (verbatim), or null for all courses. */
+  course: string | null;
+  /** When this snapshot was computed (ISO 8601). */
+  computedAt: string;
+}
+
+/**
+ * Computes {@link ModelPerformance} for one meeting day (optionally a single
+ * course), live from current DB state, using the STORED recommendation odds and
+ * stake (Phase 5B).
+ *
+ * Scope: rank-1 CURRENT recommendations for races on `date` (filtered to
+ * `course` when given, normalised so "Ascot" matches "Royal Ascot"). A race
+ * counts as settled when it has a recorded winner (`runners.finish_pos = 1`);
+ * recommendations for races without a result yet are PENDING and never counted
+ * as losses. `no_bet_races` is the number of in-scope races that had a current
+ * model run but produced no rank-1 recommendation.
+ *
+ * Read-only; changes no model maths or staking. The heavy lifting (P/L, ROI,
+ * strike rate) is the pure {@link summarizeModelPerformance}.
+ *
+ * @throws if any Supabase query fails.
+ */
+export async function computeModelPerformance(
+  params: { date: string; course?: string | null },
+  now: Date = new Date(),
+): Promise<ModelPerformanceResult> {
+  const courseLabel = (params.course ?? '').trim() || null;
+  const wantCourse = courseLabel === null ? null : normalizeCourse(courseLabel);
+
+  const wrap = (perf: ModelPerformance): ModelPerformanceResult => ({
+    ...perf,
+    date: params.date,
+    course: courseLabel,
+    computedAt: now.toISOString(),
+  });
+  const empty = (): ModelPerformanceResult => wrap(summarizeModelPerformance([], 0));
+
+  // 1. Races in scope (meeting day + optional normalised course filter).
+  const { data: raceData, error: raceError } = await supabaseAdmin
+    .from(RACES_TABLE)
+    .select('id, course')
+    .eq(RACE_MEETING_DATE_COLUMN, params.date);
+  if (raceError) {
+    throw new Error(`Failed to fetch races for performance: ${raceError.message}`);
+  }
+  let raceRows = (raceData ?? []) as { id: Id; course: string | null }[];
+  if (wantCourse !== null) {
+    raceRows = raceRows.filter((r) => normalizeCourse(r.course ?? '') === wantCourse);
+  }
+  const raceIds = raceRows.map((r) => String(r.id));
+  if (raceIds.length === 0) {
+    return empty();
+  }
+
+  // 2. Recorded winners among those races (settled signal + won/lost).
+  const { data: winnerData, error: winnerError } = await supabaseAdmin
+    .from(RUNNERS_TABLE)
+    .select('id, race_id')
+    .eq('finish_pos', 1)
+    .in('race_id', raceIds);
+  if (winnerError) {
+    throw new Error(`Failed to fetch winners for performance: ${winnerError.message}`);
+  }
+  const winnerByRace = new Map<string, string>();
+  for (const w of (winnerData ?? []) as { id: Id; race_id: Id }[]) {
+    winnerByRace.set(String(w.race_id), String(w.id));
+  }
+
+  // 3. Latest CURRENT model run per in-scope race (rows are newest-first).
+  const { data: runData, error: runError } = await supabaseAdmin
+    .from(MODEL_RUNS_TABLE)
+    .select('id, race_id, run_time')
+    .in('race_id', raceIds)
+    .eq('is_current', true)
+    .order('run_time', { ascending: false });
+  if (runError) {
+    throw new Error(`Failed to fetch model runs for performance: ${runError.message}`);
+  }
+  const latestRunByRace = new Map<string, string>();
+  for (const r of (runData ?? []) as { id: Id; race_id: Id; run_time: string }[]) {
+    const raceId = String(r.race_id);
+    if (!latestRunByRace.has(raceId)) {
+      latestRunByRace.set(raceId, String(r.id)); // first seen = latest
+    }
+  }
+  if (latestRunByRace.size === 0) {
+    return empty();
+  }
+
+  // 4. Rank-1 CURRENT recommendation for each of those latest runs.
+  const runIds = [...latestRunByRace.values()];
+  const { data: recData, error: recError } = await supabaseAdmin
+    .from(RECOMMENDATIONS_TABLE)
+    .select('race_id, runner_id, odds, stake, stake_amount, ev')
+    .in('model_run_id', runIds)
+    .eq('recommendation_rank', 1)
+    .eq('is_current', true);
+  if (recError) {
+    throw new Error(`Failed to fetch recommendations for performance: ${recError.message}`);
+  }
+
+  interface RecRow {
+    race_id: Id;
+    runner_id: Id;
+    odds: number | string | null;
+    stake: number | string | null;
+    stake_amount: number | string | null;
+    ev: number | string | null;
+  }
+  const recByRace = new Map<string, RecRow>();
+  for (const rec of (recData ?? []) as RecRow[]) {
+    const raceId = String(rec.race_id);
+    if (!recByRace.has(raceId)) recByRace.set(raceId, rec);
+  }
+
+  // 5. One outcome per race that produced a rank-1 recommendation.
+  const outcomes: RecommendationOutcome[] = [];
+  for (const [raceId, rec] of recByRace) {
+    const winnerId = winnerByRace.get(raceId);
+    const settled = winnerId !== undefined;
+    outcomes.push({
+      settled,
+      won: settled && String(rec.runner_id) === winnerId,
+      odds: toNumberOrNull(rec.odds),
+      stake: toNumberOrNull(rec.stake) ?? toNumberOrNull(rec.stake_amount),
+      ev: toNumberOrNull(rec.ev),
+    });
+  }
+
+  // 6. no_bet_races = in-scope races that ran the model but made no rank-1 rec.
+  let noBetRaces = 0;
+  for (const raceId of latestRunByRace.keys()) {
+    if (!recByRace.has(raceId)) noBetRaces += 1;
+  }
+
+  return wrap(summarizeModelPerformance(outcomes, noBetRaces));
+}
+
+/**
+ * Read-only count summary of the current tipster state, for the dashboard's
+ * tipster-status panel (Phase 4C-lite): how many approved (model-active)
+ * selections exist, and how many candidate tips are pending / approved /
+ * rejected in the review queue.
+ *
+ * Counts only — it makes NO model/staking decision and never approves anything.
+ * The candidate tables are recent additions, so if they are not present yet the
+ * corresponding counts come back `null` (distinguishable from a real zero) and
+ * the panel degrades gracefully. A genuine (non-missing) query error still
+ * throws.
+ *
+ * @throws if a Supabase query fails for a reason other than a missing table.
+ */
+export async function fetchTipsterStatusSummary(): Promise<TipsterStatusSummary> {
+  const summary: TipsterStatusSummary = {
+    approvedSelections: null,
+    candidatesPending: null,
+    candidatesApproved: null,
+    candidatesRejected: null,
+  };
+
+  // 1. Approved, model-active selections — a head count (no rows pulled).
+  const { count, error: selError } = await supabaseAdmin
+    .from(TIPSTER_SELECTIONS_TABLE)
+    .select('*', { head: true, count: 'exact' });
+  if (selError) {
+    if (classifyTableProbe(selError) !== 'missing') {
+      throw new Error(`Failed to count tipster selections: ${selError.message}`);
+    }
+    // Table absent -> approvedSelections stays null.
+  } else {
+    summary.approvedSelections = count ?? 0;
+  }
+
+  // 2. Candidate statuses — one read of the status column, tallied in memory.
+  const { data: candData, error: candError } = await supabaseAdmin
+    .from(TIPSTER_SELECTION_CANDIDATES_TABLE)
+    .select('status');
+  if (candError) {
+    if (classifyTableProbe(candError) !== 'missing') {
+      throw new Error(`Failed to read tipster candidates: ${candError.message}`);
+    }
+    // Table absent -> candidate counts stay null.
+  } else {
+    let pending = 0;
+    let approved = 0;
+    let rejected = 0;
+    for (const row of (candData ?? []) as { status: string | null }[]) {
+      const status = (row.status ?? '').trim();
+      if (status === 'pending') pending += 1;
+      else if (status === 'approved') approved += 1;
+      else if (status === 'rejected') rejected += 1;
+    }
+    summary.candidatesPending = pending;
+    summary.candidatesApproved = approved;
+    summary.candidatesRejected = rejected;
+  }
+
+  return summary;
 }
 
 /**

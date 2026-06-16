@@ -30,6 +30,8 @@ the secret into shared output).
 | Import tips (commit) | `… --commit` | `tipster_selections` |
 | Run model | `npm run run:model -- <race_id>` | `model_runs`, `model_runner_scores`, `recommendations` |
 | Dashboard | <http://localhost:3000> | — |
+| Import results (dry-run) | `npm run import:results -- --file <csv>` | nothing (preview) |
+| Import results (commit) | `… --commit` | `runners`, `races` |
 
 No-Betfair option: skip steps 4–5 and seed a synthetic race with local odds via
 `npm run seed:demo -- --confirm-demo` (see step 4b).
@@ -216,7 +218,63 @@ None of these are guarantees. Always apply your own judgement and risk limits.
 
 ---
 
-## 7. Rollback (remove a bad import by `source_label`)
+## 7. Settle results (manual fallback)
+
+After the races are run, record official finishing positions so the dashboard's
+accuracy tracker updates. The automated `/api/cron/results` route needs the
+Racing API **Standard** plan; if your plan lacks it, settle from an
+operator-curated CSV instead. Confirm your plan first (read-only, no writes):
+
+```powershell
+npm run probe:results -- --date 2026-06-16
+```
+
+If that reports `status: standard_plan_required`, use the manual importer below.
+
+CSV columns: `date,course,off_time,horse_name,finish_pos` (required) +
+`sp_decimal,bsp_decimal,runner_status` (optional). Template:
+[data/results.example.csv](../data/results.example.csv).
+
+> **Off time is UTC.** `off_time` must match the race's **stored** off time,
+> which is UTC — e.g. a 2:30pm BST Royal Ascot race is stored as `13:30`. Use the
+> time shown by `npm run import:tipster-selections -- --list-races --date <date>`
+> (or the dashboard), not the local wall-clock time, or the race will not match.
+
+### 7a. Dry-run (writes nothing)
+
+```powershell
+npm run import:results -- --file data/results.csv
+```
+
+Review the audit summary: `rows_read`, `races_matched`, `runners_matched`,
+`runners_updated`, `unmatched_races`, `unmatched_runners`, `ambiguous_rows`,
+`skipped_rows`. Matching is exact + normalised only (race by date + course +
+off_time; runner by exact horse name) — unmatched/ambiguous rows are skipped,
+never guessed. A race with duplicate runner rows or more than one
+`finish_pos = 1` is **refused** (reported, not written); the rest still proceed.
+
+### 7b. Commit (writes `runners` + settles `races`)
+
+Only after a clean dry-run:
+
+```powershell
+npm run import:results -- --file data/results.csv --commit
+```
+
+It updates `finish_pos` (and any supplied `sp_decimal` / `bsp_decimal` /
+`runner_status`) on the matched runners, and marks a race `status = 'result'`
+(with `official_result_time = now`) only when at least one of its runners has
+`finish_pos = 1`. `--commit` is refused while any field still contains
+placeholder `EXAMPLE` text. The import never overwrites an existing non-null
+result with a blank, so re-running is safe; to correct a mistake, re-import a CSV
+that includes the corrected positions for **every** affected runner in the race.
+
+Once results are written, the dashboard accuracy tracker (`/api/accuracy`)
+reflects them on its next poll — there is no separate recompute step.
+
+---
+
+## 8. Rollback (remove a bad import by `source_label`)
 
 Tipster rows you imported carry the `source_label` you set, so a specific batch
 is cleanly removable (**read this before running; it deletes only that batch**):

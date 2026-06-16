@@ -34,6 +34,8 @@
     "load:races": "tsx scripts/loadHistoricalRaces.ts",
     "import:tipster-selections": "tsx scripts/importTipsterSelections.ts",
     "review:tipster-candidates": "tsx scripts/reviewTipsterCandidates.ts",
+    "import:tipster-candidates": "tsx scripts/importTipsterCandidatesCsv.ts",
+    "import:results": "tsx scripts/importResultsCsv.ts",
     "convert:bsp": "tsx scripts/convertBetfairBsp.ts"
   },
   "dependencies": {

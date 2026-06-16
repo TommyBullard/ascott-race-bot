@@ -15,6 +15,10 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import RaceExplanationPanel from '@/components/RaceExplanationPanel';
 import {
+  buildTipsterStatusLines,
+  type TipsterStatusSummary,
+} from '@/lib/tipsterStatus';
+import {
   deriveRaceExplanationProps,
   type RaceObservabilityLike,
 } from '@/lib/raceExplanation';
@@ -78,6 +82,28 @@ interface ModelAccuracy {
   strikeRatePct: number;
   profitPoints: number;
   roiPct: number;
+  computedAt: string;
+}
+
+/**
+ * Per-day recommendation performance (mirrors the server
+ * `ModelPerformanceResult`, Phase 5B). Computed from stored recommendation odds
+ * and stake; pending races are never counted as losses.
+ */
+interface ModelPerformance {
+  recommendations_total: number;
+  settled_count: number;
+  pending_count: number;
+  winners: number;
+  losers: number;
+  strike_rate: number;
+  profit_loss: number;
+  roi: number;
+  average_ev: number | null;
+  total_staked: number;
+  no_bet_races: number;
+  date: string;
+  course: string | null;
   computedAt: string;
 }
 
@@ -454,6 +480,35 @@ const styles = {
     color: '#656d76',
     fontWeight: 400,
   } as CSSProperties,
+  perfPanel: {
+    padding: '10px 14px',
+    marginBottom: 16,
+    border: '1px solid #d0d7de',
+    borderRadius: 10,
+    background: '#f6f8fa',
+    fontSize: 14,
+    fontVariantNumeric: 'tabular-nums' as const,
+  } as CSSProperties,
+  perfHeading: {
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    alignItems: 'baseline',
+    gap: 10,
+    marginBottom: 8,
+  } as CSSProperties,
+  perfTitle: {
+    fontWeight: 700,
+  } as CSSProperties,
+  perfScope: {
+    fontSize: 12,
+    color: '#656d76',
+  } as CSSProperties,
+  perfRow: {
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    alignItems: 'baseline',
+    gap: 14,
+  } as CSSProperties,
   panel: {
     border: '1px solid #d0d7de',
     borderRadius: 10,
@@ -490,6 +545,21 @@ const styles = {
     marginLeft: 'auto',
     textAlign: 'right' as const,
     color: '#424a53',
+  } as CSSProperties,
+  tipsterStatusCounts: {
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    gap: 8,
+    marginTop: 10,
+  } as CSSProperties,
+  tipsterStatusCount: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: '#424a53',
+    background: '#eaeef2',
+    borderRadius: 999,
+    padding: '2px 10px',
+    fontVariantNumeric: 'tabular-nums' as const,
   } as CSSProperties,
   explanationPanel: {
     border: 'none',
@@ -778,6 +848,142 @@ function AccuracyBar({ accuracy }: { accuracy: ModelAccuracy | null }) {
   );
 }
 
+/** Formats a signed percentage like "+12.5%" / "−8.0%" / "0.0%". */
+function formatSignedPct(pct: number): string {
+  const sign = pct > 0 ? '+' : pct < 0 ? '\u2212' : '';
+  return `${sign}${Math.abs(pct).toFixed(1)}%`;
+}
+
+/**
+ * Per-day recommendation performance panel (Phase 5B): settled vs pending,
+ * winners/losers, strike rate, P/L and ROI at the stored recommendation
+ * odds/stake, plus average EV and no-bet races. Renders nothing until the first
+ * snapshot loads; shows the standard empty-state copy until a race settles.
+ */
+function PerformancePanel({ performance }: { performance: ModelPerformance | null }) {
+  if (!performance) {
+    return null;
+  }
+
+  const scope = performance.course
+    ? `${performance.date} · ${performance.course}`
+    : performance.date;
+
+  if (performance.settled_count === 0) {
+    return (
+      <div style={styles.perfPanel}>
+        <div style={styles.perfHeading}>
+          <span style={styles.perfTitle}>Recommendation performance</span>
+          <span style={styles.perfScope}>{scope}</span>
+        </div>
+        <span style={styles.muted}>
+          No settled races yet — accuracy will appear as results come in.
+        </span>
+        {performance.recommendations_total > 0 && (
+          <span style={{ ...styles.perfScope, marginLeft: 8 }}>
+            {performance.pending_count} pending of {performance.recommendations_total}{' '}
+            recommendation{performance.recommendations_total === 1 ? '' : 's'}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={styles.perfPanel}>
+      <div style={styles.perfHeading}>
+        <span style={styles.perfTitle}>Recommendation performance</span>
+        <span style={styles.perfScope}>{scope}</span>
+        <span style={{ ...styles.accuracyUpdated }}>
+          updated {formatUpdated(performance.computedAt)}
+        </span>
+      </div>
+      <div style={styles.perfRow}>
+        <span style={styles.accuracyMetric}>
+          {performance.winners}/{performance.settled_count} winners
+        </span>
+        <span style={styles.accuracySep}>·</span>
+        <span style={styles.accuracyMetric}>
+          {performance.strike_rate.toFixed(1)}% strike
+        </span>
+        <span style={styles.accuracySep}>·</span>
+        <span style={{ ...styles.accuracyMetric, color: profitColor(performance.profit_loss) }}>
+          {formatProfit(performance.profit_loss)}
+        </span>
+        <span style={styles.accuracySep}>·</span>
+        <span style={{ ...styles.accuracyMetric, color: profitColor(performance.roi) }}>
+          {formatSignedPct(performance.roi)} ROI
+        </span>
+        {performance.average_ev !== null && (
+          <>
+            <span style={styles.accuracySep}>·</span>
+            <span style={{ ...styles.accuracyMetric, ...evColorStyle(performance.average_ev) }}>
+              {formatEv(performance.average_ev)} avg EV
+            </span>
+          </>
+        )}
+        <span style={styles.accuracySep}>·</span>
+        <span style={styles.perfScope}>
+          settled {performance.settled_count} · pending {performance.pending_count}
+          {performance.no_bet_races > 0 ? ` · ${performance.no_bet_races} no-bet` : ''}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Tipster-status panel (Phase 4C-lite): a read-only, plain-language summary of
+ * the current tipster state — whether approved selections are feeding the model,
+ * how many candidate tips are pending review (not model-active until approved),
+ * and that "no consensus" means the model is running market-only. The counts and
+ * copy come straight from the server; nothing here recomputes a model value.
+ */
+function TipsterStatusPanel({ status }: { status: TipsterStatusSummary | null }) {
+  if (status === null) {
+    return null;
+  }
+
+  const lines = buildTipsterStatusLines(status);
+  const hasCandidateCounts = status.candidatesPending !== null;
+
+  return (
+    <section style={styles.panel}>
+      <div style={styles.panelTitle}>Tipster status</div>
+      {lines.map((line) => (
+        <div key={line} style={styles.muted}>
+          {line}
+        </div>
+      ))}
+      {(status.approvedSelections !== null || hasCandidateCounts) && (
+        <div style={styles.tipsterStatusCounts}>
+          {status.approvedSelections !== null && (
+            <span style={styles.tipsterStatusCount}>
+              {status.approvedSelections} approved selection
+              {status.approvedSelections === 1 ? '' : 's'}
+            </span>
+          )}
+          {hasCandidateCounts && (
+            <span style={styles.tipsterStatusCount}>
+              {status.candidatesPending} pending review
+            </span>
+          )}
+          {status.candidatesApproved !== null && status.candidatesApproved > 0 && (
+            <span style={styles.tipsterStatusCount}>
+              {status.candidatesApproved} candidate{status.candidatesApproved === 1 ? '' : 's'} approved
+            </span>
+          )}
+          {status.candidatesRejected !== null && status.candidatesRejected > 0 && (
+            <span style={styles.tipsterStatusCount}>
+              {status.candidatesRejected} rejected
+            </span>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 /**
  * "In-form tipsters" panel: the top needles by weight, each with their 30d ROI,
  * all-time ROI, current losing streak, and pick(s) for today's races. Renders
@@ -793,8 +999,10 @@ function InFormPanel({ tipsters }: { tipsters: InFormTipster[] | null }) {
       <div style={styles.panelTitle}>In-form tipsters</div>
       {tipsters.length === 0 ? (
         <span style={styles.muted}>
-          No active tipsters yet — run discovery with real proofed figures to
-          populate the pool.
+          No model-active tipsters yet. These are approved, proofed needles that
+          the model weights — separate from candidate tips, which stay in review
+          until approved. Run discovery with real proofed figures to populate the
+          pool.
         </span>
       ) : (
         tipsters.map((t) => {
@@ -832,7 +1040,9 @@ export default function RecommendationsPage() {
   const [error, setError] = useState<string>('');
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [accuracy, setAccuracy] = useState<ModelAccuracy | null>(null);
+  const [performance, setPerformance] = useState<ModelPerformance | null>(null);
   const [inForm, setInForm] = useState<InFormTipster[] | null>(null);
+  const [tipsterStatus, setTipsterStatus] = useState<TipsterStatusSummary | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -895,13 +1105,20 @@ export default function RecommendationsPage() {
 
     async function loadAccuracy() {
       try {
-        const res = await fetch('/api/accuracy', { signal: controller.signal });
+        // Forward ?day / ?date / ?course so the per-day performance panel matches
+        // the race list (the lifetime `accuracy` ignores these params).
+        const query =
+          typeof window !== 'undefined' ? window.location.search : '';
+        const res = await fetch(`/api/accuracy${query}`, { signal: controller.signal });
         if (!res.ok) {
           return; // Leave the bar hidden on a transient failure.
         }
         const data = await res.json();
         if (data?.accuracy) {
           setAccuracy(data.accuracy as ModelAccuracy);
+        }
+        if (data?.performance) {
+          setPerformance(data.performance as ModelPerformance);
         }
       } catch {
         // Aborted or network error; keep the last good snapshot.
@@ -946,6 +1163,35 @@ export default function RecommendationsPage() {
     };
   }, []);
 
+  // Tipster status (Phase 4C-lite): read-only candidate/selection counts so the
+  // dashboard can explain the current tipster state. Polls so it reflects new
+  // captures + approvals as they land.
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadTipsterStatus() {
+      try {
+        const res = await fetch('/api/tipsters/status', { signal: controller.signal });
+        if (!res.ok) {
+          return;
+        }
+        const data = await res.json();
+        if (data?.status) {
+          setTipsterStatus(data.status as TipsterStatusSummary);
+        }
+      } catch {
+        // Aborted or network error; keep the last good snapshot.
+      }
+    }
+
+    loadTipsterStatus();
+    const id = setInterval(loadTipsterStatus, 60000);
+    return () => {
+      controller.abort();
+      clearInterval(id);
+    };
+  }, []);
+
   return (
     <main style={styles.page}>
       <div
@@ -968,6 +1214,10 @@ export default function RecommendationsPage() {
       </div>
 
       <AccuracyBar accuracy={accuracy} />
+
+      <PerformancePanel performance={performance} />
+
+      <TipsterStatusPanel status={tipsterStatus} />
 
       <InFormPanel tipsters={inForm} />
 
