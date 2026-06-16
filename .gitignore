@@ -26,6 +26,12 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Local operator CSVs — keep private/local
+data/*.csv
+
+# Keep safe templates/examples tracked
+!data/*.example.csv
+
 # Editor / OS
 .DS_Store
 *.pem
