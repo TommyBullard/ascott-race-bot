@@ -30,6 +30,7 @@
     "seed:tipsters": "tsx scripts/seedInFormTipsters.ts",
     "seed:demo": "tsx scripts/seedDemoRaceDay.ts",
     "verify:racing": "tsx scripts/verifyRacingApi.ts",
+    "probe:results": "tsx scripts/probeRacingApiResultsAccess.ts",
     "load:races": "tsx scripts/loadHistoricalRaces.ts",
     "import:tipster-selections": "tsx scripts/importTipsterSelections.ts",
     "review:tipster-candidates": "tsx scripts/reviewTipsterCandidates.ts",

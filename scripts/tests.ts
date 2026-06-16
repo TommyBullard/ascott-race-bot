@@ -31,6 +31,7 @@ import './runnerMatch.test';
 import './envPreflight.test';
 import './tipsterImportDiagnostics.test';
 import './tipsterCandidates.test';
+import './probeRacingApiResultsAccess.test';
 import './demoSeed.test';
 import './dbHealthSpec.test';
 import './cronDiagnostics.test';
