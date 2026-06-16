@@ -40,6 +40,7 @@ import {
   type ModelPerformance,
   type SelectedRunRecommendation,
 } from './modelPerformance';
+import { isHistoricalRaceView } from './modelRunGuard';
 import { normalizeCourse } from './raceSync';
 import { classifyTableProbe } from './dbHealthSpec';
 import type { TipsterStatusSummary } from './tipsterStatus';
@@ -790,7 +791,7 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
   // 1. Race meta for the header + countdown.
   const { data: raceData, error: raceError } = await supabaseAdmin
     .from(RACES_TABLE)
-    .select('off_time, course, race_name')
+    .select('off_time, course, race_name, status')
     .eq('id', raceId)
     .limit(1);
 
@@ -804,6 +805,7 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
     off_time: string | null;
     course: string | null;
     race_name: string | null;
+    status: string | null;
   }[])[0];
 
   const card: RaceCard = {
@@ -851,14 +853,28 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
     }
   }
 
-  // 3. Latest CURRENT model run for the race (superseded runs are retained in
-  //    history but excluded here via is_current). `config_json` carries the
-  //    observational outputs surfaced below (Batch J1).
-  const { data: runData, error: runError } = await supabaseAdmin
+  // 3. Select the model run to DISPLAY for this card.
+  //    - Live / upcoming race: the latest CURRENT run (`is_current`), exactly as
+  //      before — preserves live behaviour.
+  //    - Historical race (already off, or resulted): the latest valid PRE-OFF
+  //      run (`run_time <= off_time`), so a post-off rerun on stale odds that
+  //      superseded the pre-off run in `is_current` is ignored for display. This
+  //      mirrors the as-of-off-time performance evaluation. Superseded runs are
+  //      retained in append-only history, so their rec/scores still load by id.
+  //    `config_json` carries the observational outputs surfaced below (Batch J1).
+  const usePreOffCard =
+    isHistoricalRaceView({ off_time: meta?.off_time, status: meta?.status }) &&
+    meta?.off_time != null &&
+    meta.off_time !== '';
+
+  let runQuery = supabaseAdmin
     .from(MODEL_RUNS_TABLE)
     .select('id, run_time, config_json')
-    .eq('race_id', raceId)
-    .eq('is_current', true)
+    .eq('race_id', raceId);
+  runQuery = usePreOffCard
+    ? runQuery.lte('run_time', meta.off_time as string) // pre-off: ignore post-off reruns
+    : runQuery.eq('is_current', true); // live: current run only
+  const { data: runData, error: runError } = await runQuery
     .order('run_time', { ascending: false })
     .limit(1);
 

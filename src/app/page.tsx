@@ -24,6 +24,11 @@ import {
 } from '@/lib/raceExplanation';
 import { formatRelativeAge, isStaleAge } from '@/lib/relativeTime';
 import { STALE_ODDS_THRESHOLD_MS } from '@/lib/modelDataQuality';
+import {
+  hasRaceDayScope,
+  selectDashboardSummary,
+  type DashboardSummary,
+} from '@/lib/raceDaySummary';
 
 /** A runner as shown on a card (mirrors the server `RaceCardRunner`). */
 interface RaceCardRunner {
@@ -482,6 +487,13 @@ const styles = {
     color: '#656d76',
     fontWeight: 400,
   } as CSSProperties,
+  accuracyScopeLabel: {
+    flexBasis: '100%',
+    fontSize: 12,
+    color: '#656d76',
+    fontStyle: 'italic' as const,
+    fontWeight: 400,
+  } as CSSProperties,
   perfPanel: {
     padding: '10px 14px',
     marginBottom: 16,
@@ -805,24 +817,39 @@ function formatUpdated(iso: string | null): string {
 }
 
 /**
- * Header bar summarising live model accuracy: "X/Y winners · strike rate ·
+ * Header bar summarising model accuracy: "X/Y winners · strike rate ·
  * profit · ROI", with a last-updated time. Renders nothing until the first
  * snapshot loads.
+ *
+ * The figures come from {@link selectDashboardSummary}: when the view is scoped
+ * to a meeting day/course the bar shows the corrected RACE-DAY performance
+ * (pre-off evaluated); otherwise it shows the global LIFETIME accuracy. The
+ * legacy lifetime object never overrides a scoped race-day summary.
  */
-function AccuracyBar({ accuracy }: { accuracy: ModelAccuracy | null }) {
-  if (!accuracy) {
+function AccuracyBar({ summary }: { summary: DashboardSummary | null }) {
+  if (!summary) {
     return null;
   }
 
-  if (accuracy.racesSettled === 0) {
+  const scopeLabel =
+    summary.source === 'race_day' ? (
+      <span style={styles.accuracyScopeLabel}>
+        Race-day performance uses latest pre-off model run.
+      </span>
+    ) : null;
+
+  if (summary.settled === 0) {
     return (
       <div style={styles.accuracyBar}>
         <span style={styles.muted}>
           No settled races yet — accuracy will appear as results come in.
         </span>
-        <span style={styles.accuracyUpdated}>
-          updated {formatUpdated(accuracy.computedAt)}
-        </span>
+        {summary.computedAt && (
+          <span style={styles.accuracyUpdated}>
+            updated {formatUpdated(summary.computedAt)}
+          </span>
+        )}
+        {scopeLabel}
       </div>
     );
   }
@@ -830,28 +857,31 @@ function AccuracyBar({ accuracy }: { accuracy: ModelAccuracy | null }) {
   return (
     <div style={styles.accuracyBar}>
       <span style={styles.accuracyMetric}>
-        {accuracy.winners}/{accuracy.racesSettled} winners
+        {summary.winners}/{summary.settled} winners
       </span>
       <span style={styles.accuracySep}>·</span>
       <span style={styles.accuracyMetric}>
-        {accuracy.strikeRatePct.toFixed(1)}% strike
+        {summary.strikeRatePct.toFixed(1)}% strike
       </span>
       <span style={styles.accuracySep}>·</span>
       <span
-        style={{ ...styles.accuracyMetric, color: profitColor(accuracy.profitPoints) }}
+        style={{ ...styles.accuracyMetric, color: profitColor(summary.profitLoss) }}
       >
-        {formatProfit(accuracy.profitPoints)}
+        {formatProfit(summary.profitLoss)}
       </span>
       <span style={styles.accuracySep}>·</span>
       <span
-        style={{ ...styles.accuracyMetric, color: profitColor(accuracy.roiPct) }}
+        style={{ ...styles.accuracyMetric, color: profitColor(summary.roiPct) }}
       >
-        {accuracy.roiPct > 0 ? '+' : accuracy.roiPct < 0 ? '\u2212' : ''}
-        {Math.abs(accuracy.roiPct).toFixed(1)}% ROI
+        {summary.roiPct > 0 ? '+' : summary.roiPct < 0 ? '\u2212' : ''}
+        {Math.abs(summary.roiPct).toFixed(1)}% ROI
       </span>
-      <span style={styles.accuracyUpdated}>
-        updated {formatUpdated(accuracy.computedAt)}
-      </span>
+      {summary.computedAt && (
+        <span style={styles.accuracyUpdated}>
+          updated {formatUpdated(summary.computedAt)}
+        </span>
+      )}
+      {scopeLabel}
     </div>
   );
 }
@@ -1061,6 +1091,12 @@ export default function RecommendationsPage() {
   const [performance, setPerformance] = useState<ModelPerformance | null>(null);
   const [inForm, setInForm] = useState<InFormTipster[] | null>(null);
   const [tipsterStatus, setTipsterStatus] = useState<TipsterStatusSummary | null>(null);
+  // Whether the dashboard URL scopes to a meeting day/course (?date/?day/?course).
+  // When scoped, the header summary uses the corrected race-day `performance`
+  // rather than the lifetime `accuracy` (see selectDashboardSummary).
+  const [scoped] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? hasRaceDayScope(window.location.search) : false,
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1231,7 +1267,7 @@ export default function RecommendationsPage() {
         </span>
       </div>
 
-      <AccuracyBar accuracy={accuracy} />
+      <AccuracyBar summary={selectDashboardSummary(accuracy, performance, scoped)} />
 
       <PerformancePanel performance={performance} />
 

@@ -84,3 +84,22 @@ export function evaluateModelRunGuard(
 
   return { skip: reason !== null && options.allowPostOff !== true, reason };
 }
+
+/**
+ * Whether a race should be DISPLAYED as historical — i.e. it has already gone
+ * off (`now > off_time`) or is resulted (`status = result`). When true, the
+ * race card / evaluation should show the final **pre-off** model run
+ * (`run_time <= off_time`) instead of the live `is_current` run, which a post-off
+ * rerun on stale odds may have superseded.
+ *
+ * This is the read-side mirror of {@link evaluateModelRunGuard} (which gates the
+ * write side): both use the same off/resulted detection, single-sourced here.
+ * For an UPCOMING race this returns false, so live/current selection is
+ * preserved unchanged. Pure; `now` is injectable for tests.
+ */
+export function isHistoricalRaceView(
+  input: ModelRunGuardInput,
+  now: Date = new Date(),
+): boolean {
+  return evaluateModelRunGuard(input, now).reason !== null;
+}
