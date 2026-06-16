@@ -363,3 +363,78 @@ test('regression: the OLD current-pointer selection reproduces the buggy 4 settl
   assert.notEqual(perf.settled_count, fixed.settled_count);
   assert.notEqual(perf.no_bet_races, fixed.no_bet_races);
 });
+
+/* ----------- task 3: user-noted snapshot vs final pre-off run ------------- */
+
+/**
+ * On Day 1 the operator's notes captured a snapshot 5–9 minutes before the off,
+ * but the model ran AGAIN closer to the off (still pre-off) and changed its
+ * rank-1 pick. BOTH snapshots are pre-off (`run_time <= off_time`), so the rule
+ * "latest run before off_time" must select the FINAL pre-off run — the operator
+ * note is audit evidence, not the decision record.
+ *
+ * In each case below the synthetic `winner` is set to the USER-NOTED pick on
+ * purpose: if evaluation wrongly used the note's earlier snapshot it would score
+ * a WIN, so asserting a LOSS proves the FINAL pre-off pick was evaluated. (In
+ * reality none of these won; the synthetic winner only isolates the selection.)
+ */
+const NOTE_VS_FINAL: ReadonlyArray<{
+  label: string;
+  off_time: string;
+  userSnapshot: { run_id: string; run_time: string; pick: string };
+  finalPreOff: { run_id: string; run_time: string; pick: string };
+}> = [
+  {
+    label: '17:00 Ascot Stakes',
+    off_time: '2026-06-16T16:00:00Z',
+    userSnapshot: { run_id: 'r5-usernote', run_time: '2026-06-16T15:51:02Z', pick: 'Small Fry' },
+    finalPreOff: { run_id: 'r5-final', run_time: '2026-06-16T15:55:21Z', pick: 'Puturhandstogether' },
+  },
+  {
+    label: '17:35 Wolferton Stakes',
+    off_time: '2026-06-16T16:35:00Z',
+    userSnapshot: { run_id: 'r6-usernote', run_time: '2026-06-16T16:30:16Z', pick: 'Ghostwriter' },
+    finalPreOff: { run_id: 'r6-final', run_time: '2026-06-16T16:31:25Z', pick: 'Haatem' },
+  },
+  {
+    label: '18:10 Copper Horse Stakes',
+    off_time: '2026-06-16T17:10:00Z',
+    userSnapshot: { run_id: 'r7-usernote', run_time: '2026-06-16T16:53:33Z', pick: 'Gamrai' },
+    finalPreOff: { run_id: 'r7-final', run_time: '2026-06-16T17:07:24Z', pick: 'Sing Us A Song' },
+  },
+];
+
+for (const { label, off_time, userSnapshot, finalPreOff } of NOTE_VS_FINAL) {
+  test(`regression: ${label} evaluates the final pre-off run, not the earlier user-noted snapshot`, () => {
+    const runs: Run[] = [
+      { run_id: userSnapshot.run_id, run_time: userSnapshot.run_time },
+      { run_id: finalPreOff.run_id, run_time: finalPreOff.run_time },
+    ];
+
+    // Selection must pick the FINAL pre-off run, even though BOTH are pre-off.
+    const chosen = selectPreOffRun(runs, off_time);
+    assert.equal(
+      chosen?.run_id,
+      finalPreOff.run_id,
+      `${label}: must select the final pre-off run, not the user-noted snapshot`,
+    );
+
+    // Evaluate with the winner set to the USER-NOTED pick: a LOSS proves the
+    // final pre-off pick was scored, not the note's earlier snapshot.
+    const race: RaceFixture = {
+      race_id: `race-${finalPreOff.run_id}`,
+      off_time,
+      winner_runner_id: userSnapshot.pick,
+      runs,
+    };
+    const recs = new Map<string, SelectedRunRecommendation>([
+      [userSnapshot.run_id, rec(userSnapshot.pick)],
+      [finalPreOff.run_id, rec(finalPreOff.pick)],
+    ]);
+
+    const perf = evaluateAsOfOffTime([race], recs);
+    assert.equal(perf.recommendations_total, 1, `${label}: one evaluated rec`);
+    assert.equal(perf.winners, 0, `${label}: the final pre-off pick is not the user-noted runner`);
+    assert.equal(perf.losers, 1, `${label}: scored the final pre-off pick, not the user note`);
+  });
+}
