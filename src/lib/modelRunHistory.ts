@@ -27,6 +27,23 @@ export function currentMarker(): CurrentMarker {
   return { is_current: true, superseded_at: null };
 }
 
+/** Fields stamped on a freshly-written, NON-current (diagnostic) output row. */
+export interface NotCurrentMarker {
+  is_current: false;
+  superseded_at: null;
+}
+
+/**
+ * Marker for a run that is written but must NOT become the current run — e.g. an
+ * explicit post-off diagnostic run, which must never supersede the valid pre-off
+ * run. Distinct from {@link buildSupersedePatch}: this stamps a brand-new row as
+ * non-current at insert time (no `superseded_at`), rather than retiring a row
+ * that used to be current.
+ */
+export function notCurrentMarker(): NotCurrentMarker {
+  return { is_current: false, superseded_at: null };
+}
+
 /** Patch applied to a previously-current row when a newer run supersedes it. */
 export interface SupersedePatch {
   is_current: false;

@@ -201,6 +201,15 @@ step. After a commit:
   Races without a recorded result yet stay **pending** and are never counted as
   losses.
 
+  Performance is evaluated **as-of off time** — each race is scored on its latest
+  model run with `run_time <= off_time` (the final pre-off run). Post-off model
+  reruns are diagnostic only and never replace that race-day decision record, so
+  importing results late does not let a post-off run skew the figures. (On
+  2026-06-16, post-off stale runs had superseded the pre-off runs and the
+  dashboard mis-reported the day; evaluating `run_time <= off_time` fixed it
+  without mutating any history.) This is decision-support only, not a betting
+  guarantee.
+
 The lifetime `accuracy` object in the same response is global and unaffected by
 the `date` / `course` filters.
 

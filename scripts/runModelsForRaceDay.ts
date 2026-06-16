@@ -50,6 +50,7 @@ interface RaceRow {
   course: string | null;
   off_time: string | null;
   race_name: string | null;
+  status: string | null;
 }
 
 async function main(): Promise<void> {
@@ -74,7 +75,7 @@ async function main(): Promise<void> {
   // Select the day's races (id + course/time for filtering + display).
   const { data, error } = await supabaseAdmin
     .from(RACES_TABLE)
-    .select('id, course, off_time, race_name')
+    .select('id, course, off_time, race_name, status')
     .eq(RACE_MEETING_DATE_COLUMN, args.date);
   if (error) {
     throw new Error(`races lookup failed for ${args.date}: ${error.message}`);
@@ -87,6 +88,7 @@ async function main(): Promise<void> {
     course: r.course,
     off_time: r.off_time,
     race_name: r.race_name,
+    status: r.status,
   }));
   const races = prepareMeetingRaces(rows, args.course);
 
@@ -119,7 +121,13 @@ async function main(): Promise<void> {
       if (o.status === 'run') {
         console.log(`  run     ${race.id}  scored=${o.scored} recommended=${o.recommended}`);
       } else if (o.status === 'skipped') {
-        console.log(`  skipped ${race.id}  (no priced runners / market snapshot)`);
+        const why =
+          o.skipReason === 'POST_OFF'
+            ? 'post-off: race already started'
+            : o.skipReason === 'RESULTED'
+              ? 'resulted: race already settled'
+              : 'no priced runners / market snapshot';
+        console.log(`  skipped ${race.id}  (${why})`);
       } else {
         console.error(`  FAILED  ${race.id}  ${o.error}`);
       }

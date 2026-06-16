@@ -76,6 +76,8 @@ test('summarizeModelDayOutcomes: empty -> all zero', () => {
     recommendations_created: 0,
     no_bet_races: 0,
     skipped_races: 0,
+    skipped_post_off: 0,
+    skipped_resulted: 0,
     failures: 0,
   });
 });
@@ -88,7 +90,7 @@ test('summarizeModelDayOutcomes: missing recommended counts as no-bet', () => {
 
 test('formatModelDaySummary: one line per count', () => {
   const lines = formatModelDaySummary(summarizeModelDayOutcomes([]));
-  assert.equal(lines.length, 7);
+  assert.equal(lines.length, 9);
   assert.ok(lines.some((l) => l.includes('races_found: 0')));
   assert.ok(lines.some((l) => l.includes('failures: 0')));
 });

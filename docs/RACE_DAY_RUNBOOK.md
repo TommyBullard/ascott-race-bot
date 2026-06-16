@@ -190,6 +190,15 @@ for the race are marked superseded, not deleted.
 > tips **before** running the model (or re-run the model afterwards) for the
 > consensus/alignment to reflect them.
 
+> **Post-off guard.** Once a race has gone off (`now > off_time`) or is settled
+> (`status = result`), a model run for it is **skipped by default** — the final
+> pre-off run stays the race-day decision record and is never superseded by a
+> post-off rerun on stale odds. Any explicitly-allowed post-off run is written
+> **non-current** (diagnostic only). It is therefore safe to **stop
+> `pipeline:watch` once the last race has gone off**; if you leave it running it
+> will simply skip post-off / resulted races (reported as `skipped_post_off` /
+> `skipped_resulted` in the summary) rather than overwrite their pre-off picks.
+
 ---
 
 ## 6. Check the dashboard
@@ -270,7 +279,10 @@ result with a blank, so re-running is safe; to correct a mistake, re-import a CS
 that includes the corrected positions for **every** affected runner in the race.
 
 Once results are written, the dashboard accuracy tracker (`/api/accuracy`)
-reflects them on its next poll — there is no separate recompute step.
+reflects them on its next poll — there is no separate recompute step. Performance
+is evaluated **as-of off time**: each race is scored on its latest model run with
+`run_time <= off_time`, so post-off reruns never change the race-day decision
+record (see the post-off guard note in step 5).
 
 ---
 

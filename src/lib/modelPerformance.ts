@@ -126,3 +126,125 @@ export function summarizeModelPerformance(
     no_bet_races: noBetRaces,
   };
 }
+
+/* -------------------------------------------------------------------------- */
+/* Pre-off ("as-of off time") evaluation                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A model run candidate for pre-off selection (minimal shape).
+ *
+ * `run_time` is the ISO 8601 timestamp the run was produced.
+ */
+export interface PreOffRunCandidate {
+  /** Model run id. */
+  run_id: string;
+  /** When the run was produced (ISO 8601). */
+  run_time: string;
+}
+
+/**
+ * Selects the latest model run produced at or before the scheduled off time
+ * ("as-of off time"). This is the read-only evaluation rule that ignores
+ * post-off reruns — which can run on stale odds and supersede the valid pre-off
+ * run in `is_current`, erasing a recommendation that was live at the off.
+ *
+ * Rules:
+ *   - Only runs with `run_time <= offTime` are eligible.
+ *   - Among eligible runs, the one with the greatest `run_time` wins.
+ *   - Returns null when `offTime` is missing/unparseable, no run qualifies, or
+ *     the list is empty.
+ *
+ * Pure; never throws. Input order does not matter (the max is scanned for).
+ */
+export function selectPreOffRun<T extends PreOffRunCandidate>(
+  runs: readonly T[],
+  offTime: string | null | undefined,
+): T | null {
+  if (!offTime) return null;
+  const offMs = new Date(offTime).getTime();
+  if (!Number.isFinite(offMs)) return null;
+
+  let best: T | null = null;
+  let bestMs = Number.NEGATIVE_INFINITY;
+  for (const run of runs) {
+    const ms = new Date(run.run_time).getTime();
+    if (!Number.isFinite(ms)) continue;
+    if (ms <= offMs && ms > bestMs) {
+      best = run;
+      bestMs = ms;
+    }
+  }
+  return best;
+}
+
+/** A race with its result signal, for outcome building. */
+export interface EvaluatedRaceResult {
+  /** Race id. */
+  race_id: string;
+  /** Winner runner id, or null when the race has no recorded result yet. */
+  winner_runner_id: string | null;
+}
+
+/** The rank-1 recommendation backing a selected run (odds/stake/ev resolved). */
+export interface SelectedRunRecommendation {
+  /** The recommended runner id (compared against the winner to decide `won`). */
+  runner_id: string;
+  /** Stored decimal odds, or null when not recorded. */
+  odds: number | null;
+  /** Stored stake (already resolved from stake/stake_amount), or null. */
+  stake: number | null;
+  /** Stored EV per 1 unit, or null when not recorded. */
+  ev: number | null;
+}
+
+/**
+ * Builds evaluated recommendation outcomes from an already-selected run per race
+ * (e.g. the pre-off run from {@link selectPreOffRun}) plus the rank-1
+ * recommendation for each selected run.
+ *
+ *   - A race whose selected run HAS a recommendation yields one
+ *     {@link RecommendationOutcome} (settled iff the race has a recorded
+ *     winner; `won` iff the recommended runner is that winner).
+ *   - A race whose selected run has NO recommendation is counted as a no-bet
+ *     race.
+ *   - A race with no selected run at all is out of scope (neither an outcome nor
+ *     a no-bet) — mirroring the prior "no current run" behaviour.
+ *
+ * The key property: a later post-off run cannot erase a valid pre-off
+ * recommendation, because selection already excluded the post-off run, so the
+ * pre-off run's recommendation is the one evaluated here.
+ *
+ * Pure; never throws.
+ */
+export function buildPreOffOutcomes(params: {
+  races: readonly EvaluatedRaceResult[];
+  selectedRunIdByRace: ReadonlyMap<string, string>;
+  recsByRunId: ReadonlyMap<string, SelectedRunRecommendation>;
+}): { outcomes: RecommendationOutcome[]; noBetRaces: number } {
+  const { races, selectedRunIdByRace, recsByRunId } = params;
+  const outcomes: RecommendationOutcome[] = [];
+  let noBetRaces = 0;
+
+  for (const race of races) {
+    const runId = selectedRunIdByRace.get(race.race_id);
+    if (runId === undefined) continue; // no run at/before off time → out of scope
+
+    const rec = recsByRunId.get(runId);
+    if (!rec) {
+      noBetRaces += 1; // selected run made no rank-1 recommendation → no-bet
+      continue;
+    }
+
+    const settled = race.winner_runner_id !== null;
+    outcomes.push({
+      settled,
+      won: settled && rec.runner_id === race.winner_runner_id,
+      odds: rec.odds,
+      stake: rec.stake,
+      ev: rec.ev,
+    });
+  }
+
+  return { outcomes, noBetRaces };
+}

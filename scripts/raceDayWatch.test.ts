@@ -107,6 +107,8 @@ test('formatCycleSummary: cycle first, dashboard_url last, models_run from model
     model_races_run: 7,
     recommendations_created: 6,
     no_bet_races: 1,
+    skipped_post_off: 0,
+    skipped_resulted: 0,
     failures: 0,
   };
   const lines = formatCycleSummary({

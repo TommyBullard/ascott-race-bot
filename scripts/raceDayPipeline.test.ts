@@ -169,10 +169,12 @@ test('formatPipelineSummary: one line per field + dashboard URL last', () => {
     model_races_run: 7,
     recommendations_created: 5,
     no_bet_races: 2,
+    skipped_post_off: 0,
+    skipped_resulted: 0,
     failures: 0,
   };
   const lines = formatPipelineSummary(summary, 'http://localhost:3000/?date=2026-06-16&course=Ascot');
-  assert.equal(lines.length, 12); // 11 fields + dashboard_url
+  assert.equal(lines.length, 14); // 13 fields + dashboard_url
   assert.ok(lines.some((l) => l.includes('racecards: ok')));
   assert.ok(lines.some((l) => l.includes('recommendations_created: 5')));
   assert.equal(lines[lines.length - 1], '  dashboard_url: http://localhost:3000/?date=2026-06-16&course=Ascot');

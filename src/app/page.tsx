@@ -105,6 +105,8 @@ interface ModelPerformance {
   date: string;
   course: string | null;
   computedAt: string;
+  /** Run-selection rule behind these figures; `pre_off` is the default. */
+  evaluationMode?: 'pre_off' | 'current';
 }
 
 /** A tipster's pick in one of today's races (mirrors server `TodaysPick`). */
@@ -503,6 +505,12 @@ const styles = {
     fontSize: 12,
     color: '#656d76',
   } as CSSProperties,
+  perfNote: {
+    fontSize: 12,
+    color: '#656d76',
+    fontStyle: 'italic' as const,
+    marginBottom: 8,
+  } as CSSProperties,
   perfRow: {
     display: 'flex',
     flexWrap: 'wrap' as const,
@@ -876,6 +884,11 @@ function PerformancePanel({ performance }: { performance: ModelPerformance | nul
           <span style={styles.perfTitle}>Recommendation performance</span>
           <span style={styles.perfScope}>{scope}</span>
         </div>
+        {performance.evaluationMode !== 'current' && (
+          <div style={styles.perfNote}>
+            Performance uses latest model run before scheduled off time.
+          </div>
+        )}
         <span style={styles.muted}>
           No settled races yet — accuracy will appear as results come in.
         </span>
@@ -898,6 +911,11 @@ function PerformancePanel({ performance }: { performance: ModelPerformance | nul
           updated {formatUpdated(performance.computedAt)}
         </span>
       </div>
+      {performance.evaluationMode !== 'current' && (
+        <div style={styles.perfNote}>
+          Performance uses latest model run before scheduled off time.
+        </div>
+      )}
       <div style={styles.perfRow}>
         <span style={styles.accuracyMetric}>
           {performance.winners}/{performance.settled_count} winners

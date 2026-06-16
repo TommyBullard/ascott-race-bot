@@ -11,6 +11,10 @@
  */
 
 import { normalizeCourse } from './raceSync';
+import {
+  evaluateModelRunGuard,
+  type PreOffSkipReason,
+} from './modelRunGuard';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -58,6 +62,12 @@ export interface MeetingRace {
   course: string | null;
   off_time: string | null;
   race_name: string | null;
+  /**
+   * Race status (e.g. `result` once settled), when known. Used by the pre-off
+   * guard to skip already-resulted races; optional so existing callers/tests
+   * that don't supply it still compile (the guard treats it as unknown).
+   */
+  status?: string | null;
 }
 
 /** Sort key for off_time: known instants ascending, unknowns last. */
@@ -104,6 +114,12 @@ export interface RaceRunOutcome {
   scored?: number;
   /** Error message (only meaningful when status='failed'); for logging. */
   error?: string;
+  /**
+   * Why a `skipped` race was skipped by the pre-off guard (`POST_OFF` /
+   * `RESULTED`). Absent for a no-priced-field skip (the model was attempted but
+   * had nothing to score).
+   */
+  skipReason?: PreOffSkipReason;
 }
 
 /**
@@ -114,14 +130,37 @@ export interface RaceRunOutcome {
  * is `failed` (message captured for logging, NEVER rethrown, so one bad race
  * can't sink the batch). `onOutcome` lets the caller log each result in its own
  * style. Does not mutate `races`.
+ *
+ * Pre-off guard: a race that has already gone off or is resulted is SKIPPED
+ * before `runOne` is called (so a post-off rerun can never supersede the race's
+ * valid pre-off run), recording the reason (`POST_OFF` / `RESULTED`) on the
+ * outcome. `now` is injectable for deterministic tests.
  */
 export async function runModelForMeetingRaces(
   races: readonly MeetingRace[],
   runOne: RunOneRace,
   onOutcome?: (race: MeetingRace, outcome: RaceRunOutcome) => void,
+  now: Date = new Date(),
 ): Promise<RaceRunOutcome[]> {
   const outcomes: RaceRunOutcome[] = [];
   for (const race of races) {
+    // Pre-off guard FIRST: never even attempt a run for a post-off / resulted
+    // race — that protects the final pre-off run from being superseded.
+    const guard = evaluateModelRunGuard(
+      { off_time: race.off_time, status: race.status },
+      now,
+    );
+    if (guard.skip && guard.reason) {
+      const skippedOutcome: RaceRunOutcome = {
+        raceId: race.id,
+        status: 'skipped',
+        skipReason: guard.reason,
+      };
+      outcomes.push(skippedOutcome);
+      onOutcome?.(race, skippedOutcome);
+      continue;
+    }
+
     let outcome: RaceRunOutcome;
     try {
       const result = await runOne(race.id);
@@ -153,7 +192,12 @@ export interface ModelDaySummary {
   model_runs_created: number;
   recommendations_created: number;
   no_bet_races: number;
+  /** Races skipped for no priced field / market snapshot (model had nothing to score). */
   skipped_races: number;
+  /** Races skipped because they had already gone off (pre-off run protected). */
+  skipped_post_off: number;
+  /** Races skipped because they were already resulted (pre-off run protected). */
+  skipped_resulted: number;
   failures: number;
 }
 
@@ -161,7 +205,8 @@ export interface ModelDaySummary {
  * Accumulates per-race outcomes into the summary counts. `races_found` is the
  * total selected; a `run` outcome creates a model run (and contributes its
  * `recommended` count, with `recommended === 0` counted as a no-bet race); a
- * `skipped` race had no priced field (no run written); a `failed` race threw.
+ * `skipped` race had no priced field (`skipped_races`) OR was skipped by the
+ * pre-off guard (`skipped_post_off` / `skipped_resulted`); a `failed` race threw.
  * Pure — does not mutate `outcomes`.
  */
 export function summarizeModelDayOutcomes(
@@ -174,6 +219,8 @@ export function summarizeModelDayOutcomes(
     recommendations_created: 0,
     no_bet_races: 0,
     skipped_races: 0,
+    skipped_post_off: 0,
+    skipped_resulted: 0,
     failures: 0,
   };
   for (const o of outcomes) {
@@ -184,7 +231,11 @@ export function summarizeModelDayOutcomes(
       summary.recommendations_created += rec;
       if (rec === 0) summary.no_bet_races += 1;
     } else if (o.status === 'skipped') {
-      summary.skipped_races += 1;
+      // Route pre-off-guard skips to their own counters; a reasonless skip is the
+      // existing "no priced field" case.
+      if (o.skipReason === 'POST_OFF') summary.skipped_post_off += 1;
+      else if (o.skipReason === 'RESULTED') summary.skipped_resulted += 1;
+      else summary.skipped_races += 1;
     } else {
       summary.failures += 1;
     }

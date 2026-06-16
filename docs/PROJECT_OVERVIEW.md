@@ -83,6 +83,12 @@ flowchart LR
 > Live runs are **market-only** until approved tipster selections exist for a
 > race. With no selections, the tipster terms simply don't move probabilities.
 
+> **Evaluation is "as-of off time".** Performance / accuracy selects each race's
+> latest model run with `run_time <= off_time`, so the **final pre-off run is the
+> race-day decision record**. Post-off reruns on stale odds never replace it (see
+> §6 "Results & accuracy" and §8 `/api/accuracy`). A run that happens after the
+> off is **diagnostic only or skipped** — never part of official evaluation.
+
 ---
 
 ## 5. Model logic summary
@@ -131,6 +137,11 @@ not changed by feature work.
 
 - Append-only model history (`is_current` / `superseded_at` — runs are
   superseded, never deleted).
+- **Post-off run guard** — once a race has gone off (`now > off_time`) or is
+  `status = result`, the model run is **skipped by default**, so a post-off
+  rerun on stale odds can't supersede the final pre-off run. An explicitly
+  allowed post-off run is written **non-current** (diagnostic only) and never
+  supersedes the pre-off run.
 - Data-quality flags, run-quality verdict (OK / DEGRADED / STALE / INVALID),
   confidence scaling, stake suppression, and model adjustments — persisted in
   `config_json` and surfaced read-only.
@@ -162,8 +173,17 @@ not changed by feature work.
 - Manual results CSV importer (the current settlement path) — dry-run default,
   exact matching, no null overwrites, conflict refusal, settles only with a
   recorded winner.
-- Accuracy / ROI computed live from stored odds/stake; **pending races are never
-  counted as losses**.
+- Accuracy / ROI computed live from stored odds/stake, evaluated **as-of off
+  time** (each race's latest run with `run_time <= off_time`); **pending races
+  are never counted as losses**.
+- **2026-06-16 incident (fixed).** The pipeline kept running after races went
+  off; post-off stale runs (no positive-EV bet) became `is_current` and
+  superseded the valid pre-off runs, so the dashboard read **0/4 winners,
+  settled 4, 3 no-bet** when the true pre-off record was **0/7**. Append-only
+  history had preserved every real pre-off run, so the fix was evaluation-only:
+  select `run_time <= off_time` and never overwrite the pre-off record. No
+  historical rows were mutated. Decision-support only — this corrects the record
+  shown, not any betting outcome.
 
 **Ops tooling & docs**
 
@@ -215,7 +235,9 @@ unset; bearer token required when set):
 - `GET /api/recommendations` — race cards for a meeting (`?day` / `?date` /
   `?course`).
 - `GET /api/accuracy` — lifetime accuracy + per-day performance (`?date` /
-  `?course`).
+  `?course`). Per-day performance is evaluated **as-of off time** (each race's
+  latest model run with `run_time <= off_time`), so post-off reruns don't skew
+  it.
 - `GET /api/tipsters/status` — approved / pending / candidate counts.
 - `GET /api/tipsters/in-form` — top in-form tipsters.
 - `GET /api/tipsters/leaderboard` — tipster leaderboard.

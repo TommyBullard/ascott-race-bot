@@ -200,6 +200,10 @@ export interface PipelineSummary {
   model_races_run: number;
   recommendations_created: number;
   no_bet_races: number;
+  /** Races skipped because they had already gone off (pre-off run protected). */
+  skipped_post_off: number;
+  /** Races skipped because they were already resulted (pre-off run protected). */
+  skipped_resulted: number;
   failures: number;
 }
 

@@ -35,8 +35,10 @@ import {
 } from './modelRunConfigReaders';
 import {
   summarizeModelPerformance,
+  selectPreOffRun,
+  buildPreOffOutcomes,
   type ModelPerformance,
-  type RecommendationOutcome,
+  type SelectedRunRecommendation,
 } from './modelPerformance';
 import { normalizeCourse } from './raceSync';
 import { classifyTableProbe } from './dbHealthSpec';
@@ -1254,29 +1256,51 @@ export interface ModelPerformanceResult extends ModelPerformance {
   course: string | null;
   /** When this snapshot was computed (ISO 8601). */
   computedAt: string;
+  /** Which run-selection rule produced this snapshot (default `pre_off`). */
+  evaluationMode: ModelPerformanceMode;
 }
+
+/**
+ * How {@link computeModelPerformance} picks the model run to evaluate per race.
+ *
+ *   - `pre_off` (default): the latest run with `run_time <= races.off_time`, so
+ *     post-off reruns that superseded the valid pre-off run in `is_current` are
+ *     ignored. This is the honest "as-of off time" record.
+ *   - `current`: the latest `is_current` run (legacy behaviour), retained for
+ *     callers that explicitly want the live current-pointer view.
+ */
+export type ModelPerformanceMode = 'pre_off' | 'current';
 
 /**
  * Computes {@link ModelPerformance} for one meeting day (optionally a single
  * course), live from current DB state, using the STORED recommendation odds and
  * stake (Phase 5B).
  *
- * Scope: rank-1 CURRENT recommendations for races on `date` (filtered to
- * `course` when given, normalised so "Ascot" matches "Royal Ascot"). A race
- * counts as settled when it has a recorded winner (`runners.finish_pos = 1`);
- * recommendations for races without a result yet are PENDING and never counted
- * as losses. `no_bet_races` is the number of in-scope races that had a current
- * model run but produced no rank-1 recommendation.
+ * Scope: the rank-1 recommendation of each in-scope race's evaluated run for
+ * races on `date` (filtered to `course` when given, normalised so "Ascot"
+ * matches "Royal Ascot"). The evaluated run is chosen by `mode`:
+ *   - `pre_off` (default): the latest run with `run_time <= races.off_time`, so
+ *     post-off reruns on stale odds that superseded the valid pre-off run in
+ *     `is_current` are ignored (the honest "as-of off time" record).
+ *   - `current`: the latest `is_current` run (legacy live-pointer behaviour).
  *
- * Read-only; changes no model maths or staking. The heavy lifting (P/L, ROI,
- * strike rate) is the pure {@link summarizeModelPerformance}.
+ * A race counts as settled when it has a recorded winner (`runners.finish_pos
+ * = 1`); recommendations for races without a result yet are PENDING and never
+ * counted as losses. `no_bet_races` is the number of in-scope races whose
+ * evaluated run produced no rank-1 recommendation.
+ *
+ * Read-only; mutates nothing and changes no model maths or staking. Run
+ * selection is the pure {@link selectPreOffRun}; outcome building is the pure
+ * {@link buildPreOffOutcomes}; the P/L/ROI/strike maths is the pure
+ * {@link summarizeModelPerformance}.
  *
  * @throws if any Supabase query fails.
  */
 export async function computeModelPerformance(
-  params: { date: string; course?: string | null },
+  params: { date: string; course?: string | null; mode?: ModelPerformanceMode },
   now: Date = new Date(),
 ): Promise<ModelPerformanceResult> {
+  const mode: ModelPerformanceMode = params.mode ?? 'pre_off';
   const courseLabel = (params.course ?? '').trim() || null;
   const wantCourse = courseLabel === null ? null : normalizeCourse(courseLabel);
 
@@ -1285,18 +1309,24 @@ export async function computeModelPerformance(
     date: params.date,
     course: courseLabel,
     computedAt: now.toISOString(),
+    evaluationMode: mode,
   });
   const empty = (): ModelPerformanceResult => wrap(summarizeModelPerformance([], 0));
 
-  // 1. Races in scope (meeting day + optional normalised course filter).
+  // 1. Races in scope (meeting day + optional normalised course filter). The
+  //    `off_time` drives pre-off run selection below.
   const { data: raceData, error: raceError } = await supabaseAdmin
     .from(RACES_TABLE)
-    .select('id, course')
+    .select('id, course, off_time')
     .eq(RACE_MEETING_DATE_COLUMN, params.date);
   if (raceError) {
     throw new Error(`Failed to fetch races for performance: ${raceError.message}`);
   }
-  let raceRows = (raceData ?? []) as { id: Id; course: string | null }[];
+  let raceRows = (raceData ?? []) as {
+    id: Id;
+    course: string | null;
+    off_time: string | null;
+  }[];
   if (wantCourse !== null) {
     raceRows = raceRows.filter((r) => normalizeCourse(r.course ?? '') === wantCourse);
   }
@@ -1319,72 +1349,104 @@ export async function computeModelPerformance(
     winnerByRace.set(String(w.race_id), String(w.id));
   }
 
-  // 3. Latest CURRENT model run per in-scope race (rows are newest-first).
-  const { data: runData, error: runError } = await supabaseAdmin
-    .from(MODEL_RUNS_TABLE)
-    .select('id, race_id, run_time')
-    .in('race_id', raceIds)
-    .eq('is_current', true)
-    .order('run_time', { ascending: false });
-  if (runError) {
-    throw new Error(`Failed to fetch model runs for performance: ${runError.message}`);
-  }
-  const latestRunByRace = new Map<string, string>();
-  for (const r of (runData ?? []) as { id: Id; race_id: Id; run_time: string }[]) {
-    const raceId = String(r.race_id);
-    if (!latestRunByRace.has(raceId)) {
-      latestRunByRace.set(raceId, String(r.id)); // first seen = latest
+  // 3. Select the evaluated model run per race (race_id -> run_id).
+  const selectedRunIdByRace = new Map<string, string>();
+  if (mode === 'current') {
+    // Latest CURRENT run per race (legacy live-pointer behaviour).
+    const { data: runData, error: runError } = await supabaseAdmin
+      .from(MODEL_RUNS_TABLE)
+      .select('id, race_id, run_time')
+      .in('race_id', raceIds)
+      .eq('is_current', true)
+      .order('run_time', { ascending: false });
+    if (runError) {
+      throw new Error(`Failed to fetch model runs for performance: ${runError.message}`);
+    }
+    for (const r of (runData ?? []) as { id: Id; race_id: Id; run_time: string }[]) {
+      const raceId = String(r.race_id);
+      if (!selectedRunIdByRace.has(raceId)) {
+        selectedRunIdByRace.set(raceId, String(r.id)); // first seen = latest
+      }
+    }
+  } else {
+    // Pre-off: per race, the latest run with run_time <= off_time. Queried per
+    // race (in parallel) and bounded by `off_time`, so the scan stays within one
+    // race's pre-off history and avoids the client row cap on busy days. The
+    // final pick is the pure selectPreOffRun, so post-off reruns are excluded.
+    const entries = await Promise.all(
+      raceRows.map(async (race) => {
+        if (!race.off_time) return null; // cannot evaluate pre-off without an off
+        const { data, error } = await supabaseAdmin
+          .from(MODEL_RUNS_TABLE)
+          .select('id, run_time')
+          .eq('race_id', String(race.id))
+          .lte('run_time', race.off_time);
+        if (error) {
+          throw new Error(`Failed to fetch model runs for performance: ${error.message}`);
+        }
+        const chosen = selectPreOffRun(
+          ((data ?? []) as { id: Id; run_time: string }[]).map((r) => ({
+            run_id: String(r.id),
+            run_time: r.run_time,
+          })),
+          race.off_time,
+        );
+        return chosen ? ([String(race.id), chosen.run_id] as const) : null;
+      }),
+    );
+    for (const entry of entries) {
+      if (entry) selectedRunIdByRace.set(entry[0], entry[1]);
     }
   }
-  if (latestRunByRace.size === 0) {
+  if (selectedRunIdByRace.size === 0) {
     return empty();
   }
 
-  // 4. Rank-1 CURRENT recommendation for each of those latest runs.
-  const runIds = [...latestRunByRace.values()];
+  // 4. Rank-1 recommendation for each SELECTED run. No `is_current` filter: a
+  //    valid pre-off run's recommendation may have been superseded by a later
+  //    post-off run, yet it remains the recommendation that was live at the off.
+  //    (For `current` mode the selected run IS current, so its rec is current
+  //    too — the result is identical either way.)
+  const runIds = [...selectedRunIdByRace.values()];
   const { data: recData, error: recError } = await supabaseAdmin
     .from(RECOMMENDATIONS_TABLE)
-    .select('race_id, runner_id, odds, stake, stake_amount, ev')
+    .select('model_run_id, runner_id, odds, stake, stake_amount, ev')
     .in('model_run_id', runIds)
-    .eq('recommendation_rank', 1)
-    .eq('is_current', true);
+    .eq('recommendation_rank', 1);
   if (recError) {
     throw new Error(`Failed to fetch recommendations for performance: ${recError.message}`);
   }
 
   interface RecRow {
-    race_id: Id;
+    model_run_id: Id;
     runner_id: Id;
     odds: number | string | null;
     stake: number | string | null;
     stake_amount: number | string | null;
     ev: number | string | null;
   }
-  const recByRace = new Map<string, RecRow>();
+  const recsByRunId = new Map<string, SelectedRunRecommendation>();
   for (const rec of (recData ?? []) as RecRow[]) {
-    const raceId = String(rec.race_id);
-    if (!recByRace.has(raceId)) recByRace.set(raceId, rec);
-  }
-
-  // 5. One outcome per race that produced a rank-1 recommendation.
-  const outcomes: RecommendationOutcome[] = [];
-  for (const [raceId, rec] of recByRace) {
-    const winnerId = winnerByRace.get(raceId);
-    const settled = winnerId !== undefined;
-    outcomes.push({
-      settled,
-      won: settled && String(rec.runner_id) === winnerId,
+    const runId = String(rec.model_run_id);
+    if (recsByRunId.has(runId)) continue;
+    recsByRunId.set(runId, {
+      runner_id: String(rec.runner_id),
       odds: toNumberOrNull(rec.odds),
       stake: toNumberOrNull(rec.stake) ?? toNumberOrNull(rec.stake_amount),
       ev: toNumberOrNull(rec.ev),
     });
   }
 
-  // 6. no_bet_races = in-scope races that ran the model but made no rank-1 rec.
-  let noBetRaces = 0;
-  for (const raceId of latestRunByRace.keys()) {
-    if (!recByRace.has(raceId)) noBetRaces += 1;
-  }
+  // 5. Build outcomes + no-bet from the selected runs (pure). A post-off run
+  //    cannot erase a valid pre-off recommendation: it was excluded in step 3.
+  const { outcomes, noBetRaces } = buildPreOffOutcomes({
+    races: raceRows.map((r) => ({
+      race_id: String(r.id),
+      winner_runner_id: winnerByRace.get(String(r.id)) ?? null,
+    })),
+    selectedRunIdByRace,
+    recsByRunId,
+  });
 
   return wrap(summarizeModelPerformance(outcomes, noBetRaces));
 }

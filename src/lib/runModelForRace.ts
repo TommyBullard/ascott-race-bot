@@ -73,10 +73,13 @@ import {
 import {
   buildSupersedePatch,
   currentMarker,
+  notCurrentMarker,
   selectRunIdsToSupersede,
 } from './modelRunHistory';
 import { logSkippedModelRun } from './modelRunAttempts';
+import { evaluateModelRunGuard } from './modelRunGuard';
 
+const RACES_TABLE = 'races';
 const MODEL_RUNS_TABLE = 'model_runs';
 const MODEL_RUNNER_SCORES_TABLE = 'model_runner_scores';
 const RECOMMENDATIONS_TABLE = 'recommendations';
@@ -123,6 +126,14 @@ export interface RunModelOptions {
   baseKellyFraction?: number;
   /** `model_runs.signal_kappa` (default 1). */
   signalKappa?: number;
+  /**
+   * DIAGNOSTIC override: allow the run to proceed even when the race has gone
+   * off or is already resulted. Default false (post-off / resulted races are
+   * skipped). When true, the run is written NON-current and does NOT supersede
+   * the race's valid pre-off run — so a diagnostic rerun can never overwrite the
+   * recommendation that was live at the off.
+   */
+  allowPostOff?: boolean;
 }
 
 export interface RunModelResult {
@@ -252,6 +263,43 @@ export async function runModelForRace(
   const baseKellyFraction =
     options.baseKellyFraction ?? DEFAULT_BASE_KELLY_FRACTION;
   const signalKappa = options.signalKappa ?? DEFAULT_SIGNAL_KAPPA;
+
+  // Pre-off guard: never let a post-off / resulted rerun overwrite the race's
+  // final pre-off run (the one the dashboard/evaluation uses). Fetched first so
+  // a skipped run does no work and writes nothing. The explicit `allowPostOff`
+  // diagnostic override lets a run proceed, but it is then written NON-current
+  // and never supersedes the pre-off run (see `diagnostic` below).
+  const { data: raceGuardRow, error: raceGuardError } = await supabaseAdmin
+    .from(RACES_TABLE)
+    .select('off_time, status')
+    .eq('id', raceId)
+    .limit(1)
+    .maybeSingle();
+  if (raceGuardError) {
+    throw new Error(
+      `Failed to fetch race ${raceId} for run guard: ${raceGuardError.message}`,
+    );
+  }
+  const guard = evaluateModelRunGuard(
+    {
+      off_time: (raceGuardRow as { off_time?: string | null } | null)?.off_time ?? null,
+      status: (raceGuardRow as { status?: string | null } | null)?.status ?? null,
+    },
+    new Date(),
+    { allowPostOff: options.allowPostOff },
+  );
+  if (guard.skip) {
+    // Skipped before any write: the existing current (pre-off) run is untouched.
+    console.warn(
+      `[runModelForRace] skipped ${guard.reason} run for race ${raceId} ` +
+        `(pre-off run left current; pass allowPostOff for a non-current diagnostic run).`,
+    );
+    return null;
+  }
+  // A diagnostic post-off run (allowPostOff bypassed the skip): write it
+  // NON-current and do not supersede the valid pre-off run.
+  const diagnostic = guard.reason !== null;
+  const writeMarker = diagnostic ? notCurrentMarker() : currentMarker();
 
   // Bankroll: prefer an explicit option; otherwise read the latest balance from
   // bankroll_ledger, falling back to the default (with a warning) when empty.
@@ -471,7 +519,7 @@ export async function runModelForRace(
       bet_mode: betMode,
       base_kelly_fraction: baseKellyFraction,
       signal_kappa: signalKappa,
-      ...currentMarker(),
+      ...writeMarker,
     })
     .select('id')
     .single();
@@ -494,7 +542,7 @@ export async function runModelForRace(
   const scoreRows = buildModelRunnerScoreFields(scored).map((fields) => ({
     model_run_id: modelRunId,
     ...fields,
-    ...currentMarker(),
+    ...writeMarker,
   }));
 
   const { error: scoresError } = await supabaseAdmin
@@ -531,7 +579,7 @@ export async function runModelForRace(
         // Canonical/display + compatibility columns from the same values, so
         // SQL/dashboards see a complete row (see modelPersistenceMapping).
         ...buildRecommendationFields({ topBet, bankroll, baseKellyFraction }),
-        ...currentMarker(),
+        ...writeMarker,
       });
     if (recsError) {
       throw new Error(
@@ -547,62 +595,70 @@ export async function runModelForRace(
   //    current run by run_time. The just-inserted run is EXCLUDED, and children
   //    are filtered by the OLDER run ids only, so the new run + its children
   //    stay current. Best-effort (supabase-js cannot transact); see the header.
-  const { data: currentRunData, error: currentRunsError } = await supabaseAdmin
-    .from(MODEL_RUNS_TABLE)
-    .select('id')
-    .eq('race_id', raceId)
-    .eq('is_current', true);
-
-  if (currentRunsError) {
-    throw new Error(
-      `Failed to list current model runs for race ${raceId}: ${currentRunsError.message}`,
-    );
-  }
-
-  // Exclude the just-inserted run so only OLDER current runs are superseded.
-  const supersededRunIds = selectRunIdsToSupersede(
-    ((currentRunData ?? []) as { id: string }[]).map((r) => String(r.id)),
-    modelRunId,
-  );
-
-  if (supersededRunIds.length > 0) {
-    const patch = buildSupersedePatch();
-
-    // Children (recs, scores) filtered by the OLDER run ids only — never the new
-    // run's children — then the older runs themselves. UPDATE, not DELETE, so
-    // order is not FK-sensitive; the `is_current` guard avoids rewriting rows
-    // already superseded by an earlier run.
-    const { error: supRecsError } = await supabaseAdmin
-      .from(RECOMMENDATIONS_TABLE)
-      .update(patch)
-      .in('model_run_id', supersededRunIds)
-      .eq('is_current', true);
-    if (supRecsError) {
-      throw new Error(
-        `Failed to supersede prior recommendations for race ${raceId}: ${supRecsError.message}`,
-      );
-    }
-
-    const { error: supScoresError } = await supabaseAdmin
-      .from(MODEL_RUNNER_SCORES_TABLE)
-      .update(patch)
-      .in('model_run_id', supersededRunIds)
-      .eq('is_current', true);
-    if (supScoresError) {
-      throw new Error(
-        `Failed to supersede prior model runner scores for race ${raceId}: ${supScoresError.message}`,
-      );
-    }
-
-    const { error: supRunsError } = await supabaseAdmin
+  //
+  //    SKIPPED ENTIRELY for a diagnostic (post-off) run: it was written
+  //    non-current above, so it must never retire the valid pre-off run.
+  let supersededCount = 0;
+  if (!diagnostic) {
+    const { data: currentRunData, error: currentRunsError } = await supabaseAdmin
       .from(MODEL_RUNS_TABLE)
-      .update(patch)
-      .in('id', supersededRunIds);
-    if (supRunsError) {
+      .select('id')
+      .eq('race_id', raceId)
+      .eq('is_current', true);
+
+    if (currentRunsError) {
       throw new Error(
-        `Failed to supersede prior model runs for race ${raceId}: ${supRunsError.message}`,
+        `Failed to list current model runs for race ${raceId}: ${currentRunsError.message}`,
       );
     }
+
+    // Exclude the just-inserted run so only OLDER current runs are superseded.
+    const supersededRunIds = selectRunIdsToSupersede(
+      ((currentRunData ?? []) as { id: string }[]).map((r) => String(r.id)),
+      modelRunId,
+    );
+
+    if (supersededRunIds.length > 0) {
+      const patch = buildSupersedePatch();
+
+      // Children (recs, scores) filtered by the OLDER run ids only — never the
+      // new run's children — then the older runs themselves. UPDATE, not DELETE,
+      // so order is not FK-sensitive; the `is_current` guard avoids rewriting
+      // rows already superseded by an earlier run.
+      const { error: supRecsError } = await supabaseAdmin
+        .from(RECOMMENDATIONS_TABLE)
+        .update(patch)
+        .in('model_run_id', supersededRunIds)
+        .eq('is_current', true);
+      if (supRecsError) {
+        throw new Error(
+          `Failed to supersede prior recommendations for race ${raceId}: ${supRecsError.message}`,
+        );
+      }
+
+      const { error: supScoresError } = await supabaseAdmin
+        .from(MODEL_RUNNER_SCORES_TABLE)
+        .update(patch)
+        .in('model_run_id', supersededRunIds)
+        .eq('is_current', true);
+      if (supScoresError) {
+        throw new Error(
+          `Failed to supersede prior model runner scores for race ${raceId}: ${supScoresError.message}`,
+        );
+      }
+
+      const { error: supRunsError } = await supabaseAdmin
+        .from(MODEL_RUNS_TABLE)
+        .update(patch)
+        .in('id', supersededRunIds);
+      if (supRunsError) {
+        throw new Error(
+          `Failed to supersede prior model runs for race ${raceId}: ${supRunsError.message}`,
+        );
+      }
+    }
+
+    supersededCount = supersededRunIds.length;
   }
 
   return {
@@ -610,6 +666,6 @@ export async function runModelForRace(
     race_id: raceId,
     scored: scoreRows.length,
     recommended,
-    supersededRuns: supersededRunIds.length,
+    supersededRuns: supersededCount,
   };
 }

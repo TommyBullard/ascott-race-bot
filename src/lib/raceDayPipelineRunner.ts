@@ -143,11 +143,25 @@ export async function runPipelineCommitCycle(
       `\n  model: running ${races.length} race(s)…` +
         (opts.allowStale && odds !== 'ok' ? ' (--allow-stale: odds not fresh)' : ''),
     );
-    const outcomes = await runModelForMeetingRaces(races, deps.runOneRace, (race: MeetingRace, o) => {
-      if (o.status === 'run') log(`    run     ${race.id}  scored=${o.scored} recommended=${o.recommended}`);
-      else if (o.status === 'skipped') log(`    skipped ${race.id}  (no priced runners / market snapshot)`);
-      else errorLog(`    FAILED  ${race.id}  ${o.error}`);
-    });
+    const outcomes = await runModelForMeetingRaces(
+      races,
+      deps.runOneRace,
+      (race: MeetingRace, o) => {
+        if (o.status === 'run') log(`    run     ${race.id}  scored=${o.scored} recommended=${o.recommended}`);
+        else if (o.status === 'skipped')
+          log(
+            `    skipped ${race.id}  (${
+              o.skipReason === 'POST_OFF'
+                ? 'post-off: race already started'
+                : o.skipReason === 'RESULTED'
+                  ? 'resulted: race already settled'
+                  : 'no priced runners / market snapshot'
+            })`,
+          );
+        else errorLog(`    FAILED  ${race.id}  ${o.error}`);
+      },
+      opts.now,
+    );
     modelSummary = summarizeModelDayOutcomes(outcomes);
   } else {
     log(`\n${ODDS_FAILED_SKIP_MESSAGE}`);
@@ -164,6 +178,8 @@ export async function runPipelineCommitCycle(
     model_races_run: modelSummary.races_run,
     recommendations_created: modelSummary.recommendations_created,
     no_bet_races: modelSummary.no_bet_races,
+    skipped_post_off: modelSummary.skipped_post_off,
+    skipped_resulted: modelSummary.skipped_resulted,
     failures: modelSummary.failures,
   };
   return { summary, dashboardUrl: dashUrl, racecards, odds, modelRan };
@@ -198,7 +214,7 @@ export function createFetchRaceRows(): (date: string) => Promise<MeetingRace[]> 
   return async (date: string) => {
     const { data, error } = await supabaseAdmin
       .from(RACES_TABLE)
-      .select('id, course, off_time, race_name')
+      .select('id, course, off_time, race_name, status')
       .eq(RACE_MEETING_DATE_COLUMN, date);
     if (error) {
       throw new Error(`races lookup failed for ${date}: ${error.message}`);
@@ -208,12 +224,14 @@ export function createFetchRaceRows(): (date: string) => Promise<MeetingRace[]> 
       course: string | null;
       off_time: string | null;
       race_name: string | null;
+      status: string | null;
     }[];
     return rows.map((r) => ({
       id: String(r.id),
       course: r.course,
       off_time: r.off_time,
       race_name: r.race_name,
+      status: r.status,
     }));
   };
 }
