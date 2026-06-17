@@ -2,7 +2,7 @@
 
 Course: Ascot  
 Minutes before off: 5  
-Generated: 2026-06-17T15:14:50.934Z  
+Generated: 2026-06-17T15:54:17.946Z  
 Races: 7
 
 > Source of truth: stored model history (the latest `model_runs` row with
@@ -148,25 +148,25 @@ Races: 7
 - Course: Ascot
 - Off time (UTC): 2026-06-17T16:00:00+00:00
 - Capture target (UTC): 2026-06-17T15:55:00.000Z
-- Selected model run: 4d840603-e9e7-48e8-8d6a-258f2025392a
-- Run time: 2026-06-17T15:14:39.724+00:00
+- Selected model run: 0e5d0187-5c55-42a6-9f89-c997fad45c9b
+- Run time: 2026-06-17T15:54:11.44+00:00
 - Selected run status: current
 - Later pre-off run exists: No
 - Post-off runs ignored: 0
 
 ### Model pick
 - Pick: Archivist
-- Odds: 8.20
-- EV: +14.2%
-- Stake: 1.29
+- Odds: 7.60
+- EV: +14.3%
+- Stake: 1.43
 - Confidence: low
 
 ### Market favourite
-- Archivist — odds 8.20 · EV +14.2%
+- Archivist — odds 7.60 · EV +14.3%
 
 ### Alternatives
-- Jagged Edge — odds 10.00 · EV +14.2%
-- La Botte — odds 16.50 · EV −2.9%
+- Jagged Edge — odds 10.50 · EV +14.3%
+- Swing Vote — odds 210.00 · EV −2.9%
 
 ### Model explanation
 - Data quality: DEGRADED
@@ -175,33 +175,30 @@ Races: 7
 - Tipster consensus: No tipster consensus
 - Tipster alignment: NO_TIPSTER_CONSENSUS
 
-### Warnings
-- ⚠️ Selected run is more than 10 minutes before the capture target; it may be stale for a T-minus read.
-
 ## 16:35 — Kensington Palace Stakes (Fillies' Handicap)
 
 - Course: Ascot
 - Off time (UTC): 2026-06-17T16:35:00+00:00
 - Capture target (UTC): 2026-06-17T16:30:00.000Z
-- Selected model run: 572afa57-c238-43cd-a4d5-c02c7bb4662f
-- Run time: 2026-06-17T15:14:41.463+00:00
+- Selected model run: 0744433b-3d74-4dd2-8c2e-840cdea61e70
+- Run time: 2026-06-17T15:54:12.025+00:00
 - Selected run status: current
 - Later pre-off run exists: No
 - Post-off runs ignored: 0
 
 ### Model pick
 - Pick: Stateira
-- Odds: 10.50
+- Odds: 11.00
 - EV: +6.5%
 - Stake: 1.00
 - Confidence: low
 
 ### Market favourite
-- Alobayyah — odds 4.90 · EV +6.5%
+- Alobayyah — odds 4.40 · EV +6.5%
 
 ### Alternatives
-- Radiant Beauty — odds 8.40 · EV +6.5%
-- Alobayyah — odds 4.90 · EV +6.5%
+- Radiant Beauty — odds 8.60 · EV +6.5%
+- Alobayyah — odds 4.40 · EV +6.5%
 
 ### Model explanation
 - Data quality: DEGRADED
@@ -218,25 +215,25 @@ Races: 7
 - Course: Ascot
 - Off time (UTC): 2026-06-17T17:10:00+00:00
 - Capture target (UTC): 2026-06-17T17:05:00.000Z
-- Selected model run: faffe523-48f9-4b0d-bcf8-e36c8c2cde96
-- Run time: 2026-06-17T15:14:42.68+00:00
+- Selected model run: e47db11a-0e98-4911-be96-49148f979b0c
+- Run time: 2026-06-17T15:54:12.51+00:00
 - Selected run status: current
 - Later pre-off run exists: No
 - Post-off runs ignored: 0
 
 ### Model pick
-- Pick: Sale Shark
-- Odds: 7.80
-- EV: +5.8%
+- Pick: One Number
+- Odds: 10.50
+- EV: +6.7%
 - Stake: 1.00
 - Confidence: low
 
 ### Market favourite
-- Controlla — odds 3.70 · EV +5.8%
+- Controlla — odds 3.65 · EV +6.7%
 
 ### Alternatives
-- One Number — odds 9.80 · EV +5.8%
-- Sergei Diaghilev — odds 7.00 · EV +5.8%
+- Sergei Diaghilev — odds 6.40 · EV +6.7%
+- Sale Shark — odds 7.60 · EV +6.7%
 
 ### Model explanation
 - Data quality: DEGRADED

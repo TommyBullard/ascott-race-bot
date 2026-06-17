@@ -2,7 +2,7 @@
   "date": "2026-06-17",
   "course": "Ascot",
   "minutes_before": 5,
-  "generatedAt": "2026-06-17T15:14:50.934Z",
+  "generatedAt": "2026-06-17T15:54:17.946Z",
   "races": [
     {
       "race_id": "aaaec054-a6ea-4e4f-865d-a1232aa7288e",
@@ -240,41 +240,41 @@
       "course": "Ascot",
       "off_time": "2026-06-17T16:00:00+00:00",
       "capture_target_time": "2026-06-17T15:55:00.000Z",
-      "selected_run_id": "4d840603-e9e7-48e8-8d6a-258f2025392a",
-      "selected_run_time": "2026-06-17T15:14:39.724+00:00",
+      "selected_run_id": "0e5d0187-5c55-42a6-9f89-c997fad45c9b",
+      "selected_run_time": "2026-06-17T15:54:11.44+00:00",
       "selected_run_is_current": true,
       "later_pre_off_run_exists": false,
       "post_off_run_count": 0,
       "pick": {
         "horse_name": "Archivist",
-        "odds": 8.2,
-        "ev": 0.14181855486512962,
-        "model_prob": 0.13924616522745484,
-        "market_prob": 0.12303637000215839,
-        "stake": 1.2881717994108648,
+        "odds": 7.6,
+        "ev": 0.1427165730153208,
+        "model_prob": 0.1503574438178054,
+        "market_prob": 0.13297359308636902,
+        "stake": 1.4314720282351328,
         "confidence_label": "low"
       },
       "favourite": {
         "horse_name": "Archivist",
-        "odds": 8.2,
-        "ev": 0.14181855486512962,
-        "model_prob": 0.13924616522745484,
-        "market_prob": 0.12303637000215839
+        "odds": 7.6,
+        "ev": 0.1427165730153208,
+        "model_prob": 0.1503574438178054,
+        "market_prob": 0.13297359308636902
       },
       "alternatives": [
         {
           "horse_name": "Jagged Edge",
-          "odds": 10,
-          "ev": 0.14181855486512962,
-          "model_prob": 0.11418185548651297,
-          "market_prob": 0.10088982340176988
+          "odds": 10.5,
+          "ev": 0.1427165730153206,
+          "model_prob": 0.10883014981098292,
+          "market_prob": 0.09624755309108614
         },
         {
-          "horse_name": "La Botte",
-          "odds": 16.5,
-          "ev": -0.029454228364639734,
-          "model_prob": 0.0588209558566885,
-          "market_prob": 0.06114534751622417
+          "horse_name": "Swing Vote",
+          "odds": 210,
+          "ev": -0.02869091293697712,
+          "model_prob": 0.004625281366966776,
+          "market_prob": 0.004812377654554308
         }
       ],
       "run_quality": "DEGRADED",
@@ -287,7 +287,7 @@
       "tipster_alignment_label": "NO_TIPSTER_CONSENSUS",
       "warnings": {
         "noCaptureRun": false,
-        "farBeforeCapture": true,
+        "farBeforeCapture": false,
         "laterPreOffRunExists": false,
         "postOffRunsIgnored": false
       }
@@ -298,41 +298,41 @@
       "course": "Ascot",
       "off_time": "2026-06-17T16:35:00+00:00",
       "capture_target_time": "2026-06-17T16:30:00.000Z",
-      "selected_run_id": "572afa57-c238-43cd-a4d5-c02c7bb4662f",
-      "selected_run_time": "2026-06-17T15:14:41.463+00:00",
+      "selected_run_id": "0744433b-3d74-4dd2-8c2e-840cdea61e70",
+      "selected_run_time": "2026-06-17T15:54:12.025+00:00",
       "selected_run_is_current": true,
       "later_pre_off_run_exists": false,
       "post_off_run_count": 0,
       "pick": {
         "horse_name": "Stateira",
-        "odds": 10.5,
-        "ev": 0.06537091149977026,
-        "model_prob": 0.10146389633331146,
-        "market_prob": 0.09242351324758442,
+        "odds": 11,
+        "ev": 0.0651771309651541,
+        "model_prob": 0.09683428463319582,
+        "market_prob": 0.08844897529664537,
         "stake": 1,
         "confidence_label": "low"
       },
       "favourite": {
         "horse_name": "Alobayyah",
-        "odds": 4.9,
-        "ev": 0.06537091149977026,
-        "model_prob": 0.2174226349999531,
-        "market_prob": 0.19805038553053803
+        "odds": 4.4,
+        "ev": 0.0651771309651541,
+        "model_prob": 0.24208571158298955,
+        "market_prob": 0.22112243824161343
       },
       "alternatives": [
         {
           "horse_name": "Radiant Beauty",
-          "odds": 8.4,
-          "ev": 0.06537091149977026,
-          "model_prob": 0.12682987041663932,
-          "market_prob": 0.11552939155948053
+          "odds": 8.6,
+          "ev": 0.0651771309651541,
+          "model_prob": 0.1238578059261807,
+          "market_prob": 0.11313241026315106
         },
         {
           "horse_name": "Alobayyah",
-          "odds": 4.9,
-          "ev": 0.06537091149977026,
-          "model_prob": 0.2174226349999531,
-          "market_prob": 0.19805038553053803
+          "odds": 4.4,
+          "ev": 0.0651771309651541,
+          "model_prob": 0.24208571158298955,
+          "market_prob": 0.22112243824161343
         }
       ],
       "run_quality": "DEGRADED",
@@ -356,41 +356,41 @@
       "course": "Ascot",
       "off_time": "2026-06-17T17:10:00+00:00",
       "capture_target_time": "2026-06-17T17:05:00.000Z",
-      "selected_run_id": "faffe523-48f9-4b0d-bcf8-e36c8c2cde96",
-      "selected_run_time": "2026-06-17T15:14:42.68+00:00",
+      "selected_run_id": "e47db11a-0e98-4911-be96-49148f979b0c",
+      "selected_run_time": "2026-06-17T15:54:12.51+00:00",
       "selected_run_is_current": true,
       "later_pre_off_run_exists": false,
       "post_off_run_count": 0,
       "pick": {
-        "horse_name": "Sale Shark",
-        "odds": 7.8,
-        "ev": 0.0583628716541682,
-        "model_prob": 0.13568754764797028,
-        "market_prob": 0.1284545544606574,
+        "horse_name": "One Number",
+        "odds": 10.5,
+        "ev": 0.0674190063565212,
+        "model_prob": 0.10165895298633534,
+        "market_prob": 0.09656924165750298,
         "stake": 1,
         "confidence_label": "low"
       },
       "favourite": {
         "horse_name": "Controlla",
-        "odds": 3.7,
-        "ev": 0.05836287165416776,
-        "model_prob": 0.2860440193659913,
-        "market_prob": 0.2707960877819263
+        "odds": 3.65,
+        "ev": 0.06741900635652098,
+        "model_prob": 0.2924435633853482,
+        "market_prob": 0.2778019280558305
       },
       "alternatives": [
         {
-          "horse_name": "One Number",
-          "odds": 9.8,
-          "ev": 0.05836287165416798,
-          "model_prob": 0.10799621139328243,
-          "market_prob": 0.10223933926460484
+          "horse_name": "Sergei Diaghilev",
+          "odds": 6.4,
+          "ev": 0.0674190063565212,
+          "model_prob": 0.16678421974320642,
+          "market_prob": 0.15843391209434085
         },
         {
-          "horse_name": "Sergei Diaghilev",
-          "odds": 7,
-          "ev": 0.05836287165416776,
-          "model_prob": 0.1511946959505954,
-          "market_prob": 0.14313507497044678
+          "horse_name": "Sale Shark",
+          "odds": 7.6,
+          "ev": 0.06741900635652098,
+          "model_prob": 0.14044986925743697,
+          "market_prob": 0.13341803123733964
         }
       ],
       "run_quality": "DEGRADED",
