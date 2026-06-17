@@ -40,6 +40,8 @@
     "snapshot:pre-off": "tsx scripts/snapshotPreOff.ts",
     "report:day": "tsx scripts/reportDay.ts",
     "lessons:day": "tsx scripts/dayLessons.ts",
+    "preflight:day": "tsx scripts/dayPreflightPack.ts",
+    "dashboard:ready": "tsx scripts/dashboardReadiness.ts",
     "export:training-data": "tsx scripts/exportTrainingData.ts",
     "capture:t-minus": "tsx scripts/captureTMinus.ts",
     "results:auto": "tsx scripts/autoResults.ts",
@@ -51,7 +53,8 @@
     "place:audit": "tsx scripts/placeAudit.ts",
     "ml:evaluate": "tsx scripts/mlEvaluate.ts",
     "race-day:autopilot": "tsx scripts/raceDayAutopilot.ts",
-    "race-day:live-plan": "tsx scripts/raceDayLivePlan.ts"
+    "race-day:live-plan": "tsx scripts/raceDayLivePlan.ts",
+    "race-day:operate": "tsx scripts/raceDayOperate.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
