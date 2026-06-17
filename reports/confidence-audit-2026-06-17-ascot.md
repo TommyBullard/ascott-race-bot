@@ -1,7 +1,7 @@
 # Confidence decomposition audit — 2026-06-17
 
 Course: Ascot  
-Generated: 2026-06-17T18:06:46.031Z  
+Generated: 2026-06-17T20:08:27.187Z  
 Races: 7
 
 > Diagnostic / display-only. This decomposes WHY each run is Low/Medium/High
