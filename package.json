@@ -44,7 +44,8 @@
     "results:auto": "tsx scripts/autoResults.ts",
     "extract:notes": "tsx scripts/extractNotes.ts",
     "tipsters:audit": "tsx scripts/tipsterAudit.ts",
-    "confidence:audit": "tsx scripts/confidenceAudit.ts"
+    "confidence:audit": "tsx scripts/confidenceAudit.ts",
+    "gates:audit": "tsx scripts/noBetGateAudit.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

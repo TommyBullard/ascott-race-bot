@@ -55,6 +55,7 @@ import './autoResults.test';
 import './noteFeatureExtraction.test';
 import './tipsterAudit.test';
 import './confidenceDiagnostics.test';
+import './noBetGateAudit.test';
 import './relativeTime.test';
 import './modelDayRun.test';
 import './raceDayPipeline.test';
