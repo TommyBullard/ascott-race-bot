@@ -2,7 +2,7 @@
 
 Course: Ascot  
 Minutes before off: 5  
-Generated: 2026-06-17T15:54:17.946Z  
+Generated: 2026-06-17T17:04:00.867Z  
 Races: 7
 
 > Source of truth: stored model history (the latest `model_runs` row with
@@ -180,25 +180,25 @@ Races: 7
 - Course: Ascot
 - Off time (UTC): 2026-06-17T16:35:00+00:00
 - Capture target (UTC): 2026-06-17T16:30:00.000Z
-- Selected model run: 0744433b-3d74-4dd2-8c2e-840cdea61e70
-- Run time: 2026-06-17T15:54:12.025+00:00
-- Selected run status: current
-- Later pre-off run exists: No
+- Selected model run: f756a6af-2c28-4b5d-8bd2-92c1aa220269
+- Run time: 2026-06-17T16:29:47.89+00:00
+- Selected run status: superseded
+- Later pre-off run exists: Yes
 - Post-off runs ignored: 0
 
 ### Model pick
 - Pick: Stateira
 - Odds: 11.00
-- EV: +6.5%
+- EV: +7.9%
 - Stake: 1.00
 - Confidence: low
 
 ### Market favourite
-- Alobayyah — odds 4.40 · EV +6.5%
+- Alobayyah — odds 4.70 · EV +7.9%
 
 ### Alternatives
-- Radiant Beauty — odds 8.60 · EV +6.5%
-- Alobayyah — odds 4.40 · EV +6.5%
+- Radiant Beauty — odds 9.20 · EV +7.9%
+- Alobayyah — odds 4.70 · EV +7.9%
 
 ### Model explanation
 - Data quality: DEGRADED
@@ -208,32 +208,32 @@ Races: 7
 - Tipster alignment: NO_TIPSTER_CONSENSUS
 
 ### Warnings
-- ⚠️ Selected run is more than 10 minutes before the capture target; it may be stale for a T-minus read.
+- ℹ️ A later pre-off run exists (after the capture target but before the off); it was NOT used for this capture.
 
 ## 17:10 — Windsor Castle Stakes (Listed Race)
 
 - Course: Ascot
 - Off time (UTC): 2026-06-17T17:10:00+00:00
 - Capture target (UTC): 2026-06-17T17:05:00.000Z
-- Selected model run: e47db11a-0e98-4911-be96-49148f979b0c
-- Run time: 2026-06-17T15:54:12.51+00:00
+- Selected model run: fb075674-5547-4785-a468-f8d0b89f2f48
+- Run time: 2026-06-17T17:03:53.894+00:00
 - Selected run status: current
 - Later pre-off run exists: No
 - Post-off runs ignored: 0
 
 ### Model pick
-- Pick: One Number
-- Odds: 10.50
-- EV: +6.7%
+- Pick: Sale Shark
+- Odds: 8.20
+- EV: +7.4%
 - Stake: 1.00
 - Confidence: low
 
 ### Market favourite
-- Controlla — odds 3.65 · EV +6.7%
+- Controlla — odds 4.50 · EV +7.4%
 
 ### Alternatives
-- Sergei Diaghilev — odds 6.40 · EV +6.7%
-- Sale Shark — odds 7.60 · EV +6.7%
+- One Number — odds 10.00 · EV +7.4%
+- Sergei Diaghilev — odds 5.00 · EV +7.4%
 
 ### Model explanation
 - Data quality: DEGRADED
@@ -241,6 +241,3 @@ Races: 7
 - Data quality summary: DEGRADED — Missing runner odds (23/25 priced), No tipster selections
 - Tipster consensus: No tipster consensus
 - Tipster alignment: NO_TIPSTER_CONSENSUS
-
-### Warnings
-- ⚠️ Selected run is more than 10 minutes before the capture target; it may be stale for a T-minus read.
