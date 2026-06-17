@@ -32,6 +32,10 @@ data/*.csv
 # Keep safe templates/examples tracked
 !data/*.example.csv
 
+# Generated ML training exports — local/regeneratable
+data/exports/*.csv
+!data/exports/*.example.csv
+
 # Editor / OS
 .DS_Store
 *.pem
