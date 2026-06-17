@@ -58,6 +58,7 @@ import './confidenceDiagnostics.test';
 import './noBetGateAudit.test';
 import './mlShadowEvaluation.test';
 import './raceDayAutopilot.test';
+import './raceDayLivePlan.test';
 import './relativeTime.test';
 import './modelDayRun.test';
 import './raceDayPipeline.test';
