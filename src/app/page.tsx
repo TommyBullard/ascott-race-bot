@@ -27,6 +27,7 @@ import { STALE_ODDS_THRESHOLD_MS } from '@/lib/modelDataQuality';
 import {
   hasRaceDayScope,
   selectDashboardSummary,
+  shouldShowAccuracyBar,
   type DashboardSummary,
 } from '@/lib/raceDaySummary';
 
@@ -1246,6 +1247,11 @@ export default function RecommendationsPage() {
     };
   }, []);
 
+  // Scoped race-day views render the same figures in the PerformancePanel below,
+  // so the top AccuracyBar would duplicate them. Hide the bar when the summary is
+  // race-day scoped; keep it for the unscoped lifetime/global view.
+  const dashboardSummary = selectDashboardSummary(accuracy, performance, scoped);
+
   return (
     <main style={styles.page}>
       <div
@@ -1267,7 +1273,9 @@ export default function RecommendationsPage() {
         </span>
       </div>
 
-      <AccuracyBar summary={selectDashboardSummary(accuracy, performance, scoped)} />
+      {shouldShowAccuracyBar(dashboardSummary) && (
+        <AccuracyBar summary={dashboardSummary} />
+      )}
 
       <PerformancePanel performance={performance} />
 

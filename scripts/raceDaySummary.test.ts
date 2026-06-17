@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import {
   hasRaceDayScope,
   selectDashboardSummary,
+  shouldShowAccuracyBar,
   type LifetimeAccuracyLike,
   type RaceDayPerformanceLike,
 } from '../src/lib/raceDaySummary';
@@ -114,4 +115,32 @@ test('scoped but no performance yet: falls back to lifetime accuracy (no crash)'
 test('neither block present: null (the bar renders nothing)', () => {
   assert.equal(selectDashboardSummary(null, null, true), null);
   assert.equal(selectDashboardSummary(null, null, false), null);
+});
+
+/* --------------------------- shouldShowAccuracyBar ------------------------ */
+
+test('shouldShowAccuracyBar: hidden for a scoped race-day summary (avoids duplicating the performance panel)', () => {
+  const summary = selectDashboardSummary(LIFETIME, RACE_DAY, true);
+  assert.ok(summary);
+  assert.equal(summary.source, 'race_day');
+  assert.equal(shouldShowAccuracyBar(summary), false);
+});
+
+test('shouldShowAccuracyBar: shown for the unscoped lifetime/global summary', () => {
+  const summary = selectDashboardSummary(LIFETIME, RACE_DAY, false);
+  assert.ok(summary);
+  assert.equal(summary.source, 'lifetime');
+  assert.equal(shouldShowAccuracyBar(summary), true);
+});
+
+test('shouldShowAccuracyBar: shown when scoped but no performance yet (bar falls back to lifetime, no duplicate)', () => {
+  const summary = selectDashboardSummary(LIFETIME, null, true);
+  assert.ok(summary);
+  assert.equal(summary.source, 'lifetime');
+  assert.equal(shouldShowAccuracyBar(summary), true);
+});
+
+test('shouldShowAccuracyBar: hidden when there is no summary at all', () => {
+  assert.equal(shouldShowAccuracyBar(null), false);
+  assert.equal(shouldShowAccuracyBar(undefined), false);
 });

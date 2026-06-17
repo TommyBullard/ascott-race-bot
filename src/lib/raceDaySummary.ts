@@ -118,3 +118,20 @@ export function selectDashboardSummary(
   }
   return null;
 }
+
+/**
+ * Whether the dashboard's top AccuracyBar should render.
+ *
+ * A `source: 'race_day'` summary is the scoped, pre-off record that the
+ * Recommendation performance panel already shows in full — rendering the bar
+ * as well would duplicate the same winners/strike/profit/ROI figures. Hide the
+ * bar in that case; keep it for the unscoped lifetime/global summary (and only
+ * when a summary is present at all).
+ *
+ * Pure; tolerates null/undefined.
+ */
+export function shouldShowAccuracyBar(
+  summary: DashboardSummary | null | undefined,
+): boolean {
+  return !!summary && summary.source !== 'race_day';
+}
