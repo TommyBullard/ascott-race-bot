@@ -27,6 +27,7 @@ import {
   matchFreeRunnerToDbRunner,
   buildFreeRaceSettlement,
   collectFreeSettlements,
+  commitOpsForSettlement,
   buildFreeResultsReport,
   renderFreeResultsSummary,
   FREE_RESULTS_SOURCE_LABEL,
@@ -303,6 +304,143 @@ test('renderFreeResultsSummary: deterministic; shows winner, SP/BSP null, settle
   assert.ok(out.includes(FREE_RESULTS_SOURCE_LABEL));
 });
 
+/* ------------------- commit ops, conflicts, idempotency ------------------- */
+
+test('buildFreeRaceSettlement: commit_op classifies update / noop / conflict per runner', () => {
+  const free = freeRace({ runners: [freeRunner('Alpha', '1'), freeRunner('Bravo', '2'), freeRunner('Charlie', '3')] });
+  const dbRunners = [
+    dbRunner({ id: 'r1', horse_name: 'Alpha', finish_pos: null }), // existing null -> update
+    dbRunner({ id: 'r2', horse_name: 'Bravo', finish_pos: 2 }),    // identical -> noop
+    dbRunner({ id: 'r3', horse_name: 'Charlie', finish_pos: 5 }),  // differs -> conflict
+  ];
+  const s = buildFreeRaceSettlement(free, dbRace(), dbRunners, normalizeHorseName);
+  const byHorse = Object.fromEntries(s.runners.map((r) => [r.free_horse, r.commit_op]));
+  assert.equal(byHorse['Alpha'], 'update');
+  assert.equal(byHorse['Bravo'], 'noop');
+  assert.equal(byHorse['Charlie'], 'conflict');
+  assert.equal(s.audit.existing_result_conflict, true);
+  assert.equal(s.safety.canCommit, false); // a conflict blocks the race
+});
+
+test('commitOpsForSettlement: only update ops are written; SP/BSP never in the patch', () => {
+  const free = freeRace({ runners: [freeRunner('Alpha', '1'), freeRunner('Bravo', '2')] });
+  const s = buildFreeRaceSettlement(
+    free,
+    dbRace(),
+    [dbRunner({ id: 'r1', horse_name: 'Alpha', finish_pos: null }), dbRunner({ id: 'r2', horse_name: 'Bravo', finish_pos: 2 })],
+    normalizeHorseName,
+  );
+  const ops = commitOpsForSettlement(s);
+  assert.deepEqual(ops.updates, [{ runner_id: 'r1', finish_pos: 1 }]);
+  assert.equal(ops.noops, 1);
+  assert.equal(ops.conflicts, 0);
+  for (const u of ops.updates) assert.deepEqual(Object.keys(u).sort(), ['finish_pos', 'runner_id']);
+  assert.equal(s.runners[0].sp_decimal, null);
+  assert.equal(s.runners[0].bsp_decimal, null);
+});
+
+test('idempotency: identical existing values -> 0 updates (all noop), still settle-ready', () => {
+  const free = freeRace({ runners: [freeRunner('Alpha', '1'), freeRunner('Bravo', '2')] });
+  const s = buildFreeRaceSettlement(
+    free,
+    dbRace(),
+    [dbRunner({ id: 'r1', horse_name: 'Alpha', finish_pos: 1 }), dbRunner({ id: 'r2', horse_name: 'Bravo', finish_pos: 2 })],
+    normalizeHorseName,
+  );
+  assert.equal(s.audit.existing_result_conflict, false);
+  assert.equal(s.safety.canCommit, true);
+  const ops = commitOpsForSettlement(s);
+  assert.equal(ops.updates.length, 0); // a re-run writes nothing
+  assert.equal(ops.noops, 2);
+});
+
+test('conflicting existing finish_pos blocks commit', () => {
+  const s = buildFreeRaceSettlement(
+    freeRace({ runners: [freeRunner('Alpha', '1')] }),
+    dbRace(),
+    [dbRunner({ id: 'r1', horse_name: 'Alpha', finish_pos: 3 })],
+    normalizeHorseName,
+  );
+  assert.equal(s.audit.existing_result_conflict, true);
+  assert.equal(s.safety.canCommit, false);
+  assert.match(s.pending_reason ?? '', /conflict/i);
+});
+
+test('conflicting existing winner blocks commit', () => {
+  // DB winner is Alpha (pos 1); the free result says Bravo won (Alpha is now 2nd).
+  const s = buildFreeRaceSettlement(
+    freeRace({ runners: [freeRunner('Alpha', '2'), freeRunner('Bravo', '1')] }),
+    dbRace(),
+    [dbRunner({ id: 'r1', horse_name: 'Alpha', finish_pos: 1 }), dbRunner({ id: 'r2', horse_name: 'Bravo', finish_pos: null })],
+    normalizeHorseName,
+  );
+  assert.equal(s.audit.existing_result_conflict, true); // Alpha existing 1 != incoming 2
+  assert.equal(s.safety.canCommit, false);
+});
+
+test('buildFreeResultsReport: commit plan counts (planned updates / noops / conflicts / blocked)', () => {
+  const fresh = buildFreeRaceSettlement(
+    freeRace({ race_id: 'r1', off_dt: '2026-06-17T13:30:00+00:00', runners: [freeRunner('Alpha', '1'), freeRunner('Bravo', '2')] }),
+    dbRace({ id: 'd1' }),
+    [dbRunner({ id: 'a', horse_name: 'Alpha', finish_pos: null }), dbRunner({ id: 'b', horse_name: 'Bravo', finish_pos: null })],
+    normalizeHorseName,
+  );
+  const settled = buildFreeRaceSettlement(
+    freeRace({ race_id: 'r2', off_dt: '2026-06-17T14:05:00+00:00', runners: [freeRunner('Cara', '1'), freeRunner('Delt', '2')] }),
+    dbRace({ id: 'd2' }),
+    [dbRunner({ id: 'c', horse_name: 'Cara', finish_pos: 1 }), dbRunner({ id: 'd', horse_name: 'Delt', finish_pos: 2 })],
+    normalizeHorseName,
+  );
+  const blocked = buildFreeRaceSettlement(
+    freeRace({ race_id: 'r3', off_dt: '2026-06-17T14:40:00+00:00', runners: [freeRunner('Echo', '1')] }),
+    dbRace({ id: 'd3' }),
+    [dbRunner({ id: 'e', horse_name: 'Echo', finish_pos: 4 })], // conflict
+    normalizeHorseName,
+  );
+  const report = buildFreeResultsReport({
+    date: '2026-06-17', course: 'Ascot', commitRequested: false,
+    primarySource: 'x', primaryStatus: 'plan_blocked', primaryDetail: null,
+    freeAttempted: true, freeNotApplicableReason: null, freeResultsFound: 3,
+    settlements: [fresh, settled, blocked], pendingDbRaces: [], manualImportCommand: 'cmd',
+  });
+  assert.equal(report.settle_ready_count, 2);
+  assert.equal(report.races_blocked, 1);
+  assert.equal(report.runner_updates_planned, 2); // fresh's two updates
+  assert.equal(report.idempotent_noops, 2);       // settled's two noops
+  assert.equal(report.conflict_rows, 1);          // blocked's conflict
+  assert.equal(report.races_committed, 0);        // dry-run -> nothing committed
+});
+
+test('renderFreeResultsSummary: DRY RUN vs COMMIT header + deterministic; pending/blocked untouched note', () => {
+  const s = buildFreeRaceSettlement(
+    freeRace({ runners: [freeRunner('Alpha', '1'), freeRunner('Bravo', '2')] }),
+    dbRace(),
+    [dbRunner({ id: 'r1', horse_name: 'Alpha', finish_pos: null }), dbRunner({ id: 'r2', horse_name: 'Bravo', finish_pos: null })],
+    normalizeHorseName,
+  );
+  const common = {
+    date: '2026-06-17', course: 'Ascot', primarySource: 'x', primaryStatus: 'plan_blocked' as const,
+    primaryDetail: null, freeAttempted: true, freeNotApplicableReason: null, freeResultsFound: 1,
+    settlements: [s], pendingDbRaces: [], manualImportCommand: 'cmd',
+  };
+  const dry = renderFreeResultsSummary(buildFreeResultsReport({ ...common, commitRequested: false }));
+  assert.match(dry, /\u2014 DRY RUN \(free daily fallback\)/);
+  assert.match(dry, /would commit 2 finish_pos update\(s\)/);
+  assert.match(dry, /no database writes/);
+  assert.equal(dry, renderFreeResultsSummary(buildFreeResultsReport({ ...common, commitRequested: false })));
+
+  const com = renderFreeResultsSummary(buildFreeResultsReport({ ...common, commitRequested: true, committedRaces: 1, committedRunners: 2 }));
+  assert.match(com, /\u2014 COMMIT \(free daily fallback\)/);
+  assert.match(com, /1 race\(s\) committed, 2 runner\(s\) updated/);
+  assert.match(com, /pending\/blocked races untouched/);
+});
+
+test('dry-run and commit share identical audit/matching logic (no commit flag in the audit builder)', () => {
+  const a = buildFreeRaceSettlement(freeRace({ runners: [freeRunner('Alpha', '1')] }), dbRace(), [dbRunner({ id: 'r1', horse_name: 'Alpha', finish_pos: null })], normalizeHorseName);
+  const b = buildFreeRaceSettlement(freeRace({ runners: [freeRunner('Alpha', '1')] }), dbRace(), [dbRunner({ id: 'r1', horse_name: 'Alpha', finish_pos: null })], normalizeHorseName);
+  assert.deepEqual(a, b);
+});
+
 /* --------------------- purity / read-only source guards ------------------- */
 
 test('the free-match module is pure (no DB/fs/net) and never fabricates SP/BSP', () => {
@@ -314,9 +452,16 @@ test('the free-match module is pure (no DB/fs/net) and never fabricates SP/BSP',
   assert.equal(/bsp_decimal:\s*null/.test(src), true);
 });
 
-test('the CLI never auto-commits and never mutates the DB (SELECT-only reads)', () => {
+test('the CLI write layer is commit-gated and writes only finish_pos + race status (never SP/BSP)', () => {
   const cli = readFileSync('scripts/autoResults.ts', 'utf8');
-  assert.equal(/\.(insert|update|upsert|delete|rpc)\s*\(/.test(cli), false);
-  // commit is only ever refused / deferred — never a write.
-  assert.match(cli, /Refusing to commit|persistence is not/);
+  // The only writes are commit-gated runner finish_pos + race status updates.
+  assert.match(cli, /if \(commit\)/);
+  assert.match(cli, /\.update\(\{ finish_pos: u\.finish_pos \}\)/);
+  assert.match(cli, /\.update\(\{ status: 'result', official_result_time: nowIso \}\)/);
+  // never writes / overwrites SP or BSP.
+  assert.equal(/sp_decimal|bsp_decimal/.test(cli), false);
+  // no insert / upsert / delete / rpc anywhere.
+  assert.equal(/\.(insert|upsert|delete|rpc)\s*\(/.test(cli), false);
+  // no model / staking / ranking / recommendation / bet-placement imports.
+  assert.equal(/bettingEngine|modelProbabilities|kellyStake|scoreRaceRunners|BetfairClient|placeOrder|placeBet/.test(cli), false);
 });

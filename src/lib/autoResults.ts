@@ -149,6 +149,11 @@ export interface SettlementAudit {
   duplicate_winner_conflict: boolean;
   /** A patch would overwrite an existing non-null result with null. */
   would_overwrite_nonnull_with_null: boolean;
+  /**
+   * An existing non-null finish_pos (or the existing winner) conflicts with the
+   * incoming result. Optional so non-free sources that cannot conflict omit it.
+   */
+  existing_result_conflict?: boolean;
 }
 
 /** The safety-gate verdict: whether commit is allowed, plus every blocker. */
@@ -196,6 +201,9 @@ export function evaluateSettlementSafety(
   }
   if (audit.would_overwrite_nonnull_with_null) {
     blockers.push('attempting to overwrite a non-null result with null');
+  }
+  if (audit.existing_result_conflict) {
+    blockers.push('existing result conflicts with the incoming result (finish_pos / winner mismatch)');
   }
 
   return { canCommit: blockers.length === 0, blockers };

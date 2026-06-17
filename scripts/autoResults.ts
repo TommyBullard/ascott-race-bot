@@ -57,12 +57,14 @@ import {
   isTodayUtc,
   filterFreeRacesByCourse,
   collectFreeSettlements,
+  commitOpsForSettlement,
   buildFreeResultsReport,
   renderFreeResultsSummary,
   shouldFetchMoreFreeResults,
   FREE_RESULTS_MAX_LIMIT,
   type DbRaceLite,
   type DbRunnerLite,
+  type FreeRaceSettlement,
 } from '../src/lib/freeResultsMatch';
 
 /** Default UK + Irish region codes for The Racing API (matches the live sync). */
@@ -125,7 +127,7 @@ async function fetchDbRacesAndRunners(
   const wantCourse = course ? normalizeCourse(course) : null;
   const { data: raceData, error: raceError } = await supabaseAdmin
     .from('races')
-    .select('id, course, off_time, race_name')
+    .select('id, course, off_time, race_name, status')
     .eq('meeting_date', date);
   if (raceError) throw new Error(`Failed to read races for ${date}: ${raceError.message}`);
   let races = (raceData ?? []) as DbRaceLite[];
@@ -153,18 +155,53 @@ async function fetchDbRacesAndRunners(
   return { races, runnersByRace };
 }
 
-/** Prints the commit decision for the free path (this phase never persists). */
-function handleCommitRequest(commit: boolean, settleReady: number): void {
-  if (!commit) return;
-  if (settleReady === 0) {
-    console.error('\nRefusing to commit — no race passed the safety gate (see per-race reasons above).');
+/** Reports a no-op commit when the free endpoint produced nothing to settle. */
+function reportNothingCommitted(commit: boolean): void {
+  if (commit) {
+    console.error('\nNothing committed \u2014 the free endpoint was not available/applicable; use the manual importer.');
     process.exitCode = 1;
-  } else {
-    console.log(
-      `\nCommit gates pass for ${settleReady} race(s), but automated settlement persistence is not ` +
-        'enabled in this phase; use the manual importer to write results.',
-    );
   }
+}
+
+/**
+ * Writes ONLY settle-ready races to the DB: for each, applies the idempotent
+ * runner finish_pos updates (existing-null -> set; NEVER SP/BSP) and marks the
+ * race settled (`status='result'`, `official_result_time`) using the same schema
+ * convention as the manual importer. Idempotent: a re-run finds no `update` ops
+ * and (if the race is already `result`) writes nothing. Pending / blocked races
+ * are NEVER touched. Returns the actual committed counts.
+ */
+async function applyFreeSettlements(
+  settlements: readonly FreeRaceSettlement[],
+  statusById: ReadonlyMap<string, string | null>,
+): Promise<{ races: number; runners: number }> {
+  let races = 0;
+  let runners = 0;
+  const nowIso = new Date().toISOString();
+  for (const s of settlements) {
+    if (!s.safety.canCommit || !s.matched_db_race_id) continue; // settle-ready + matched only
+    const ops = commitOpsForSettlement(s);
+    for (const u of ops.updates) {
+      const { error } = await supabaseAdmin
+        .from('runners')
+        .update({ finish_pos: u.finish_pos })
+        .eq('id', u.runner_id);
+      if (error) throw new Error(`runner result update failed: ${error.message}`);
+      runners += 1;
+    }
+    // Mark settled only when something changed or the race is not already 'result'
+    // (keeps a re-run a true no-op).
+    const alreadyResult = (statusById.get(s.matched_db_race_id) ?? null) === 'result';
+    if (ops.updates.length > 0 || !alreadyResult) {
+      const { error } = await supabaseAdmin
+        .from('races')
+        .update({ status: 'result', official_result_time: nowIso })
+        .eq('id', s.matched_db_race_id);
+      if (error) throw new Error(`race status update failed: ${error.message}`);
+      races += 1;
+    }
+  }
+  return { races, runners };
 }
 
 /** Runs the free daily-results fallback (today only) and prints the dry-run audit. */
@@ -198,7 +235,7 @@ async function runFreeFallback(opts: {
       pendingDbRaces: [],
     });
     console.log(renderFreeResultsSummary(report));
-    handleCommitRequest(commit, 0);
+    reportNothingCommitted(commit);
     return;
   }
 
@@ -217,7 +254,7 @@ async function runFreeFallback(opts: {
       pendingDbRaces: [],
     });
     console.log(renderFreeResultsSummary(report));
-    handleCommitRequest(commit, 0);
+    reportNothingCommitted(commit);
     return;
   }
 
@@ -231,6 +268,13 @@ async function runFreeFallback(opts: {
     normalizeHorseName,
   });
 
+  // Commit mode: write ONLY settle-ready races (idempotent; finish_pos only, never SP/BSP).
+  let committed = { races: 0, runners: 0 };
+  if (commit) {
+    const statusById = new Map(dbRaces.map((r) => [r.id, r.status ?? null]));
+    committed = await applyFreeSettlements(settlements, statusById);
+  }
+
   const report = buildFreeResultsReport({
     ...base,
     freeAttempted: true,
@@ -238,9 +282,15 @@ async function runFreeFallback(opts: {
     freeResultsFound: byCourse.length,
     settlements,
     pendingDbRaces: pending,
+    committedRaces: commit ? committed.races : undefined,
+    committedRunners: commit ? committed.runners : undefined,
   });
   console.log(renderFreeResultsSummary(report));
-  handleCommitRequest(commit, report.settle_ready_count);
+
+  if (commit && report.settle_ready_count === 0) {
+    console.error('\nNothing committed \u2014 no race passed the safety gate (see per-race reasons above).');
+    process.exitCode = 1;
+  }
 }
 
 async function main(): Promise<void> {

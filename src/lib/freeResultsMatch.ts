@@ -45,6 +45,8 @@ export interface DbRaceLite {
   course: string | null;
   off_time: string | null;
   race_name: string | null;
+  /** Current race status (e.g. 'scheduled' | 'result'); used for idempotent settle. */
+  status?: string | null;
   /** Optional stored Racing API race id (none today -> id-match dormant). */
   racing_api_race_id?: string | null;
 }
@@ -200,6 +202,9 @@ export function matchFreeRunnerToDbRunner(
 /* Per-race settlement                                                        */
 /* -------------------------------------------------------------------------- */
 
+/** What a commit would do for a matched runner's finishing place. */
+export type CommitOp = 'update' | 'noop' | 'conflict' | 'skip';
+
 /** A free runner mapped to a stored runner, with its parsed finishing place. */
 export interface FreeRunnerResult {
   free_horse: string | null;
@@ -211,6 +216,10 @@ export interface FreeRunnerResult {
   bsp_decimal: null;
   matched_runner_id: string | null;
   match_method: RunnerMatchMethod;
+  /** Existing stored finishing place for the matched runner (null if none). */
+  existing_finish_pos: number | null;
+  /** update = set a null; noop = identical; conflict = differs; skip = nothing to write. */
+  commit_op: CommitOp;
 }
 
 /** A per-race settlement built from a free result + the stored race/runners. */
@@ -249,6 +258,7 @@ export function buildFreeRaceSettlement(
   let winners = 0;
   let positionsPresent = 0;
   let overwriteNonNullWithNull = false;
+  let conflictRows = 0;
 
   for (const fr of free.runners ?? []) {
     const finishPos = parseFinishPosition(fr.position);
@@ -266,6 +276,16 @@ export function buildFreeRaceSettlement(
       if (matched && matched.finish_pos != null && finishPos == null) overwriteNonNullWithNull = true;
     }
 
+    // Classify the commit operation vs the existing stored finishing place.
+    const existingFinishPos = matched ? matched.finish_pos : null;
+    let commitOp: CommitOp = 'skip';
+    if (matched && finishPos != null) {
+      if (existingFinishPos == null) commitOp = 'update';
+      else if (existingFinishPos === finishPos) commitOp = 'noop';
+      else commitOp = 'conflict';
+    }
+    if (commitOp === 'conflict') conflictRows += 1;
+
     runners.push({
       free_horse: fr.horse ?? null,
       free_horse_id: fr.horse_id ?? null,
@@ -275,6 +295,8 @@ export function buildFreeRaceSettlement(
       bsp_decimal: null,
       matched_runner_id: matched ? matched.id : null,
       match_method: method,
+      existing_finish_pos: existingFinishPos,
+      commit_op: commitOp,
     });
   }
 
@@ -291,6 +313,7 @@ export function buildFreeRaceSettlement(
     has_winner: winners >= 1,
     duplicate_winner_conflict: winners > 1,
     would_overwrite_nonnull_with_null: overwriteNonNullWithNull,
+    existing_result_conflict: conflictRows > 0,
   };
   const safety = evaluateSettlementSafety(audit);
 
@@ -311,6 +334,38 @@ export function buildFreeRaceSettlement(
     safety,
     pending_reason,
   };
+}
+
+/** The runner-level write plan derived from a settlement (pure). */
+export interface CommitOps {
+  /** Runners to write: existing finish_pos was null and the incoming is set. */
+  updates: { runner_id: string; finish_pos: number }[];
+  /** Matched runners whose existing finish_pos already equals the incoming. */
+  noops: number;
+  /** Matched runners whose existing finish_pos conflicts with the incoming. */
+  conflicts: number;
+}
+
+/**
+ * Derives the idempotent runner write plan for a settlement: only `update` ops
+ * (existing null -> set) are written; `noop` ops are already correct; `conflict`
+ * ops block the race (via the gate) and are never written. SP/BSP are never
+ * included. Pure; computes nothing the audit did not already classify.
+ */
+export function commitOpsForSettlement(settlement: FreeRaceSettlement): CommitOps {
+  const updates: { runner_id: string; finish_pos: number }[] = [];
+  let noops = 0;
+  let conflicts = 0;
+  for (const r of settlement.runners) {
+    if (r.commit_op === 'update' && r.matched_runner_id && r.finish_pos != null) {
+      updates.push({ runner_id: r.matched_runner_id, finish_pos: r.finish_pos });
+    } else if (r.commit_op === 'noop') {
+      noops += 1;
+    } else if (r.commit_op === 'conflict') {
+      conflicts += 1;
+    }
+  }
+  return { updates, noops, conflicts };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -366,6 +421,17 @@ export interface FreeResultsReport {
   settlements: FreeRaceSettlement[];
   pending_db_races: PendingDbRace[];
   settle_ready_count: number;
+  races_blocked: number;
+  /** Planned runner finish_pos writes over settle-ready races (dry-run view). */
+  runner_updates_planned: number;
+  /** Matched runners already correct over settle-ready races. */
+  idempotent_noops: number;
+  /** Conflicting runner rows across all settlements (these block their race). */
+  conflict_rows: number;
+  /** Races actually committed (set by the writer; 0 in dry-run). */
+  races_committed: number;
+  /** Runners actually updated (set by the writer; 0 in dry-run). */
+  runners_committed: number;
   manual_import_command: string;
 }
 
@@ -393,9 +459,28 @@ export function buildFreeResultsReport(input: {
   settlements: readonly FreeRaceSettlement[];
   pendingDbRaces: readonly PendingDbRace[];
   manualImportCommand: string;
+  /** Actual write outcome (set by the CLI writer; omit for dry-run). */
+  committedRaces?: number;
+  committedRunners?: number;
 }): FreeResultsReport {
   const settlements = [...input.settlements].sort((a, b) => offSortKey(a.off_time) - offSortKey(b.off_time));
   const pending = [...input.pendingDbRaces].sort((a, b) => offSortKey(a.off_time) - offSortKey(b.off_time));
+
+  let runnerUpdatesPlanned = 0;
+  let idempotentNoops = 0;
+  let conflictRows = 0;
+  let racesBlocked = 0;
+  for (const s of settlements) {
+    const ops = commitOpsForSettlement(s);
+    conflictRows += ops.conflicts;
+    if (s.safety.canCommit) {
+      runnerUpdatesPlanned += ops.updates.length;
+      idempotentNoops += ops.noops;
+    } else {
+      racesBlocked += 1;
+    }
+  }
+
   return {
     date: input.date,
     course: input.course,
@@ -410,6 +495,12 @@ export function buildFreeResultsReport(input: {
     settlements,
     pending_db_races: pending,
     settle_ready_count: settlements.filter((s) => s.safety.canCommit).length,
+    races_blocked: racesBlocked,
+    runner_updates_planned: runnerUpdatesPlanned,
+    idempotent_noops: idempotentNoops,
+    conflict_rows: conflictRows,
+    races_committed: input.committedRaces ?? 0,
+    runners_committed: input.committedRunners ?? 0,
     manual_import_command: input.manualImportCommand,
   };
 }
@@ -424,7 +515,7 @@ const DASH = '\u2014';
  */
 export function renderFreeResultsSummary(report: FreeResultsReport): string {
   const lines: string[] = [];
-  lines.push(`Automated result settlement \u2014 ${report.commit_requested ? 'COMMIT REQUESTED' : 'DRY RUN'} (free daily fallback)`);
+  lines.push(`Automated result settlement \u2014 ${report.commit_requested ? 'COMMIT' : 'DRY RUN'} (free daily fallback)`);
   lines.push(`  date: ${report.date}`);
   lines.push(`  course: ${report.course ?? 'All'}`);
   lines.push(`  primary source: ${report.primary_source} \u2014 ${report.primary_status}`);
@@ -452,15 +543,35 @@ export function renderFreeResultsSummary(report: FreeResultsReport): string {
     lines.push(`    runners with a finishing place: ${s.runners.filter((r) => r.finish_pos != null).length}/${s.runners.length}`);
     lines.push(`    SP/BSP: ${DASH} (not provided by the free endpoint; left null)`);
     lines.push(`    unmatched_runners: ${s.audit.unmatched_runners} · ambiguous_rows: ${s.audit.ambiguous_rows} · partial: ${s.audit.partial}`);
-    lines.push(`    settle-ready: ${s.safety.canCommit ? 'yes' : `no (${s.pending_reason ?? s.safety.blockers[0] ?? 'blocked'})`}`);
+    if (s.safety.canCommit) {
+      const ops = commitOpsForSettlement(s);
+      const verb = report.commit_requested ? 'committed' : 'would commit';
+      lines.push(`    settle-ready: yes \u2014 ${verb} ${ops.updates.length} finish_pos update(s), ${ops.noops} idempotent no-op(s)`);
+    } else {
+      lines.push(`    settle-ready: no (${s.pending_reason ?? s.safety.blockers[0] ?? 'blocked'}) \u2014 not committed`);
+    }
   }
 
   for (const p of report.pending_db_races) {
     lines.push(`  pending race: ${p.race_name ?? DASH} (off ${p.off_time ?? DASH}) \u2014 ${p.reason}`);
   }
 
-  lines.push(`  summary: ${report.settle_ready_count} settle-ready, ${report.settlements.length - report.settle_ready_count} blocked, ${report.pending_db_races.length} pending`);
-  lines.push('  NOTE: dry-run only \u2014 no database writes; SP/BSP never fabricated; settle via the manual importer.');
+  lines.push(
+    `  summary: ${report.settlements.length} audited, ${report.settle_ready_count} settle-ready, ` +
+      `${report.races_blocked} blocked, ${report.pending_db_races.length} pending`,
+  );
+  lines.push(
+    `  commit: ${
+      report.commit_requested
+        ? `${report.races_committed} race(s) committed, ${report.runners_committed} runner(s) updated`
+        : `${report.runner_updates_planned} update(s) planned`
+    }, ${report.idempotent_noops} idempotent no-op(s), ${report.conflict_rows} conflict row(s)`,
+  );
+  if (report.commit_requested) {
+    lines.push('  NOTE: COMMIT \u2014 wrote finish_pos for settle-ready races only; SP/BSP left null (never fabricated); pending/blocked races untouched.');
+  } else {
+    lines.push('  NOTE: dry-run only \u2014 no database writes; SP/BSP never fabricated. Re-run with --commit to settle the settle-ready races.');
+  }
   lines.push(`  manual fallback: ${report.manual_import_command}`);
   return lines.join('\n');
 }
