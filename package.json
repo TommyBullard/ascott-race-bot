@@ -43,7 +43,8 @@
     "capture:t-minus": "tsx scripts/captureTMinus.ts",
     "results:auto": "tsx scripts/autoResults.ts",
     "extract:notes": "tsx scripts/extractNotes.ts",
-    "tipsters:audit": "tsx scripts/tipsterAudit.ts"
+    "tipsters:audit": "tsx scripts/tipsterAudit.ts",
+    "confidence:audit": "tsx scripts/confidenceAudit.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

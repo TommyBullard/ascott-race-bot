@@ -54,6 +54,7 @@ import './tMinusCapture.test';
 import './autoResults.test';
 import './noteFeatureExtraction.test';
 import './tipsterAudit.test';
+import './confidenceDiagnostics.test';
 import './relativeTime.test';
 import './modelDayRun.test';
 import './raceDayPipeline.test';
