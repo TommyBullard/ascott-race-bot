@@ -1,0 +1,405 @@
+{
+  "date": "2026-06-16",
+  "course": "Ascot",
+  "minutes_before": 5,
+  "generatedAt": "2026-06-17T09:49:55.479Z",
+  "races": [
+    {
+      "race_id": "3c03fc0e-1f42-49f3-9fd2-08c7a3465aae",
+      "race_name": "Queen Anne Stakes (Group 1)",
+      "course": "Ascot",
+      "off_time": "2026-06-16T13:30:00+00:00",
+      "capture_target_time": "2026-06-16T13:25:00.000Z",
+      "selected_run_id": "313bf767-aa2c-4f7f-b0c3-3cede6e30b23",
+      "selected_run_time": "2026-06-16T13:24:06.238+00:00",
+      "selected_run_is_current": false,
+      "later_pre_off_run_exists": false,
+      "post_off_run_count": 54,
+      "pick": {
+        "horse_name": "Docklands",
+        "odds": 7.6,
+        "ev": 0.019067350544818007,
+        "model_prob": 0.1340878092822129,
+        "market_prob": 0.13216083790855251,
+        "stake": 1,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Notable Speech",
+        "odds": 3.5,
+        "ev": 0.019067350544817785,
+        "model_prob": 0.29116210015566224,
+        "market_prob": 0.28697781945857115
+      },
+      "alternatives": [
+        {
+          "horse_name": "Opera Ballo",
+          "odds": 4.6,
+          "ev": 0.019067350544818007,
+          "model_prob": 0.22153638055322133,
+          "market_prob": 0.2183526887184781
+        },
+        {
+          "horse_name": "Zeus Olympios",
+          "odds": 11.5,
+          "ev": 0.019067350544818007,
+          "model_prob": 0.08861455222128853,
+          "market_prob": 0.08734107548739123
+        }
+      ],
+      "run_quality": "DEGRADED",
+      "data_quality_flags": [
+        "MISSING_RUNNER_ODDS",
+        "NO_TIPSTER_SELECTIONS"
+      ],
+      "data_quality_short_summary": "DEGRADED — Missing runner odds (8/9 priced), No tipster selections",
+      "tipster_short_summary": "No tipster consensus",
+      "tipster_alignment_label": "NO_TIPSTER_CONSENSUS",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": false,
+        "laterPreOffRunExists": false,
+        "postOffRunsIgnored": true
+      }
+    },
+    {
+      "race_id": "c251e5c2-495e-4936-bbd5-27eab26254d0",
+      "race_name": "Coventry Stakes (Group 2)",
+      "course": "Ascot",
+      "off_time": "2026-06-16T14:05:00+00:00",
+      "capture_target_time": "2026-06-16T14:00:00.000Z",
+      "selected_run_id": "b2fae1e2-08cf-40c2-b78a-3a37aff17953",
+      "selected_run_time": "2026-06-16T13:59:29.081+00:00",
+      "selected_run_is_current": false,
+      "later_pre_off_run_exists": true,
+      "post_off_run_count": 48,
+      "pick": {
+        "horse_name": "Confucius",
+        "odds": 3.45,
+        "ev": 0.21566131411895828,
+        "model_prob": 0.3523655982953502,
+        "market_prob": 0.3223365274694493,
+        "stake": 8.345693706686987,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Confucius",
+        "odds": 3.45,
+        "ev": 0.21566131411895828,
+        "model_prob": 0.3523655982953502,
+        "market_prob": 0.3223365274694493
+      },
+      "alternatives": [
+        {
+          "horse_name": "Night In Vegas",
+          "odds": 11,
+          "ev": 0.21566131411895806,
+          "model_prob": 0.11051466491990528,
+          "market_prob": 0.10109645634269092
+        },
+        {
+          "horse_name": "Royal Heritage",
+          "odds": 12,
+          "ev": 0.21566131411895784,
+          "model_prob": 0.10130510950991316,
+          "market_prob": 0.09267175164746666
+        }
+      ],
+      "run_quality": "DEGRADED",
+      "data_quality_flags": [
+        "MISSING_RUNNER_ODDS"
+      ],
+      "data_quality_short_summary": "DEGRADED — Missing runner odds (20/22 priced)",
+      "tipster_short_summary": "Tipsters divergent from recommendation",
+      "tipster_alignment_label": "DIVERGENT",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": false,
+        "laterPreOffRunExists": true,
+        "postOffRunsIgnored": true
+      }
+    },
+    {
+      "race_id": "c54d97cf-15af-421a-8d7e-880e46cce0a2",
+      "race_name": "King Charles III Stakes (Group 1)",
+      "course": "Ascot",
+      "off_time": "2026-06-16T14:40:00+00:00",
+      "capture_target_time": "2026-06-16T14:35:00.000Z",
+      "selected_run_id": "fec39952-bd7d-467f-82f5-61fc7d32e15d",
+      "selected_run_time": "2026-06-16T14:33:22.595+00:00",
+      "selected_run_is_current": false,
+      "later_pre_off_run_exists": false,
+      "post_off_run_count": 46,
+      "pick": {
+        "horse_name": "Night Raider",
+        "odds": 8,
+        "ev": 0.14839431121174096,
+        "model_prob": 0.14354928890146762,
+        "market_prob": 0.12322506870599574,
+        "stake": 1.4763607983513085,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Overpass",
+        "odds": 4.3,
+        "ev": -0.1387042665911944,
+        "model_prob": 0.20030133335088504,
+        "market_prob": 0.2292559417785967
+      },
+      "alternatives": [
+        {
+          "horse_name": "Rayevka",
+          "odds": 11.5,
+          "ev": 0.14839431121174096,
+          "model_prob": 0.09986037488797747,
+          "market_prob": 0.08572178692591008
+        },
+        {
+          "horse_name": "Cover Up",
+          "odds": 32,
+          "ev": -0.023864835470020163,
+          "model_prob": 0.03050422389156187,
+          "market_prob": 0.030806267176498935
+        }
+      ],
+      "run_quality": "DEGRADED",
+      "data_quality_flags": [
+        "MISSING_RUNNER_ODDS"
+      ],
+      "data_quality_short_summary": "DEGRADED — Missing runner odds (25/26 priced)",
+      "tipster_short_summary": "Tipsters divergent from recommendation",
+      "tipster_alignment_label": "DIVERGENT",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": false,
+        "laterPreOffRunExists": false,
+        "postOffRunsIgnored": true
+      }
+    },
+    {
+      "race_id": "7487efda-0d4b-4b2d-9509-d9ad18e10e21",
+      "race_name": "St James's Palace Stakes (Group 1) (Colts)",
+      "course": "Ascot",
+      "off_time": "2026-06-16T15:20:00+00:00",
+      "capture_target_time": "2026-06-16T15:15:00.000Z",
+      "selected_run_id": "ffbae3ba-d2eb-434b-b216-9613b19f4c7e",
+      "selected_run_time": "2026-06-16T15:13:46.537+00:00",
+      "selected_run_is_current": false,
+      "later_pre_off_run_exists": false,
+      "post_off_run_count": 44,
+      "pick": {
+        "horse_name": "Talk Of New York",
+        "odds": 6.4,
+        "ev": 0.2569390446186137,
+        "model_prob": 0.1963967257216584,
+        "market_prob": 0.15480147863577753,
+        "stake": 4.709325786084308,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Bow Echo",
+        "odds": 1.97,
+        "ev": -0.24583657322883168,
+        "model_prob": 0.3828240745031311,
+        "market_prob": 0.502908356989328
+      },
+      "alternatives": [
+        {
+          "horse_name": "Gstaad",
+          "odds": 3.65,
+          "ev": 0.2569390446186135,
+          "model_prob": 0.3443668615393462,
+          "market_prob": 0.2714327296627332
+        },
+        {
+          "horse_name": "Power Blue",
+          "odds": 75,
+          "ev": 0.06839818792582175,
+          "model_prob": 0.01424530917234429,
+          "market_prob": 0.013209726176919684
+        }
+      ],
+      "run_quality": "OK",
+      "data_quality_flags": [],
+      "data_quality_short_summary": "OK",
+      "tipster_short_summary": "Tipsters divergent from recommendation",
+      "tipster_alignment_label": "DIVERGENT",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": false,
+        "laterPreOffRunExists": false,
+        "postOffRunsIgnored": true
+      }
+    },
+    {
+      "race_id": "5acf2ff2-72e8-4daf-a648-35022b2219b9",
+      "race_name": "Ascot Stakes (Heritage Handicap) (GBBPlus Race)",
+      "course": "Ascot",
+      "off_time": "2026-06-16T16:00:00+00:00",
+      "capture_target_time": "2026-06-16T15:55:00.000Z",
+      "selected_run_id": "f2565b2c-fd0a-48b9-af2e-106daa493dd9",
+      "selected_run_time": "2026-06-16T15:50:12.796+00:00",
+      "selected_run_is_current": false,
+      "later_pre_off_run_exists": true,
+      "post_off_run_count": 39,
+      "pick": {
+        "horse_name": "Small Fry",
+        "odds": 11.5,
+        "ev": 0.16642916873494817,
+        "model_prob": 0.10142862336825637,
+        "market_prob": 0.08590594914072092,
+        "stake": 1.1965213260001928,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Reaching High",
+        "odds": 3.15,
+        "ev": -0.12517812344878887,
+        "model_prob": 0.27772123065117815,
+        "market_prob": 0.31362489368834623
+      },
+      "alternatives": [
+        {
+          "horse_name": "Puturhandstogether",
+          "odds": 9.6,
+          "ev": 0.16642916873494817,
+          "model_prob": 0.12150303840989045,
+          "market_prob": 0.10290816824148862
+        },
+        {
+          "horse_name": "Bunting",
+          "odds": 21,
+          "ev": -0.008535206575293941,
+          "model_prob": 0.047212609210700286,
+          "market_prob": 0.047043734053251934
+        }
+      ],
+      "run_quality": "DEGRADED",
+      "data_quality_flags": [
+        "MISSING_RUNNER_ODDS"
+      ],
+      "data_quality_short_summary": "DEGRADED — Missing runner odds (19/20 priced)",
+      "tipster_short_summary": "Tipsters divergent from recommendation",
+      "tipster_alignment_label": "DIVERGENT",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": false,
+        "laterPreOffRunExists": true,
+        "postOffRunsIgnored": true
+      }
+    },
+    {
+      "race_id": "40aa23a6-18c1-4205-85d4-2deba4642119",
+      "race_name": "Wolferton Stakes (Listed Race)",
+      "course": "Ascot",
+      "off_time": "2026-06-16T16:35:00+00:00",
+      "capture_target_time": "2026-06-16T16:30:00.000Z",
+      "selected_run_id": "af5cacb0-bee1-4fdc-a281-acd167d33475",
+      "selected_run_time": "2026-06-16T16:26:17.606+00:00",
+      "selected_run_is_current": false,
+      "later_pre_off_run_exists": true,
+      "post_off_run_count": 32,
+      "pick": {
+        "horse_name": "Ghostwriter",
+        "odds": 12,
+        "ev": 0.12993257233548672,
+        "model_prob": 0.09416104769462388,
+        "market_prob": 0.08674122649859675,
+        "stake": 1,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Nahraan",
+        "odds": 7.8,
+        "ev": 0.12993257233548672,
+        "model_prob": 0.14486315029942137,
+        "market_prob": 0.13344804076707195
+      },
+      "alternatives": [
+        {
+          "horse_name": "Map Of Stars",
+          "odds": 7.8,
+          "ev": 0.12993257233548672,
+          "model_prob": 0.14486315029942137,
+          "market_prob": 0.13344804076707195
+        },
+        {
+          "horse_name": "Nahraan",
+          "odds": 7.8,
+          "ev": 0.12993257233548672,
+          "model_prob": 0.14486315029942137,
+          "market_prob": 0.13344804076707195
+        }
+      ],
+      "run_quality": "DEGRADED",
+      "data_quality_flags": [
+        "MISSING_RUNNER_ODDS",
+        "NO_TIPSTER_SELECTIONS"
+      ],
+      "data_quality_short_summary": "DEGRADED — Missing runner odds (15/16 priced), No tipster selections",
+      "tipster_short_summary": "No tipster consensus",
+      "tipster_alignment_label": "NO_TIPSTER_CONSENSUS",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": false,
+        "laterPreOffRunExists": true,
+        "postOffRunsIgnored": true
+      }
+    },
+    {
+      "race_id": "79efa7f3-f06a-47ab-8927-9b3e2e377e6f",
+      "race_name": "Copper Horse Stakes (Handicap) (GBBPlus Race)",
+      "course": "Ascot",
+      "off_time": "2026-06-16T17:10:00+00:00",
+      "capture_target_time": "2026-06-16T17:05:00.000Z",
+      "selected_run_id": "626ccd32-a974-4f72-986e-e9b50cf60334",
+      "selected_run_time": "2026-06-16T17:02:16.836+00:00",
+      "selected_run_is_current": false,
+      "later_pre_off_run_exists": true,
+      "post_off_run_count": 25,
+      "pick": {
+        "horse_name": "Gamrai",
+        "odds": 6.4,
+        "ev": 0.07022986674003495,
+        "model_prob": 0.16722341667813045,
+        "market_prob": 0.1533177810577318,
+        "stake": 1,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Valiancy",
+        "odds": 3.9,
+        "ev": 0.07022986674003473,
+        "model_prob": 0.2744179145487269,
+        "market_prob": 0.2515984099408932
+      },
+      "alternatives": [
+        {
+          "horse_name": "Valiancy",
+          "odds": 3.9,
+          "ev": 0.07022986674003473,
+          "model_prob": 0.2744179145487269,
+          "market_prob": 0.2515984099408932
+        },
+        {
+          "horse_name": "Sing Us A Song",
+          "odds": 7.6,
+          "ev": 0.07022986674003473,
+          "model_prob": 0.1408197193078993,
+          "market_prob": 0.12910971036440572
+        }
+      ],
+      "run_quality": "OK",
+      "data_quality_flags": [],
+      "data_quality_short_summary": "OK",
+      "tipster_short_summary": "Tipsters divergent from recommendation",
+      "tipster_alignment_label": "DIVERGENT",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": false,
+        "laterPreOffRunExists": true,
+        "postOffRunsIgnored": true
+      }
+    }
+  ]
+}

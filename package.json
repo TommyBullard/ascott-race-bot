@@ -39,7 +39,8 @@
     "convert:bsp": "tsx scripts/convertBetfairBsp.ts",
     "snapshot:pre-off": "tsx scripts/snapshotPreOff.ts",
     "report:day": "tsx scripts/reportDay.ts",
-    "export:training-data": "tsx scripts/exportTrainingData.ts"
+    "export:training-data": "tsx scripts/exportTrainingData.ts",
+    "capture:t-minus": "tsx scripts/captureTMinus.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

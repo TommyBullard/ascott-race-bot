@@ -50,6 +50,7 @@ import './raceCardRunSelection.test';
 import './preOffSnapshot.test';
 import './dayReport.test';
 import './trainingExport.test';
+import './tMinusCapture.test';
 import './relativeTime.test';
 import './modelDayRun.test';
 import './raceDayPipeline.test';
