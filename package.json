@@ -40,7 +40,8 @@
     "snapshot:pre-off": "tsx scripts/snapshotPreOff.ts",
     "report:day": "tsx scripts/reportDay.ts",
     "export:training-data": "tsx scripts/exportTrainingData.ts",
-    "capture:t-minus": "tsx scripts/captureTMinus.ts"
+    "capture:t-minus": "tsx scripts/captureTMinus.ts",
+    "results:auto": "tsx scripts/autoResults.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
