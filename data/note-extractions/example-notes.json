@@ -1,0 +1,57 @@
+{
+  "source_document_id": "example-doc-001",
+  "source_label": "example-synthetic-notes",
+  "source_url": "https://example.com/synthetic-notes",
+  "retrieved_at": "2026-06-16T09:00:00.000Z",
+  "race_date": "2026-06-16",
+  "course": "Example Downs (SYNTHETIC)",
+  "race_name": "EXAMPLE Synthetic Handicap (Example Data Only)",
+  "off_time": "2026-06-16T13:30:00.000Z",
+  "raw_note_text": "SYNTHETIC EXAMPLE NOTES — not real tipster content, for schema/preview testing only. Alpha should relish the ground and the step up in trip looks ideal, though a wide draw is a slight concern. Bravo comes from an in-form yard but today's trip looks on the sharp side.",
+  "extracted_features": [
+    {
+      "runner_name": "EXAMPLE Runner Alpha (SYNTHETIC)",
+      "ground_signal": "positive",
+      "distance_signal": "positive",
+      "course_form_signal": "unknown",
+      "draw_signal": "negative",
+      "pace_setup_signal": "unknown",
+      "trainer_form_signal": "unknown",
+      "jockey_signal": "unknown",
+      "recent_run_signal": "unknown",
+      "class_move_signal": "unknown",
+      "market_support_signal": "unknown",
+      "race_type_risk": "medium",
+      "volatility_risk": "high",
+      "value_case_strength": "medium",
+      "likely_winner_case_strength": "weak",
+      "each_way_case_strength": "medium",
+      "concern_flags": ["wide_draw", "volatile_handicap"],
+      "evidence": [
+        { "feature": "ground_signal", "quote_or_reference": "Alpha should relish the ground" },
+        { "feature": "distance_signal", "quote_or_reference": "the step up in trip looks ideal" },
+        { "feature": "draw_signal", "quote_or_reference": "a wide draw is a slight concern" }
+      ],
+      "extraction_confidence": 0.62,
+      "model_active": false,
+      "review_status": "pending"
+    },
+    {
+      "runner_name": "EXAMPLE Runner Bravo (SYNTHETIC)",
+      "distance_signal": "negative",
+      "trainer_form_signal": "positive",
+      "race_type_risk": "medium",
+      "volatility_risk": "medium",
+      "value_case_strength": "weak",
+      "likely_winner_case_strength": "none",
+      "each_way_case_strength": "weak",
+      "concern_flags": [],
+      "evidence": [
+        { "feature": "distance_signal", "quote_or_reference": "today's trip looks on the sharp side" },
+        { "feature": "trainer_form_signal", "quote_or_reference": "comes from an in-form yard" }
+      ],
+      "extraction_confidence": 0.4,
+      "model_active": false
+    }
+  ]
+}

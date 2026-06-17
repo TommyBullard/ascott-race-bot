@@ -52,6 +52,7 @@ import './dayReport.test';
 import './trainingExport.test';
 import './tMinusCapture.test';
 import './autoResults.test';
+import './noteFeatureExtraction.test';
 import './relativeTime.test';
 import './modelDayRun.test';
 import './raceDayPipeline.test';
