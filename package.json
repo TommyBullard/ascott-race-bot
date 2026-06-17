@@ -46,7 +46,8 @@
     "tipsters:audit": "tsx scripts/tipsterAudit.ts",
     "confidence:audit": "tsx scripts/confidenceAudit.ts",
     "gates:audit": "tsx scripts/noBetGateAudit.ts",
-    "ml:evaluate": "tsx scripts/mlEvaluate.ts"
+    "ml:evaluate": "tsx scripts/mlEvaluate.ts",
+    "race-day:autopilot": "tsx scripts/raceDayAutopilot.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
