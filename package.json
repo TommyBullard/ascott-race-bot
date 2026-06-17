@@ -42,7 +42,8 @@
     "export:training-data": "tsx scripts/exportTrainingData.ts",
     "capture:t-minus": "tsx scripts/captureTMinus.ts",
     "results:auto": "tsx scripts/autoResults.ts",
-    "extract:notes": "tsx scripts/extractNotes.ts"
+    "extract:notes": "tsx scripts/extractNotes.ts",
+    "tipsters:audit": "tsx scripts/tipsterAudit.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
