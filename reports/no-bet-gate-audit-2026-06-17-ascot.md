@@ -1,7 +1,7 @@
 # No-bet gate research audit — 2026-06-17
 
 Course: Ascot  
-Generated: 2026-06-17T17:33:57.930Z  
+Generated: 2026-06-17T18:06:41.878Z  
 Races: 7  
 Betting races: 7
 
