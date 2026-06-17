@@ -2,7 +2,7 @@
 
 Course: Ascot  
 Minutes before off: 5  
-Generated: 2026-06-17T14:32:54.453Z  
+Generated: 2026-06-17T15:14:50.934Z  
 Races: 7
 
 > Source of truth: stored model history (the latest `model_runs` row with
@@ -116,25 +116,25 @@ Races: 7
 - Course: Ascot
 - Off time (UTC): 2026-06-17T15:20:00+00:00
 - Capture target (UTC): 2026-06-17T15:15:00.000Z
-- Selected model run: 9cbfe8aa-a795-4314-8110-c546ef8496f2
-- Run time: 2026-06-17T14:32:44.072+00:00
+- Selected model run: b3fe2642-27ab-4a47-ae27-d244bbcc0144
+- Run time: 2026-06-17T15:14:38.654+00:00
 - Selected run status: current
 - Later pre-off run exists: No
 - Post-off runs ignored: 0
 
 ### Model pick
 - Pick: Almaqam
-- Odds: 8.40
-- EV: +0.4%
+- Odds: 9.80
+- EV: +1.1%
 - Stake: 1.00
 - Confidence: low
 
 ### Market favourite
-- Ombudsman — odds 2.46 · EV +0.4%
+- Ombudsman — odds 2.26 · EV +1.1%
 
 ### Alternatives
-- Ombudsman — odds 2.46 · EV +0.4%
-- Minnie Hauk — odds 9.00 · EV +0.4%
+- Daryz — odds 3.40 · EV +1.1%
+- Ombudsman — odds 2.26 · EV +1.1%
 
 ### Model explanation
 - Data quality: DEGRADED
@@ -143,33 +143,30 @@ Races: 7
 - Tipster consensus: No tipster consensus
 - Tipster alignment: NO_TIPSTER_CONSENSUS
 
-### Warnings
-- ⚠️ Selected run is more than 10 minutes before the capture target; it may be stale for a T-minus read.
-
 ## 16:00 — Royal Hunt Cup (Heritage Handicap)
 
 - Course: Ascot
 - Off time (UTC): 2026-06-17T16:00:00+00:00
 - Capture target (UTC): 2026-06-17T15:55:00.000Z
-- Selected model run: 55c8adf0-d85f-4eb6-858f-d673433fd767
-- Run time: 2026-06-17T14:32:44.582+00:00
+- Selected model run: 4d840603-e9e7-48e8-8d6a-258f2025392a
+- Run time: 2026-06-17T15:14:39.724+00:00
 - Selected run status: current
 - Later pre-off run exists: No
 - Post-off runs ignored: 0
 
 ### Model pick
 - Pick: Archivist
-- Odds: 7.80
-- EV: +15.1%
-- Stake: 1.55
+- Odds: 8.20
+- EV: +14.2%
+- Stake: 1.29
 - Confidence: low
 
 ### Market favourite
-- Archivist — odds 7.80 · EV +15.1%
+- Archivist — odds 8.20 · EV +14.2%
 
 ### Alternatives
-- Jagged Edge — odds 11.50 · EV +15.1%
-- Excellent Believe — odds 40.00 · EV −2.2%
+- Jagged Edge — odds 10.00 · EV +14.2%
+- La Botte — odds 16.50 · EV −2.9%
 
 ### Model explanation
 - Data quality: DEGRADED
@@ -186,25 +183,25 @@ Races: 7
 - Course: Ascot
 - Off time (UTC): 2026-06-17T16:35:00+00:00
 - Capture target (UTC): 2026-06-17T16:30:00.000Z
-- Selected model run: 66ac1df1-2998-44c7-997b-12f9b6e540c3
-- Run time: 2026-06-17T14:32:45.148+00:00
+- Selected model run: 572afa57-c238-43cd-a4d5-c02c7bb4662f
+- Run time: 2026-06-17T15:14:41.463+00:00
 - Selected run status: current
 - Later pre-off run exists: No
 - Post-off runs ignored: 0
 
 ### Model pick
-- Pick: Alobayyah
-- Odds: 5.10
-- EV: +6.4%
+- Pick: Stateira
+- Odds: 10.50
+- EV: +6.5%
 - Stake: 1.00
 - Confidence: low
 
 ### Market favourite
-- Alobayyah — odds 5.10 · EV +6.4%
+- Alobayyah — odds 4.90 · EV +6.5%
 
 ### Alternatives
-- Stateira — odds 10.50 · EV +6.4%
-- Radiant Beauty — odds 8.40 · EV +6.4%
+- Radiant Beauty — odds 8.40 · EV +6.5%
+- Alobayyah — odds 4.90 · EV +6.5%
 
 ### Model explanation
 - Data quality: DEGRADED
@@ -221,25 +218,25 @@ Races: 7
 - Course: Ascot
 - Off time (UTC): 2026-06-17T17:10:00+00:00
 - Capture target (UTC): 2026-06-17T17:05:00.000Z
-- Selected model run: aabe934b-47b8-4a3c-8a78-bedda5b7342a
-- Run time: 2026-06-17T14:32:45.621+00:00
+- Selected model run: faffe523-48f9-4b0d-bcf8-e36c8c2cde96
+- Run time: 2026-06-17T15:14:42.68+00:00
 - Selected run status: current
 - Later pre-off run exists: No
 - Post-off runs ignored: 0
 
 ### Model pick
 - Pick: Sale Shark
-- Odds: 7.20
-- EV: +5.3%
+- Odds: 7.80
+- EV: +5.8%
 - Stake: 1.00
 - Confidence: low
 
 ### Market favourite
-- Controlla — odds 3.75 · EV +5.3%
+- Controlla — odds 3.70 · EV +5.8%
 
 ### Alternatives
-- One Number — odds 9.60 · EV +5.3%
-- Sergei Diaghilev — odds 6.40 · EV +5.3%
+- One Number — odds 9.80 · EV +5.8%
+- Sergei Diaghilev — odds 7.00 · EV +5.8%
 
 ### Model explanation
 - Data quality: DEGRADED
