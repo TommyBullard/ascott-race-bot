@@ -16,6 +16,8 @@ import { useEffect, useState, useSyncExternalStore, type CSSProperties } from 'r
 import RaceExplanationPanel from '@/components/RaceExplanationPanel';
 import RaceIntelligencePanel from '@/components/RaceIntelligencePanel';
 import RaceTimelinePanel from '@/components/RaceTimelinePanel';
+import SettlementStatusPanel from '@/components/SettlementStatusPanel';
+import PlaceAuditPanel from '@/components/PlaceAuditPanel';
 import {
   buildTipsterStatusLines,
   type TipsterStatusSummary,
@@ -46,11 +48,15 @@ import {
 } from '@/lib/raceDayStatus';
 import { buildRaceIntelligence } from '@/lib/raceIntelligence';
 import { buildRaceDayTimeline } from '@/lib/raceDayTimeline';
+import { buildSettlementView } from '@/lib/settlementStatus';
+import { buildPlaceAuditView } from '@/lib/placeAuditView';
 import {
   deriveNextAction,
   type NextAction,
   type NextActionTone,
 } from '@/lib/operatorNextAction';
+import { buildLiveStatusView } from '@/lib/liveStatus';
+import type { RaceDayStatusResponse } from '@/lib/raceDayStatusApi';
 
 /** A runner as shown on a card (mirrors the server `RaceCardRunner`). */
 interface RaceCardRunner {
@@ -976,6 +982,19 @@ function RaceCardView({ card, nowMs }: { card: RaceCard; nowMs: number }) {
     runQuality: explain.runQuality,
     alignmentLabel: explain.alignmentLabel,
   });
+  // Read-only result-settlement view (backend settles; the UI never commits).
+  const settlement = buildSettlementView({
+    offTime: card.off_time,
+    now: nowMs,
+    status: card.status ?? null,
+    providedStatus: null,
+    freeResultNote: null,
+    runners: (card.runners ?? []).map((r) => ({
+      horse_name: r.horse_name,
+      finish_pos: r.finish_pos ?? null,
+    })),
+    modelPickFinishPos: card.modelPick?.finish_pos ?? null,
+  });
 
   return (
     <article style={styles.card}>
@@ -1009,6 +1028,9 @@ function RaceCardView({ card, nowMs }: { card: RaceCard; nowMs: number }) {
 
       {/* Data freshness: odds + model recency (read-only). */}
       <FreshnessRow card={card} nowMs={nowMs} />
+
+      {/* Result settlement status (read-only; the backend settles, never the UI). */}
+      <SettlementStatusPanel view={settlement} style={styles.explanationPanel} />
 
       {/* Market favourite */}
       <div style={styles.favouriteRow}>
@@ -1413,13 +1435,18 @@ function InFormPanel({ tipsters }: { tipsters: InFormTipster[] | null }) {
 function LiveModeBar({
   scoped,
   cardsUpdatedMs,
+  statusUpdatedMs,
+  statusError,
   nowMs,
 }: {
   scoped: boolean;
   cardsUpdatedMs: number | null;
+  statusUpdatedMs: number | null;
+  statusError: boolean;
   nowMs: number;
 }) {
-  const refreshedAge = formatRelativeAge(cardsUpdatedMs, nowMs);
+  const view = buildLiveStatusView({ statusUpdatedMs, cardsUpdatedMs, statusError });
+  const refreshedAge = formatRelativeAge(view.refreshedMs, nowMs);
   const refreshSecs = Math.round(RACE_DAY_REFRESH_MS / 1000);
   return (
     <div style={liveBarStyle(scoped)}>
@@ -1432,7 +1459,7 @@ function LiveModeBar({
           ? `Auto-refreshing read-only data every ${refreshSecs}s`
           : 'Open a day/course link (?date=…&course=…) for live auto-refresh'}
       </span>
-      {scoped && cardsUpdatedMs != null && (
+      {scoped && view.refreshedMs != null && (
         <span
           style={{
             color: '#656d76',
@@ -1440,12 +1467,25 @@ function LiveModeBar({
             fontVariantNumeric: 'tabular-nums',
           }}
         >
-          {`Data refreshed ${refreshedAge.text}`}
+          {`Status refreshed ${refreshedAge.text}`}
         </span>
+      )}
+      {scoped && view.warning && (
+        <span style={liveWarningStyle}>{view.warning}</span>
       )}
     </div>
   );
 }
+
+const liveWarningStyle: CSSProperties = {
+  flexBasis: '100%',
+  color: '#9a6700',
+  background: '#fff8c5',
+  border: '1px solid #eac54f',
+  borderRadius: 6,
+  padding: '4px 8px',
+  fontSize: 12,
+};
 
 function liveBarStyle(scoped: boolean): CSSProperties {
   return {
@@ -1578,6 +1618,11 @@ export default function RecommendationsPage() {
   // Epoch ms of the last successful race-card refresh, for the live-mode
   // "data refreshed X ago" indicator. null until the first load completes.
   const [cardsUpdatedMs, setCardsUpdatedMs] = useState<number | null>(null);
+  // Consolidated read-only race-day status poll (live mode): last good snapshot,
+  // its refresh time, and whether the latest poll failed (non-blocking warning).
+  const [statusData, setStatusData] = useState<RaceDayStatusResponse | null>(null);
+  const [statusUpdatedMs, setStatusUpdatedMs] = useState<number | null>(null);
+  const [statusError, setStatusError] = useState<boolean>(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1746,6 +1791,45 @@ export default function RecommendationsPage() {
     };
   }, []);
 
+  // Live race-day STATUS poll: only scoped date pages poll the consolidated
+  // read-only /api/race-day/status endpoint, on the same 30-60s cadence. On
+  // failure it KEEPS the last known status + raises a non-blocking warning; the
+  // race cards never break (they have their own data, and the page falls back to
+  // the client-derived next action). Read-only fetch; no writes, no commands.
+  useEffect(() => {
+    const scope = readScopeFromUrl();
+    if (!scoped || !scope.date) return;
+    const controller = new AbortController();
+
+    async function pollStatus() {
+      try {
+        const query =
+          typeof window !== 'undefined' ? window.location.search : '';
+        const res = await fetch(`/api/race-day/status${query}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          setStatusError(true); // keep last known data (non-blocking warning)
+          return;
+        }
+        const data = (await res.json()) as RaceDayStatusResponse;
+        setStatusData(data);
+        setStatusUpdatedMs(Date.now());
+        setStatusError(false);
+      } catch {
+        if (controller.signal.aborted) return;
+        setStatusError(true); // keep last known data (non-blocking warning)
+      }
+    }
+
+    pollStatus();
+    const id = setInterval(pollStatus, RACE_DAY_REFRESH_MS);
+    return () => {
+      controller.abort();
+      clearInterval(id);
+    };
+  }, [scoped]);
+
   // Scoped race-day views render the same figures in the PerformancePanel below,
   // so the top AccuracyBar would duplicate them. Hide the bar when the summary is
   // race-day scoped; keep it for the unscoped lifetime/global view.
@@ -1773,6 +1857,48 @@ export default function RecommendationsPage() {
           nowMs,
         )
       : [];
+  // Read-only place / each-way RESEARCH summary for the day (simulated top-N
+  // marker only). Derived client-side from the already-loaded cards (no new
+  // fetch / API route); reuses the pure `place:audit` counting helpers. Never
+  // computes a payout and never writes the database.
+  const placeAuditView =
+    status === 'ready' && cards.length > 0
+      ? buildPlaceAuditView(
+          cards.map((c) => ({
+            race_id: c.race_id,
+            off_time: c.off_time,
+            race_name: c.race_name,
+            course: c.course,
+            modelPick: c.modelPick
+              ? {
+                  runner_id: c.modelPick.runner_id,
+                  horse_name: c.modelPick.horse_name,
+                  finish_pos: c.modelPick.finish_pos ?? null,
+                }
+              : null,
+            favourite: c.favourite
+              ? {
+                  runner_id: c.favourite.runner_id,
+                  horse_name: c.favourite.horse_name,
+                  finish_pos: c.favourite.finish_pos ?? null,
+                }
+              : null,
+            alternatives: c.alternatives.map((a) => ({
+              runner_id: a.runner_id,
+              horse_name: a.horse_name,
+              finish_pos: a.finish_pos ?? null,
+            })),
+            runners: (c.runners ?? []).map((r) => ({
+              runner_id: r.runner_id,
+              horse_name: r.horse_name,
+              finish_pos: r.finish_pos ?? null,
+            })),
+            status: c.status ?? null,
+            confidenceLabel: c.modelPick?.confidence_label ?? null,
+            runQuality: c.observability?.runQuality ?? null,
+          })),
+        )
+      : null;
   // Read-only operator "next action" suggestion derived from stored race state.
   const nextAction =
     status === 'ready'
@@ -1782,6 +1908,9 @@ export default function RecommendationsPage() {
           readScopeFromUrl(),
         )
       : null;
+  // Prefer the server-derived next action from the consolidated status API when
+  // available (authoritative); fall back to the client-derived one.
+  const effectiveNextAction = statusData?.nextAction ?? nextAction;
 
   return (
     <main style={styles.page}>
@@ -1805,12 +1934,18 @@ export default function RecommendationsPage() {
         </span>
       </div>
 
-      <LiveModeBar scoped={scoped} cardsUpdatedMs={cardsUpdatedMs} nowMs={nowMs} />
+      <LiveModeBar
+        scoped={scoped}
+        cardsUpdatedMs={cardsUpdatedMs}
+        statusUpdatedMs={statusUpdatedMs}
+        statusError={statusError}
+        nowMs={nowMs}
+      />
       <SafetyBanner />
 
       <NextRacePanel card={nextRace} nowMs={nowMs} />
 
-      {nextAction && <NextActionWidget action={nextAction} />}
+      {effectiveNextAction && <NextActionWidget action={effectiveNextAction} />}
 
       {shouldShowAccuracyBar(dashboardSummary) && (
         <AccuracyBar summary={dashboardSummary} />
@@ -1836,6 +1971,10 @@ export default function RecommendationsPage() {
 
       {status === 'ready' && cards.length > 0 && (
         <RaceTimelinePanel entries={timeline} nowMs={nowMs} />
+      )}
+
+      {status === 'ready' && cards.length > 0 && placeAuditView && (
+        <PlaceAuditPanel view={placeAuditView} />
       )}
 
       {status === 'ready' && cards.length > 0 && (

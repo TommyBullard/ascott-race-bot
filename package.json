@@ -39,6 +39,7 @@
     "convert:bsp": "tsx scripts/convertBetfairBsp.ts",
     "snapshot:pre-off": "tsx scripts/snapshotPreOff.ts",
     "report:day": "tsx scripts/reportDay.ts",
+    "lessons:day": "tsx scripts/dayLessons.ts",
     "export:training-data": "tsx scripts/exportTrainingData.ts",
     "capture:t-minus": "tsx scripts/captureTMinus.ts",
     "results:auto": "tsx scripts/autoResults.ts",
