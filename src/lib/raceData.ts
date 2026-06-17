@@ -706,6 +706,12 @@ export interface RaceCardRunner {
   confidence_score: number | null;
   /** 1-based EV rank within the race (model_runner_scores.rank_in_race). */
   rank: number | null;
+  /**
+   * Recorded finishing position from the `runners` table once the race is
+   * settled (1 = winner), else null. Read-only; surfaced for the settled-race
+   * result display only. (Race Intelligence.)
+   */
+  finish_pos: number | null;
 }
 
 /** The model's rank-1 pick for a race, with its staking decision + rationale. */
@@ -733,6 +739,13 @@ export interface RaceCard {
   /** Up to two alternative runners (EV rank 2-3), excluding the model pick. */
   alternatives: RaceCardRunner[];
   /**
+   * The full scored field (read-only) for this race, in EV-rank order. Used by
+   * the display-only Race Intelligence panel to derive most-likely / win-value /
+   * each-way comparison candidates. Empty when there is no model run. Not a
+   * decision input — the recommendation stays `modelPick`. (Race Intelligence.)
+   */
+  runners: RaceCardRunner[];
+  /**
    * True when a CURRENT model run exists for this race. Lets readers tell apart
    * "a run happened but produced no bet" (`hasModelRun` true, `modelPick` null)
    * from "no run yet" (`hasModelRun` false). Read-only; not a decision input.
@@ -750,6 +763,18 @@ export interface RaceCard {
    * (Phase 3A.)
    */
   latestModelRunTime: string | null;
+  /**
+   * The race row `status` (e.g. `'result'` once the race is settled), or null
+   * when unknown. Read-only state signal for the live dashboard's race-state +
+   * result-status indicators; never a decision input. (Live mode.)
+   */
+  status: string | null;
+  /**
+   * `races.official_result_time` (ISO) when the result was recorded, or null
+   * when not yet resulted. Read-only "results checked X ago" signal only.
+   * (Live mode.)
+   */
+  result_time: string | null;
   /**
    * Observational model outputs read from the current run's `config_json`
    * (data quality + tipster consensus). Always present but null-safe: every
@@ -791,7 +816,7 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
   // 1. Race meta for the header + countdown.
   const { data: raceData, error: raceError } = await supabaseAdmin
     .from(RACES_TABLE)
-    .select('off_time, course, race_name, status')
+    .select('off_time, course, race_name, status, official_result_time')
     .eq('id', raceId)
     .limit(1);
 
@@ -806,6 +831,7 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
     course: string | null;
     race_name: string | null;
     status: string | null;
+    official_result_time: string | null;
   }[])[0];
 
   const card: RaceCard = {
@@ -813,9 +839,12 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
     off_time: meta?.off_time ?? null,
     course: meta?.course ?? null,
     race_name: meta?.race_name ?? null,
+    status: meta?.status ?? null,
+    result_time: meta?.official_result_time ?? null,
     favourite: null,
     modelPick: null,
     alternatives: [],
+    runners: [],
     hasModelRun: false,
     latestOddsSnapshotTime: null,
     latestModelRunTime: null,
@@ -823,6 +852,24 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
     // (stays empty when the race has no current model run).
     observability: getModelObservabilityFromConfig(null),
   };
+
+  // Finish positions for the settled-race result display (read-only). Only
+  // queried once the race is resulted, so upcoming races skip the extra read.
+  const finishByRunner = new Map<string, number | null>();
+  if ((meta?.status ?? '') === 'result') {
+    const { data: finishRows, error: finishError } = await supabaseAdmin
+      .from(RUNNERS_TABLE)
+      .select('id, finish_pos')
+      .eq('race_id', raceId);
+    if (finishError) {
+      throw new Error(
+        `Failed to fetch finish positions for race ${raceId}: ${finishError.message}`,
+      );
+    }
+    for (const r of (finishRows ?? []) as { id: Id; finish_pos: number | null }[]) {
+      finishByRunner.set(String(r.id), r.finish_pos ?? null);
+    }
+  }
 
   // 2. Market data (odds + de-overrounded probs) from the latest snapshot.
   const inputs = await fetchRaceModelInputs(raceId);
@@ -849,6 +896,7 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
         ev: null,
         confidence_score: null,
         rank: null,
+        finish_pos: finishByRunner.get(String(fav.runner_id)) ?? null,
       };
     }
   }
@@ -949,6 +997,7 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
       ev: toNumberOrNull(s.ev_per_1),
       confidence_score: toNumberOrNull(s.confidence_score),
       rank: s.rank_in_race ?? null,
+      finish_pos: finishByRunner.get(id) ?? null,
     };
   };
 
@@ -992,6 +1041,9 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
     )
     .filter((s) => String(s.runner_id) !== pickRunnerId)
     .map(toRunner);
+
+  // Full scored field (read-only) for the display-only Race Intelligence panel.
+  card.runners = scores.map(toRunner);
 
   return card;
 }

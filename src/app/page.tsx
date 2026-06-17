@@ -12,8 +12,10 @@
  * Expected response: `{ races: RaceCard[] }`.
  */
 
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import RaceExplanationPanel from '@/components/RaceExplanationPanel';
+import RaceIntelligencePanel from '@/components/RaceIntelligencePanel';
+import RaceTimelinePanel from '@/components/RaceTimelinePanel';
 import {
   buildTipsterStatusLines,
   type TipsterStatusSummary,
@@ -30,6 +32,25 @@ import {
   shouldShowAccuracyBar,
   type DashboardSummary,
 } from '@/lib/raceDaySummary';
+import {
+  RACE_DAY_REFRESH_MS,
+  deriveRaceState,
+  deriveResultStatus,
+  deriveCaptureStatus,
+  raceStateBadge,
+  resultStatusBadge,
+  captureStatusBadge,
+  selectNextRace,
+  buildRaceWarningChips,
+  type StatusTone,
+} from '@/lib/raceDayStatus';
+import { buildRaceIntelligence } from '@/lib/raceIntelligence';
+import { buildRaceDayTimeline } from '@/lib/raceDayTimeline';
+import {
+  deriveNextAction,
+  type NextAction,
+  type NextActionTone,
+} from '@/lib/operatorNextAction';
 
 /** A runner as shown on a card (mirrors the server `RaceCardRunner`). */
 interface RaceCardRunner {
@@ -42,6 +63,8 @@ interface RaceCardRunner {
   ev: number | null;
   confidence_score: number | null;
   rank: number | null;
+  /** Recorded finishing position once settled (1 = winner); null/absent otherwise. */
+  finish_pos?: number | null;
 }
 
 /** The model's rank-1 pick (mirrors the server `RaceCardPick`). */
@@ -63,6 +86,12 @@ interface RaceCard {
   modelPick: RaceCardPick | null;
   alternatives: RaceCardRunner[];
   /**
+   * Full scored field (read-only) for the display-only Race Intelligence panel.
+   * Optional for back-compat with older responses; absent/empty -> the panel
+   * renders its "unknown" / "Not enough data" states.
+   */
+  runners?: RaceCardRunner[];
+  /**
    * True when a current model run exists for this race. Distinguishes
    * "ran but no qualifying bet" (true + `modelPick` null) from "no run yet"
    * (false). Optional for back-compat with older responses.
@@ -72,6 +101,16 @@ interface RaceCard {
   latestOddsSnapshotTime?: string | null;
   /** Latest model run time (ISO) for the freshness indicator; null/absent if none. */
   latestModelRunTime?: string | null;
+  /**
+   * Race row status (e.g. 'result' once settled) for the read-only race-state /
+   * result-status badges. Optional for back-compat with older responses.
+   */
+  status?: string | null;
+  /**
+   * Result recorded time (ISO) for the read-only "results checked X ago" line;
+   * null/absent when not yet resulted.
+   */
+  result_time?: string | null;
   /**
    * Read-only model observability for this race (from the current run's
    * config_json, surfaced by the API in Batch J1). Optional/null-safe: absent or
@@ -335,6 +374,7 @@ const styles = {
     maxWidth: 820,
     margin: '2rem auto',
     padding: '0 1rem',
+    paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 32px)',
     fontFamily: 'system-ui, -apple-system, sans-serif',
     color: '#1f2328',
   } as CSSProperties,
@@ -368,6 +408,7 @@ const styles = {
     fontSize: 13,
     color: '#656d76',
     marginTop: 2,
+    overflowWrap: 'anywhere' as const,
   } as CSSProperties,
   countdown: {
     fontSize: 13,
@@ -376,6 +417,13 @@ const styles = {
     borderRadius: 999,
     whiteSpace: 'nowrap' as const,
     fontVariantNumeric: 'tabular-nums' as const,
+  } as CSSProperties,
+  statusRow: {
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
   } as CSSProperties,
   freshnessRow: {
     display: 'flex',
@@ -415,6 +463,7 @@ const styles = {
   pickName: {
     fontSize: 18,
     fontWeight: 700,
+    overflowWrap: 'anywhere' as const,
   } as CSSProperties,
   pickStats: {
     display: 'flex',
@@ -591,6 +640,105 @@ const styles = {
     marginTop: 12,
     background: 'transparent',
   } as CSSProperties,
+  // Mobile / on-course polish: sticky next-race header, warning chips, and a
+  // collapsible Alternatives summary. Presentational only.
+  nextRace: {
+    position: 'sticky' as const,
+    top: 0,
+    zIndex: 20,
+    background: '#fff',
+    border: '1px solid #d0d7de',
+    borderRadius: 10,
+    padding: '10px 14px',
+    margin: '12px 0',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.10)',
+  } as CSSProperties,
+  nextRaceTop: {
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    alignItems: 'center',
+    gap: 8,
+  } as CSSProperties,
+  nextRaceLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase' as const,
+    color: '#656d76',
+  } as CSSProperties,
+  nextRaceTime: {
+    fontSize: 18,
+    fontWeight: 700,
+    fontVariantNumeric: 'tabular-nums' as const,
+  } as CSSProperties,
+  nextRaceName: {
+    fontSize: 13,
+    color: '#656d76',
+    marginTop: 4,
+    overflowWrap: 'anywhere' as const,
+  } as CSSProperties,
+  nextRacePick: {
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    alignItems: 'baseline',
+    gap: 12,
+    marginTop: 6,
+    fontSize: 14,
+    fontVariantNumeric: 'tabular-nums' as const,
+  } as CSSProperties,
+  nextRacePickName: {
+    fontWeight: 700,
+    overflowWrap: 'anywhere' as const,
+  } as CSSProperties,
+  altSummary: {
+    cursor: 'pointer',
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: 0.5,
+    color: '#656d76',
+    textTransform: 'uppercase' as const,
+  } as CSSProperties,
+  nextActionLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase' as const,
+    color: '#656d76',
+  } as CSSProperties,
+  nextActionHeadline: {
+    fontSize: 15,
+    fontWeight: 700,
+    marginTop: 2,
+    overflowWrap: 'anywhere' as const,
+  } as CSSProperties,
+  nextActionDetail: {
+    fontSize: 13,
+    color: '#424a53',
+    marginTop: 4,
+    overflowWrap: 'anywhere' as const,
+  } as CSSProperties,
+  nextActionCmdRow: {
+    marginTop: 8,
+  } as CSSProperties,
+  nextActionCmdLabel: {
+    display: 'block',
+    fontSize: 11,
+    color: '#656d76',
+    marginBottom: 4,
+  } as CSSProperties,
+  nextActionCmd: {
+    display: 'block',
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontSize: 12.5,
+    background: '#0d1117',
+    color: '#e6edf3',
+    border: '1px solid #d0d7de',
+    borderRadius: 6,
+    padding: '6px 10px',
+    overflowX: 'auto' as const,
+    whiteSpace: 'pre-wrap' as const,
+    wordBreak: 'break-all' as const,
+  } as CSSProperties,
 };
 
 /** A pill style for a "Why" tag, tinted by tone. */
@@ -601,6 +749,30 @@ function tagStyle(tone: TagTone): CSSProperties {
   > = {
     pos: { bg: '#dafbe1', border: '#aceebb', color: '#1a7f37' },
     neg: { bg: '#ffebe9', border: '#ffcecb', color: '#cf222e' },
+    neutral: { bg: '#f6f8fa', border: '#d0d7de', color: '#424a53' },
+  };
+  const c = palette[tone];
+  return {
+    display: 'inline-block',
+    padding: '2px 8px',
+    fontSize: 12,
+    fontWeight: 600,
+    borderRadius: 999,
+    background: c.bg,
+    border: `1px solid ${c.border}`,
+    color: c.color,
+  };
+}
+
+/** A pill style for a live race-day status badge, tinted by tone. */
+function statusBadgeStyle(tone: StatusTone): CSSProperties {
+  const palette: Record<
+    StatusTone,
+    { bg: string; border: string; color: string }
+  > = {
+    pos: { bg: '#dafbe1', border: '#aceebb', color: '#1a7f37' },
+    neg: { bg: '#ffebe9', border: '#ffcecb', color: '#cf222e' },
+    warn: { bg: '#fff8c5', border: '#eac54f', color: '#9a6700' },
     neutral: { bg: '#f6f8fa', border: '#d0d7de', color: '#424a53' },
   };
   const c = palette[tone];
@@ -666,6 +838,11 @@ function FreshnessRow({
   const runQuality = (card.observability?.runQuality ?? '').toUpperCase();
   const modelStale = modelTime != null && runQuality === 'STALE';
 
+  // Result freshness: when the race has a recorded result, how long ago it was
+  // checked/recorded (read-only; from the persisted result timestamp).
+  const resultTime = card.result_time ?? null;
+  const resultAge = formatRelativeAge(resultTime, nowMs);
+
   return (
     <div style={styles.freshnessRow}>
       <span style={oddsStale ? styles.freshStale : styles.freshOk}>
@@ -679,20 +856,131 @@ function FreshnessRow({
           ? 'Model has not run yet'
           : `Model updated ${modelAge.text}${modelStale ? ' · stale' : ''}`}
       </span>
+      {resultTime != null && (
+        <>
+          <span style={styles.freshSep}>·</span>
+          <span style={styles.freshOk}>{`Results checked ${resultAge.text}`}</span>
+        </>
+      )}
     </div>
   );
 }
 
 
+/**
+ * Read-only live race-day status row. Derives three decision-support badges
+ * purely from stored fields (off time, race status, displayed run time) and the
+ * current clock — never from a live API call:
+ *  - lifecycle state: upcoming -> T−10 -> T−5 -> off -> result pending -> settled
+ *  - result status (DB-derivable): pending / settled (never claims "settle-ready",
+ *    which is a results:auto concept needing the Free endpoint)
+ *  - capture status: whether the displayed model run is the pre-off run
+ */
+function RaceStatusRow({ card, nowMs }: { card: RaceCard; nowMs: number }) {
+  const stateInput = {
+    offTime: card.off_time,
+    now: nowMs,
+    status: card.status ?? null,
+  };
+  const stateBadge = raceStateBadge(deriveRaceState(stateInput));
+  const resultBadge = resultStatusBadge(deriveResultStatus(stateInput));
+  const captureBadge = captureStatusBadge(
+    deriveCaptureStatus({
+      hasModelRun: card.hasModelRun,
+      runTime: card.latestModelRunTime ?? null,
+      offTime: card.off_time,
+    }),
+  );
+
+  return (
+    <div style={styles.statusRow}>
+      <span style={statusBadgeStyle(stateBadge.tone)}>{stateBadge.label}</span>
+      <span style={statusBadgeStyle(resultBadge.tone)}>
+        {`Result: ${resultBadge.label}`}
+      </span>
+      <span style={statusBadgeStyle(captureBadge.tone)}>{captureBadge.label}</span>
+    </div>
+  );
+}
+
+/**
+ * Compact, sticky "Next race" header for on-course mobile viewing. Shows the
+ * soonest upcoming race (or the latest race once all are off) with its time,
+ * countdown/state, model pick (odds / EV / confidence) and result status when
+ * off/settled. Read-only; reuses the same pure derivations as the cards and
+ * never changes the recommendation. Renders nothing when there is no race.
+ */
+function NextRacePanel({ card, nowMs }: { card: RaceCard | null; nowMs: number }) {
+  if (!card) return null;
+  const cd = countdownTo(card.off_time, nowMs);
+  const stateInput = { offTime: card.off_time, now: nowMs, status: card.status ?? null };
+  const state = raceStateBadge(deriveRaceState(stateInput));
+  const result = resultStatusBadge(deriveResultStatus(stateInput));
+  const pick = card.modelPick;
+  return (
+    <div style={styles.nextRace}>
+      <div style={styles.nextRaceTop}>
+        <span style={styles.nextRaceLabel}>Next race</span>
+        <span style={styles.nextRaceTime}>{formatOffTime(card.off_time)}</span>
+        <span style={countdownStyle(cd)}>{cd ? cd.text : 'no time'}</span>
+        <span style={statusBadgeStyle(state.tone)}>{state.label}</span>
+        {result.label !== '\u2014' && (
+          <span style={statusBadgeStyle(result.tone)}>{`Result: ${result.label}`}</span>
+        )}
+      </div>
+      {(card.course || card.race_name) && (
+        <div style={styles.nextRaceName}>
+          {[card.course, card.race_name].filter(Boolean).join(' \u2014 ')}
+        </div>
+      )}
+      {pick ? (
+        <div style={styles.nextRacePick}>
+          <span style={styles.nextRacePickName}>{pick.horse_name}</span>
+          <span>
+            <span style={styles.statLabel}>Odds</span>
+            {formatOdds(pick.odds)}
+          </span>
+          <span style={evColorStyle(pick.ev)}>
+            <span style={styles.statLabel}>EV</span>
+            {formatEv(pick.ev)}
+          </span>
+          <span
+            style={{
+              color: CONFIDENCE_COLORS[displayConfidence(pick.confidence_label)],
+              fontWeight: 600,
+            }}
+          >
+            {displayConfidence(pick.confidence_label)} conf
+          </span>
+        </div>
+      ) : (
+        <div style={styles.nextRacePick}>
+          <span style={styles.muted}>
+            {card.hasModelRun
+              ? 'No qualifying bet for this race.'
+              : 'No model pick yet.'}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RaceCardView({ card, nowMs }: { card: RaceCard; nowMs: number }) {
   const cd = countdownTo(card.off_time, nowMs);
   const pick = card.modelPick;
   const tags = pick ? deriveWhyTags(pick) : [];
+  const explain = deriveRaceExplanationProps(card.observability);
+  const warningChips = buildRaceWarningChips({
+    confidenceLabel: pick?.confidence_label ?? null,
+    runQuality: explain.runQuality,
+    alignmentLabel: explain.alignmentLabel,
+  });
 
   return (
     <article style={styles.card}>
       <header style={styles.cardHeader}>
-        <div>
+        <div style={{ minWidth: 0 }}>
           <div style={styles.offTime}>{formatOffTime(card.off_time)}</div>
           {(card.course || card.race_name) && (
             <div style={styles.subtitle}>
@@ -702,6 +990,22 @@ function RaceCardView({ card, nowMs }: { card: RaceCard; nowMs: number }) {
         </div>
         <span style={countdownStyle(cd)}>{cd ? cd.text : 'no time'}</span>
       </header>
+
+      {/* Live race-day status: lifecycle state + result + pre-off capture (read-only). */}
+      <RaceStatusRow card={card} nowMs={nowMs} />
+
+      {/* At-a-glance warning chips (LOW confidence / DEGRADED data /
+          NO_TIPSTER_CONSENSUS), always visible. Read-only, derived from stored
+          fields; not a decision input. */}
+      {warningChips.length > 0 && (
+        <div style={styles.statusRow}>
+          {warningChips.map((chip) => (
+            <span key={chip.label} style={statusBadgeStyle(chip.tone)}>
+              {chip.label}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Data freshness: odds + model recency (read-only). */}
       <FreshnessRow card={card} nowMs={nowMs} />
@@ -772,16 +1076,21 @@ function RaceCardView({ card, nowMs }: { card: RaceCard; nowMs: number }) {
         )}
       </div>
 
-      {/* Alternatives (EV rank 2-3) */}
+      {/* Alternatives (EV rank 2-3): collapsed by default to keep cards compact
+          on mobile. Read-only. */}
       {card.alternatives.length > 0 && (
-        <div style={styles.altList}>
-          <div style={styles.sectionLabel}>Alternatives</div>
+        <details style={styles.altList}>
+          <summary style={styles.altSummary}>
+            Alternatives ({card.alternatives.length})
+          </summary>
           {card.alternatives.map((alt) => (
             <div key={alt.runner_id} style={styles.altRow}>
               <span style={{ width: 24, color: '#8c959f' }}>
                 {alt.rank != null ? `#${alt.rank}` : ''}
               </span>
-              <span style={{ flex: 1 }}>{alt.horse_name}</span>
+              <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
+                {alt.horse_name}
+              </span>
               <span style={{ width: 64, textAlign: 'right' }}>
                 {formatOdds(alt.odds)}
               </span>
@@ -792,15 +1101,26 @@ function RaceCardView({ card, nowMs }: { card: RaceCard; nowMs: number }) {
               </span>
             </div>
           ))}
-        </div>
+        </details>
       )}
+
+      {/* Race Intelligence: display-only win / value / each-way comparison
+          derived from stored per-runner fields. Read-only; does NOT change the
+          model pick, probability, EV, staking, or ranking. */}
+      <RaceIntelligencePanel
+        intel={buildRaceIntelligence({
+          runners: card.runners ?? [],
+          favourite: card.favourite,
+          modelPickRunnerId: card.modelPick?.runner_id ?? null,
+          settled: card.status === 'result',
+        })}
+        settled={card.status === 'result'}
+        style={styles.explanationPanel}
+      />
 
       {/* Model explanation: read-only observability from the current run. Renders
           its own empty state when this race has no usable observability. */}
-      <RaceExplanationPanel
-        {...deriveRaceExplanationProps(card.observability)}
-        style={styles.explanationPanel}
-      />
+      <RaceExplanationPanel {...explain} style={styles.explanationPanel} />
     </article>
   );
 }
@@ -1083,6 +1403,158 @@ function InFormPanel({ tipsters }: { tipsters: InFormTipster[] | null }) {
   );
 }
 
+/**
+ * Live-mode indicator. When the dashboard is scoped to a meeting day/course it
+ * auto-refreshes the read-only data on a fixed cadence; this bar surfaces that
+ * (a green "Live mode" dot, the cadence, and when the cards last refreshed).
+ * Unscoped (global) views show a static-view note instead. Purely presentational
+ * — it triggers no fetches or writes itself.
+ */
+function LiveModeBar({
+  scoped,
+  cardsUpdatedMs,
+  nowMs,
+}: {
+  scoped: boolean;
+  cardsUpdatedMs: number | null;
+  nowMs: number;
+}) {
+  const refreshedAge = formatRelativeAge(cardsUpdatedMs, nowMs);
+  const refreshSecs = Math.round(RACE_DAY_REFRESH_MS / 1000);
+  return (
+    <div style={liveBarStyle(scoped)}>
+      <span style={liveDotStyle(scoped)} aria-hidden />
+      <strong style={{ letterSpacing: 0.3 }}>
+        {scoped ? 'Live mode' : 'Static view'}
+      </strong>
+      <span style={{ color: '#656d76' }}>
+        {scoped
+          ? `Auto-refreshing read-only data every ${refreshSecs}s`
+          : 'Open a day/course link (?date=…&course=…) for live auto-refresh'}
+      </span>
+      {scoped && cardsUpdatedMs != null && (
+        <span
+          style={{
+            color: '#656d76',
+            marginLeft: 'auto',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {`Data refreshed ${refreshedAge.text}`}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function liveBarStyle(scoped: boolean): CSSProperties {
+  return {
+    display: 'flex',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+    fontSize: 13,
+    padding: '8px 12px',
+    borderRadius: 8,
+    margin: '12px 0',
+    background: scoped ? '#eafff1' : '#f6f8fa',
+    border: `1px solid ${scoped ? '#aceebb' : '#d0d7de'}`,
+  };
+}
+
+function liveDotStyle(scoped: boolean): CSSProperties {
+  return {
+    display: 'inline-block',
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    background: scoped ? '#1a7f37' : '#afb8c1',
+    boxShadow: scoped ? '0 0 0 3px rgba(26,127,55,0.18)' : 'none',
+  };
+}
+
+/**
+ * Persistent safety banner. This dashboard is decision-support only: it never
+ * auto-bets, never places bets/orders, and never writes to the database — result
+ * settlement is a separate, audited backend command, not a UI action.
+ */
+function SafetyBanner() {
+  return (
+    <div style={safetyBannerStyle}>
+      <strong>Decision-support only.</strong> No auto-betting and no bet
+      placement. This page is read-only — it never writes to the database.
+      Result settlement runs as a separate, audited backend command, never from
+      this UI.
+    </div>
+  );
+}
+
+const safetyBannerStyle: CSSProperties = {
+  fontSize: 12.5,
+  lineHeight: 1.5,
+  color: '#573a00',
+  background: '#fff8c5',
+  border: '1px solid #eac54f',
+  borderRadius: 8,
+  padding: '8px 12px',
+  margin: '0 0 16px',
+};
+
+/**
+ * Stable no-op subscribe for `useSyncExternalStore`. The URL scope does not
+ * change during a page's lifetime, so there is nothing to subscribe to; defined
+ * at module scope so the reference is stable across renders.
+ */
+const subscribeNoop = (): (() => void) => () => {};
+
+/** Reads the {date, course} scope from the URL (client only) for command hints. */
+function readScopeFromUrl(): { date: string | null; course: string | null } {
+  if (typeof window === 'undefined') return { date: null, course: null };
+  const params = new URLSearchParams(window.location.search);
+  return { date: params.get('date'), course: params.get('course') };
+}
+
+/** Tone -> container style for the next-action widget. */
+function nextActionStyle(tone: NextActionTone): CSSProperties {
+  const palette: Record<NextActionTone, { bg: string; border: string }> = {
+    pos: { bg: '#eafff1', border: '#aceebb' },
+    warn: { bg: '#fff8c5', border: '#eac54f' },
+    neutral: { bg: '#f6f8fa', border: '#d0d7de' },
+  };
+  const c = palette[tone];
+  return {
+    border: `1px solid ${c.border}`,
+    background: c.bg,
+    borderRadius: 10,
+    padding: '10px 14px',
+    margin: '12px 0',
+  };
+}
+
+/**
+ * Read-only operator "next action" widget. Shows the single most useful next
+ * step as TEXT, plus an optional read-only terminal command SUGGESTION rendered
+ * as a non-clickable <code> block (never a button, never a commit flag, never
+ * executed from the page). Decision-support only.
+ */
+function NextActionWidget({ action }: { action: NextAction }) {
+  return (
+    <div style={nextActionStyle(action.tone)}>
+      <span style={styles.nextActionLabel}>Next action</span>
+      <div style={styles.nextActionHeadline}>{action.headline}</div>
+      <div style={styles.nextActionDetail}>{action.detail}</div>
+      {action.suggestedCommand && (
+        <div style={styles.nextActionCmdRow}>
+          <span style={styles.nextActionCmdLabel}>
+            Suggested (read-only — run in a terminal, not from this page):
+          </span>
+          <code style={styles.nextActionCmd}>{action.suggestedCommand}</code>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function RecommendationsPage() {
   const [cards, setCards] = useState<RaceCard[]>([]);
   const [status, setStatus] = useState<LoadStatus>('loading');
@@ -1093,18 +1565,28 @@ export default function RecommendationsPage() {
   const [inForm, setInForm] = useState<InFormTipster[] | null>(null);
   const [tipsterStatus, setTipsterStatus] = useState<TipsterStatusSummary | null>(null);
   // Whether the dashboard URL scopes to a meeting day/course (?date/?day/?course).
-  // When scoped, the header summary uses the corrected race-day `performance`
-  // rather than the lifetime `accuracy` (see selectDashboardSummary).
-  const [scoped] = useState<boolean>(() =>
-    typeof window !== 'undefined' ? hasRaceDayScope(window.location.search) : false,
+  // useSyncExternalStore returns the server snapshot (false) during SSR and the
+  // initial hydration render — so there is no hydration mismatch — then switches
+  // to the real URL-derived value on the client. When scoped, the header summary
+  // uses the corrected race-day `performance` (selectDashboardSummary) and live
+  // mode auto-refreshes the read-only cards.
+  const scoped = useSyncExternalStore(
+    subscribeNoop,
+    () => hasRaceDayScope(window.location.search),
+    () => false,
   );
+  // Epoch ms of the last successful race-card refresh, for the live-mode
+  // "data refreshed X ago" indicator. null until the first load completes.
+  const [cardsUpdatedMs, setCardsUpdatedMs] = useState<number | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
 
-    async function load() {
+    async function load(isInitial: boolean) {
       try {
-        setStatus('loading');
+        if (isInitial) {
+          setStatus('loading');
+        }
         // Forward the dashboard's own URL query (?day / ?date / ?course) to the
         // read API so deep links like /?date=2026-06-16&course=Ascot work.
         const query =
@@ -1129,19 +1611,36 @@ export default function RecommendationsPage() {
         const data = await res.json();
         const list: RaceCard[] = Array.isArray(data?.races) ? data.races : [];
         setCards(list);
+        setCardsUpdatedMs(Date.now());
         setStatus('ready');
       } catch (err) {
         if (controller.signal.aborted) {
           return;
         }
-        setError(err instanceof Error ? err.message : 'Unknown error');
-        setStatus('error');
+        // Only surface a hard error on the first load; a failed *background*
+        // refresh keeps the last good cards on screen (read-only, best-effort).
+        if (isInitial) {
+          setError(err instanceof Error ? err.message : 'Unknown error');
+          setStatus('error');
+        }
       }
     }
 
-    load();
-    return () => controller.abort();
-  }, []);
+    load(true);
+    // Live mode: when scoped to a meeting day/course, auto-refresh the read-only
+    // race cards every RACE_DAY_REFRESH_MS so odds/model/result freshness updates
+    // without a manual reload. Read-only fetch of an existing endpoint; the UI
+    // never writes. Unscoped (global) views load once.
+    const refreshId = scoped
+      ? setInterval(() => load(false), RACE_DAY_REFRESH_MS)
+      : null;
+    return () => {
+      controller.abort();
+      if (refreshId !== null) {
+        clearInterval(refreshId);
+      }
+    };
+  }, [scoped]);
 
   // Drive the live countdowns: tick once per second while showing results.
   useEffect(() => {
@@ -1251,6 +1750,38 @@ export default function RecommendationsPage() {
   // so the top AccuracyBar would duplicate them. Hide the bar when the summary is
   // race-day scoped; keep it for the unscoped lifetime/global view.
   const dashboardSummary = selectDashboardSummary(accuracy, performance, scoped);
+  // The soonest upcoming race (or the latest once all are off) for the sticky
+  // on-course "Next race" header. Read-only derivation from the loaded cards.
+  const nextRace = status === 'ready' ? selectNextRace(cards, nowMs) : null;
+  // Read-only operational timeline derived from the already-loaded cards (no new
+  // fetch / API route). Stored DB state only; never written from here.
+  const timeline =
+    status === 'ready'
+      ? buildRaceDayTimeline(
+          cards.map((c) => ({
+            race_id: c.race_id,
+            off_time: c.off_time,
+            race_name: c.race_name,
+            course: c.course,
+            oddsUpdatedAt: c.latestOddsSnapshotTime ?? null,
+            modelUpdatedAt: c.latestModelRunTime ?? null,
+            hasModelRun: c.hasModelRun,
+            status: c.status ?? null,
+            resultTime: c.result_time ?? null,
+            runQuality: c.observability?.runQuality ?? null,
+          })),
+          nowMs,
+        )
+      : [];
+  // Read-only operator "next action" suggestion derived from stored race state.
+  const nextAction =
+    status === 'ready'
+      ? deriveNextAction(
+          cards.map((c) => ({ off_time: c.off_time, status: c.status ?? null })),
+          nowMs,
+          readScopeFromUrl(),
+        )
+      : null;
 
   return (
     <main style={styles.page}>
@@ -1260,6 +1791,7 @@ export default function RecommendationsPage() {
           alignItems: 'baseline',
           justifyContent: 'space-between',
           gap: 12,
+          flexWrap: 'wrap',
         }}
       >
         <h1>Bet Recommendations</h1>
@@ -1272,6 +1804,13 @@ export default function RecommendationsPage() {
           </a>
         </span>
       </div>
+
+      <LiveModeBar scoped={scoped} cardsUpdatedMs={cardsUpdatedMs} nowMs={nowMs} />
+      <SafetyBanner />
+
+      <NextRacePanel card={nextRace} nowMs={nowMs} />
+
+      {nextAction && <NextActionWidget action={nextAction} />}
 
       {shouldShowAccuracyBar(dashboardSummary) && (
         <AccuracyBar summary={dashboardSummary} />
@@ -1293,6 +1832,10 @@ export default function RecommendationsPage() {
 
       {status === 'ready' && cards.length === 0 && (
         <p style={styles.muted}>No races available.</p>
+      )}
+
+      {status === 'ready' && cards.length > 0 && (
+        <RaceTimelinePanel entries={timeline} nowMs={nowMs} />
       )}
 
       {status === 'ready' && cards.length > 0 && (

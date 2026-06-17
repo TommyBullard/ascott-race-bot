@@ -1,0 +1,18 @@
+{
+  "source_document_id": "ascot-2026-06-17-queen-mary-operator-001",
+  "source_type": "operator_observation",
+  "source_label": "Operator trackside notes (synthetic example)",
+  "source_url": "https://example.com/operator-notes/ascot-2026-06-17",
+  "licence_status": "manual",
+  "retrieved_at": "2026-06-17T09:00:00Z",
+  "race_date": "2026-06-17",
+  "course": "Ascot",
+  "race_name": "Queen Mary Stakes",
+  "raw_note_text": "Synthetic operator note for testing only. Ground was riding on the easy side after overnight rain; the stands' side looked to hold the better ground in the previous race. A few first-time-out juveniles in the field, so the early market may move. This is our own short observation, not a copied article.",
+  "notes": [
+    { "topic": "going", "text": "Ground easy after overnight rain; watch for it drying through the card." },
+    { "topic": "pace", "text": "Likely strong early pace; prominent racers may be vulnerable late." },
+    { "topic": "bias", "text": "Stands' side appeared to hold the better ground earlier." },
+    "Several unraced/first-time-out juveniles in the field — market may be volatile."
+  ]
+}
