@@ -48,6 +48,8 @@ import './royalAscotDay1Regression.test';
 import './raceDaySummary.test';
 import './raceCardRunSelection.test';
 import './preOffSnapshot.test';
+import './dayReport.test';
+import './trainingExport.test';
 import './relativeTime.test';
 import './modelDayRun.test';
 import './raceDayPipeline.test';
