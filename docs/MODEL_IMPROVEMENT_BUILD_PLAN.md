@@ -68,10 +68,11 @@ form students use:
 - race-type volatility,
 - and **live in-day tipster form**.
 
-Because those signals are missing, "LOW confidence" today usually means
-"insufficient information", not "this is a bad bet". The improvements below aim to
-make confidence **decompose into reasons** and to add contextual evidence — while
-keeping every new input **non-model-active until it is proven**.
+Because those signals are missing, **LOW confidence** today usually means
+**insufficient or conflicting evidence** — **not automatically a bad bet or a good
+one**. The improvements below aim to make confidence **decompose into reasons** and
+to add contextual evidence — while keeping every new input **non-model-active until
+it is proven**.
 
 ---
 
@@ -293,6 +294,75 @@ Rules:
 > this plan: **evaluate on the pre-off decision record only** — the same
 > no-leakage discipline applied to run selection — and remember this remains
 > **decision-support, not a betting guarantee.**
+
+### 7.1 Current automation status (implemented)
+
+The evaluation discipline above is **already live** in the tool. These are
+evaluation / observability changes only — they do **not** change model math,
+staking, or ranking:
+
+- **As-of-off-time (pre-off) evaluation** is implemented: the dashboard and
+  performance metrics score each race on its **latest model run with
+  `run_time <= off_time`** (the final pre-off run).
+- **Post-off / resulted run guards** are implemented: the producer skips post-off
+  or resulted races (or writes such runs **non-current**), so stale reruns can
+  never supersede the pre-off decision record.
+- **Historical race cards use the final pre-off run**, not a later post-off
+  `is_current` rerun.
+- A **read-only pre-off snapshot generator** exists for spot-checking a meeting:
+
+  ```bash
+  npm run snapshot:pre-off -- --date YYYY-MM-DD --course COURSE
+  ```
+
+  It reads stored model runs and writes a snapshot report; it places no bets and
+  changes no model math, staking, or ranking.
+
+### 7.2 Next automation target — read-only end-of-day report
+
+The next automation step is a **read-only end-of-day report generator**:
+
+```bash
+npm run report:day -- --date YYYY-MM-DD --course COURSE
+```
+
+For each race it would join the **final pre-off model run**, the **official
+result** and **finishing position**, **P/L**, and the recorded
+**confidence / data-quality / tipster state**, then summarise the day's
+**patterns**. Like the snapshot generator it is **read-only** — no model-math,
+staking, ranking, or row changes — and exists to make each day **auditable**, not
+to predict.
+
+### 7.3 Future no-bet / skip-gate research (backtest-gated)
+
+Conditions worth researching as **no-bet / skip gates** — all of them
+**experimental and forbidden from activation until backtested** on out-of-sample,
+pre-off data (§7):
+
+- **LOW** confidence **+ DIVERGENT** tipsters **+ DEGRADED** data quality.
+- **LOW** confidence **+ NO_TIPSTER_CONSENSUS** in a large field.
+- **stale odds** or **post-off** model runs.
+- **many runners with similar EV** (no separation between candidates).
+- **missing runner odds** beyond a threshold.
+- **high volatility** combined with **weak contextual evidence**.
+
+These are research hypotheses for the evaluation framework, not approved rules.
+**No gate may suppress a bet in production until it clears the GO / NO-GO bar.**
+
+### 7.4 Manual notes vs the official model record
+
+Manual race-day notes and hand-built snapshots are **useful** for sense-checking,
+but they are **not** the official record. Official evaluation always uses the
+**latest stored `model_run` where `run_time <= off_time`** (the final pre-off DB
+run):
+
+- If a **user snapshot differs** from the final pre-off DB run, **record both** —
+  keep the note, but do not overwrite the stored run.
+- **Performance is computed from the final pre-off DB run**, never from the manual
+  note.
+
+This keeps the decision record consistent with the as-of-off-time discipline
+above and prevents after-the-fact notes from re-scoring a settled day.
 
 ---
 
