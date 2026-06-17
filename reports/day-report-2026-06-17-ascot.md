@@ -1,7 +1,7 @@
 # End-of-day race report — 2026-06-17
 
 Course: Ascot  
-Generated: 2026-06-17T17:33:40.620Z  
+Generated: 2026-06-17T18:01:45.184Z  
 Evaluation mode: pre_off  
 Races: 7
 
@@ -109,11 +109,11 @@ Races: 7
 - Confidence: low
 
 #### Market favourite
-- Galiyan — odds 3.50 · EV +1.2% · finish —
+- Galiyan — odds 3.50 · EV +1.2% · finish 6
 
 #### Alternatives
 - Point Of Law — odds 10.00 · EV +1.2% · finish 4
-- Port Of Spain — odds 10.00 · EV +1.2% · finish —
+- Port Of Spain — odds 10.00 · EV +1.2% · finish 11
 
 #### Model explanation
 - Data quality: OK

@@ -1,7 +1,7 @@
 # ML shadow evaluation (offline baseline — no model trained)
 
 Input: data/exports/training-data-2026-06-17-to-2026-06-17-ascot.csv  
-Generated: 2026-06-17T17:34:02.907Z  
+Generated: 2026-06-17T18:01:51.655Z  
 Races: 7 · runners: 142 · settled races: 7
 
 > Offline / shadow evaluation only. This trains NO model, persists nothing,
@@ -13,8 +13,8 @@ Races: 7 · runners: 142 · settled races: 7
 ## 1. Executive summary
 
 - Dataset: 7 race(s), 142 runner(s), 7 settled.
-- Market favourite strike rate: +50.0%.
-- Model-rank baseline strike rate: +50.0%; ROI: +81.0% (shadow model-rank baseline — NOT the production recommendation).
+- Market favourite strike rate: +42.9%.
+- Model-rank baseline strike rate: +42.9%; ROI: +55.1% (shadow model-rank baseline — NOT the production recommendation).
 - This is not the production recommendation record. Production recommendation performance is reported separately by /api/accuracy performance.
 - Leakage check: PASS.
 - ⚠️ Sample is far too small (7 settled < 100); results are not evidence of anything.
@@ -39,8 +39,8 @@ Races: 7 · runners: 142 · settled races: 7
 
 | Baseline | Rule | Races | Settled | Winners | Strike | ROI | P/L |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Market favourite | Pick the shortest-priced runner per race. | 7 | 6 | 3 | +50.0% | +81.0% | +4.86pt |
-| Model-rank baseline (not production recommendation) | Pick model_rank_pre_off = 1 (else highest model_prob). Top model probability/rank only — NOT the persisted production recommendation. | 7 | 6 | 3 | +50.0% | +81.0% | +4.86pt |
+| Market favourite | Pick the shortest-priced runner per race. | 7 | 7 | 3 | +42.9% | +55.1% | +3.86pt |
+| Model-rank baseline (not production recommendation) | Pick model_rank_pre_off = 1 (else highest model_prob). Top model probability/rank only — NOT the persisted production recommendation. | 7 | 7 | 3 | +42.9% | +55.1% | +3.86pt |
 | Highest EV | Pick the highest exported ev_pre_off per race. | 7 | 7 | 2 | +28.6% | +16.6% | +1.16pt |
 
 _Flat 1-unit stakes at the exported pre-off odds; settled races only count toward strike/ROI._
@@ -72,7 +72,7 @@ _Market-favourite picks grouped by the pick’s odds band._
 | Band | Picks | Settled | Winners | Strike | ROI |
 | --- | --- | --- | --- | --- | --- |
 | <3.0 | 1 | 1 | 1 | +100.0% | +126.0% |
-| 3.0-8.0 | 6 | 5 | 2 | +40.0% | +72.0% |
+| 3.0-8.0 | 6 | 6 | 2 | +33.3% | +43.3% |
 
 ## 7. Confidence-band performance
 
@@ -82,7 +82,7 @@ _Model-rank picks grouped by the pick’s confidence score (low <0.34, medium <0
 
 | Band | Picks | Settled | Winners | Strike | ROI |
 | --- | --- | --- | --- | --- | --- |
-| low | 7 | 6 | 3 | +50.0% | +81.0% |
+| low | 7 | 7 | 3 | +42.9% | +55.1% |
 
 ## 8. Warnings and limitations
 
