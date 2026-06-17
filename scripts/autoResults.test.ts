@@ -7,8 +7,8 @@
  * classification, the strict settlement safety gate, the manual fallback command
  * + message, and the deterministic operator summary. One test feeds the manual
  * importer's own `detectRaceConflicts` / `raceHasWinner` into the safety gate to
- * prove the standards align. Two sanity tests scan the source to prove the tool
- * performs no DB writes (it makes no Supabase calls at all). Run:  npm test
+ * prove the standards align. Sanity tests scan the source to prove the tool
+ * performs no DB writes (SELECT-only reads via Supabase, never mutations). Run:  npm test
  */
 
 import { test } from 'node:test';
@@ -259,14 +259,15 @@ test('render: does not leak env/secret-looking content (sanity)', () => {
 
 /* ----------------------- read-only guards (source scan) ------------------- */
 
-test('no DB writes: the auto-results script makes no mutations and no Supabase access', () => {
+test('no DB writes: the auto-results script performs SELECT-only reads, never mutations', () => {
   const src = readFileSync('scripts/autoResults.ts', 'utf8');
   assert.equal(/\.insert\s*\(/.test(src), false);
   assert.equal(/\.update\s*\(/.test(src), false);
   assert.equal(/\.upsert\s*\(/.test(src), false);
   assert.equal(/\.delete\s*\(/.test(src), false);
   assert.equal(/\.rpc\s*\(/.test(src), false);
-  assert.equal(/supabaseAdmin/.test(src), false); // no Supabase access at all -> cannot write in any mode
+  // It DOES read (SELECT-only) to match results to stored races/runners.
+  assert.ok(/\.select\s*\(/.test(src));
 });
 
 test('no DB access: the pure helper module never imports a DB client, fs, or env', () => {

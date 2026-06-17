@@ -210,6 +210,49 @@ export interface ResultsResponse {
   total?: number;
 }
 
+/** A runner on `/results/today/free` (RunnerFree). All fields are strings; NO SP/BSP. */
+export interface ResultFreeRunner {
+  horse_id?: string;
+  horse?: string;
+  number?: string;
+  draw?: string;
+  /** Finishing position as a string, e.g. "1"; non-finishers are non-numeric ("PU", "F", ""). */
+  position?: string;
+  jockey?: string;
+  trainer?: string;
+}
+
+/** A settled race on `/results/today/free` (ResultFree). Carries NO SP/BSP fields. */
+export interface ResultFreeRace {
+  race_id?: string;
+  course?: string;
+  date?: string;
+  /** Local off time, e.g. "8:25". */
+  off?: string;
+  /** Full ISO off datetime (may be empty). */
+  off_dt?: string;
+  race_name?: string;
+  region?: string;
+  going?: string;
+  runners?: ResultFreeRunner[];
+}
+
+/** Response of `GET /v1/results/today/free` (ResultsFreePage). */
+export interface ResultsFreeResponse {
+  results?: ResultFreeRace[] | null;
+  total?: number;
+  limit?: number;
+  skip?: number;
+}
+
+/** Query for `/results/today/free` (TODAY only — no date parameter). */
+export interface TodayFreeResultsQuery {
+  regionCodes?: string[];
+  /** 1..100; the API default is 50. */
+  limit?: number;
+  skip?: number;
+}
+
 /** Query for `/racecards/standard`. */
 export interface RacecardsQuery {
   day?: 'today' | 'tomorrow';
@@ -271,6 +314,13 @@ export interface RacingApiClient {
   getBasicRacecards(params: RacecardsQuery): Promise<RacecardsStandardResponse>;
   /** `/results` — settled races incl. finishing position, SP and BSP (Standard plan). */
   getResults(params: ResultsQuery): Promise<ResultsResponse>;
+  /**
+   * `/results/today/free` — TODAY's settled races (basic data) on the FREE plan.
+   * No date parameter (today only); paginated via limit (max 100) / skip. Carries
+   * finishing `position` but NO SP/BSP. Used as the fallback when `/results` is
+   * plan-blocked.
+   */
+  getTodayFreeResults(params: TodayFreeResultsQuery): Promise<ResultsFreeResponse>;
 }
 
 // --- Credentials + low-level transport -------------------------------------
@@ -416,6 +466,13 @@ export function createRacingApiClient(
           limit,
           skip,
         },
+        fetchImpl,
+        minIntervalMs,
+      ),
+    getTodayFreeResults: ({ regionCodes, limit, skip }) =>
+      racingApiGet<ResultsFreeResponse>(
+        '/results/today/free',
+        { region: regionCodes, limit, skip },
         fetchImpl,
         minIntervalMs,
       ),

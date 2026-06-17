@@ -267,6 +267,9 @@ function makeFakeClient(): RacingApiClient {
     async getResults() {
       return { results: [] };
     },
+    async getTodayFreeResults() {
+      return { results: [], total: 0, limit: 100, skip: 0 };
+    },
   };
 }
 
@@ -331,6 +334,42 @@ test('createRacingApiClient: real client is constructable without credentials', 
   assert.equal(typeof createRacingApiClient().getFreeRacecards, 'function');
   // The basic racecards method exists for the plan-fallback path.
   assert.equal(typeof createRacingApiClient().getBasicRacecards, 'function');
+  // The free daily results method exists for the results fallback path.
+  assert.equal(typeof createRacingApiClient().getTodayFreeResults, 'function');
+});
+
+test('getTodayFreeResults: GETs /v1/results/today/free with region/limit/skip + Basic auth', async () => {
+  const prevUser = process.env.RACING_API_USER;
+  const prevKey = process.env.RACING_API_KEY;
+  process.env.RACING_API_USER = 'u';
+  process.env.RACING_API_KEY = 'k';
+  let capturedUrl = '';
+  let capturedAuth: string | undefined;
+  const fakeFetch = (async (url: string | URL, init?: { headers?: Record<string, string> }) => {
+    capturedUrl = String(url);
+    capturedAuth = init?.headers?.Authorization;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ results: [], total: 0, limit: 100, skip: 50 }),
+      text: async () => '',
+    } as unknown as Response;
+  }) as unknown as typeof fetch;
+  try {
+    const client = createRacingApiClient(fakeFetch, 0);
+    await client.getTodayFreeResults({ regionCodes: ['gb', 'ire'], limit: 100, skip: 50 });
+    assert.match(capturedUrl, /\/v1\/results\/today\/free\?/);
+    assert.match(capturedUrl, /region=gb/);
+    assert.match(capturedUrl, /region=ire/);
+    assert.match(capturedUrl, /limit=100/);
+    assert.match(capturedUrl, /skip=50/);
+    assert.ok((capturedAuth ?? '').startsWith('Basic '));
+  } finally {
+    if (prevUser === undefined) delete process.env.RACING_API_USER;
+    else process.env.RACING_API_USER = prevUser;
+    if (prevKey === undefined) delete process.env.RACING_API_KEY;
+    else process.env.RACING_API_KEY = prevKey;
+  }
 });
 
 // --- racecards tier + plan-fallback (Batch: plan compatibility) ------------

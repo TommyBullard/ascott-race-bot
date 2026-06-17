@@ -52,6 +52,7 @@ import './dayReport.test';
 import './trainingExport.test';
 import './tMinusCapture.test';
 import './autoResults.test';
+import './freeResultsMatch.test';
 import './noteFeatureExtraction.test';
 import './tipsterAudit.test';
 import './confidenceDiagnostics.test';
