@@ -277,6 +277,23 @@ export function buildSpawnArgs(command: PlannedCommand): string[] {
   return ['run', command.script, '--', ...command.args];
 }
 
+/**
+ * Quotes a single spawn argument for use with `shell: true`, so whitespace and
+ * shell metacharacters stay a single LITERAL token and cannot be interpreted by
+ * the shell. Simple, safe tokens (flags, dates, numbers, single-word courses,
+ * script ids) are returned unquoted; anything else is wrapped in double quotes
+ * with any embedded double quote removed (the breakout vector). Pure.
+ *
+ * `shell: true` is needed because Windows cannot spawn the `npm.cmd` shim with
+ * arguments directly (EINVAL since the CVE-2024-27980 fix); quoting keeps that
+ * safe (e.g. a multi-word course like "Royal Ascot" stays one argument).
+ */
+export function quoteSpawnArg(arg: string): string {
+  if (arg === '') return '""';
+  if (/^[A-Za-z0-9._:@/\\-]+$/.test(arg)) return arg;
+  return `"${arg.replace(/"/g, '')}"`;
+}
+
 /** The result of running one read-only command. */
 export interface CommandResult {
   id: string;

@@ -2,7 +2,7 @@
 
 Course: Ascot  
 Minutes before off: 5  
-Generated: 2026-06-17T09:49:55.479Z  
+Generated: 2026-06-17T12:43:52.693Z  
 Races: 7
 
 > Source of truth: stored model history (the latest `model_runs` row with

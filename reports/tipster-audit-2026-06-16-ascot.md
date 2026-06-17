@@ -1,7 +1,7 @@
 # Tipster intelligence audit — 2026-06-16
 
 Course: Ascot  
-Generated: 2026-06-17T10:44:15.977Z  
+Generated: 2026-06-17T12:44:03.631Z  
 Approved selections: 5
 
 > Read-only diagnostic. These tipster signals are NOT model-active, change

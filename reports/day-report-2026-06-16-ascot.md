@@ -1,7 +1,7 @@
 # End-of-day race report — 2026-06-16
 
 Course: Ascot  
-Generated: 2026-06-17T09:15:22.968Z  
+Generated: 2026-06-17T12:43:56.664Z  
 Evaluation mode: pre_off  
 Races: 7
 

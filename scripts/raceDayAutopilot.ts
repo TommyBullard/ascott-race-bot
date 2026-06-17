@@ -23,6 +23,7 @@ import {
   renderAutopilotPlanMarkdown,
   runReadonlyPlan,
   buildSpawnArgs,
+  quoteSpawnArg,
   type PlannedCommand,
   type CommandResult,
 } from '../src/lib/raceDayAutopilot';
@@ -35,11 +36,18 @@ function npmExecutable(): string {
  * Real child-process runner used only in --run-readonly mode. Spawns
  * `npm run <script> -- <args>` for the (already safety-gated) read-only command
  * and streams its output. Never adds flags; never spawns anything else.
+ *
+ * `shell: true` is required so Windows can launch the `npm.cmd` shim with
+ * arguments (Node refuses to spawn a `.cmd` directly — EINVAL — since the
+ * CVE-2024-27980 fix). Each argument is quoted via quoteSpawnArg so a multi-word
+ * course (e.g. "Royal Ascot") or any shell metacharacter stays a single literal
+ * token and cannot be interpreted by the shell.
  */
 function spawnRunner(command: PlannedCommand): CommandResult {
-  const result = spawnSync(npmExecutable(), buildSpawnArgs(command), { stdio: 'inherit' });
+  const args = buildSpawnArgs(command).map(quoteSpawnArg);
+  const result = spawnSync(npmExecutable(), args, { stdio: 'inherit', shell: true });
   const exitCode = typeof result.status === 'number' ? result.status : null;
-  return { id: command.id, ok: exitCode === 0, exitCode };
+  return { id: command.id, ok: !result.error && exitCode === 0, exitCode };
 }
 
 function main(): void {

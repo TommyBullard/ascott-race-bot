@@ -1,7 +1,7 @@
 # Pre-off race-day snapshot — 2026-06-16
 
 Course: Ascot  
-Generated: 2026-06-16T22:09:01.345Z  
+Generated: 2026-06-17T12:43:49.177Z  
 Races: 7
 
 > Source of truth: stored model history (the latest `model_runs` row with

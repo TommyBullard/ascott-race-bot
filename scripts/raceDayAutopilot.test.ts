@@ -21,6 +21,7 @@ import {
   assertReadonlyCommand,
   runReadonlyPlan,
   buildSpawnArgs,
+  quoteSpawnArg,
   formatCommandInvocation,
   isValidIsoDate,
   READONLY_COMMAND_IDS,
@@ -208,6 +209,21 @@ test('buildSpawnArgs: npm run <script> -- <args>', () => {
     '--course',
     'Ascot',
   ]);
+});
+
+test('quoteSpawnArg: leaves simple tokens; quotes whitespace/metacharacters; strips embedded quotes', () => {
+  // simple, safe tokens are untouched
+  for (const safe of ['--date', '2026-06-16', 'results:auto', 'Ascot', '--', '5']) {
+    assert.equal(quoteSpawnArg(safe), safe);
+  }
+  // multi-word course is wrapped so shell:true keeps it one token
+  assert.equal(quoteSpawnArg('Royal Ascot'), '"Royal Ascot"');
+  // shell metacharacters are neutralised by quoting (no injection)
+  assert.equal(quoteSpawnArg('Ascot&del'), '"Ascot&del"');
+  // an embedded double quote (breakout vector) is removed
+  assert.equal(quoteSpawnArg('a"b c'), '"ab c"');
+  // empty -> explicit empty token
+  assert.equal(quoteSpawnArg(''), '""');
 });
 
 test('formatCommandInvocation: copy-pasteable npm invocation', () => {
