@@ -32,6 +32,12 @@ export interface RaceExplanationPanelProps {
   confidenceReduced?: boolean | null;
   /** Persisted data-quality-adjusted confidence (0-1), shown when reduced. */
   adjustedConfidence?: number | null;
+  /** Phase 4E weighted-consensus band: STRONG/MODERATE/WEAK/NONE, or null. */
+  consensusStrength?: string | null;
+  /** Phase 4E consensus type: FAVOURITE/VALUE/OUTSIDER/MID/NONE, or null. */
+  consensusType?: string | null;
+  /** Phase 4E display line, e.g. "7 of 9 weighted tipsters support <horse>". */
+  consensusDetail?: string | null;
   /** Optional style override merged over the panel container (e.g. when nested). */
   style?: CSSProperties;
 }
@@ -170,6 +176,9 @@ export default function RaceExplanationPanel({
   stakeSuppressed,
   confidenceReduced,
   adjustedConfidence,
+  consensusStrength,
+  consensusType,
+  consensusDetail,
   style,
 }: RaceExplanationPanelProps) {
   const dqShort = clean(dataQualityShortSummary);
@@ -180,6 +189,11 @@ export default function RaceExplanationPanel({
   const alignment = clean(alignmentLabel);
   const suppressed = stakeSuppressed === true;
   const reduced = confidenceReduced === true;
+  const cStrength = clean(consensusStrength);
+  const cType = clean(consensusType);
+  const cDetail = clean(consensusDetail);
+  const cTypeBadge =
+    cType !== null && cType !== 'NONE' && cType !== 'MID' ? cType.toLowerCase() : null;
   const adjConf =
     typeof adjustedConfidence === 'number' && Number.isFinite(adjustedConfidence)
       ? adjustedConfidence
@@ -192,6 +206,8 @@ export default function RaceExplanationPanel({
     tipList !== null ||
     quality !== null ||
     alignment !== null ||
+    cStrength !== null ||
+    cDetail !== null ||
     suppressed ||
     reduced;
 
@@ -205,10 +221,16 @@ export default function RaceExplanationPanel({
         </p>
       ) : (
         <>
-          {(quality !== null || alignment !== null || suppressed || reduced) && (
+          {(quality !== null || alignment !== null || suppressed || reduced || cStrength !== null) && (
             <div style={styles.row}>
               {quality !== null && <span style={styles.badge}>Data quality: {quality}</span>}
               {alignment !== null && <span style={styles.badge}>Tipsters: {alignment}</span>}
+              {cStrength !== null && (
+                <span style={styles.badge}>
+                  Consensus: {cStrength}
+                  {cTypeBadge !== null ? ` (${cTypeBadge})` : ''}
+                </span>
+              )}
               {suppressed && <span style={styles.warnBadge}>Stake suppressed</span>}
               {reduced && (
                 <span style={styles.warnBadge}>
@@ -221,6 +243,7 @@ export default function RaceExplanationPanel({
 
           <Row label="Data quality" value={dqShort} />
           <Row label="Tipster consensus" value={tipShort} />
+          <Row label="Weighted consensus" value={cDetail} />
 
           <DetailList summaryLabel="Data quality details" items={dqList} />
           <DetailList summaryLabel="Tipster consensus details" items={tipList} />

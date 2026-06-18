@@ -23,6 +23,7 @@ import {
   buildCronErrorDiagnostic,
   formatCronErrorLog,
 } from '@/lib/cronDiagnostics';
+import { recordCronRun, buildCronRunRecord } from '@/lib/cronHeartbeat';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -37,13 +38,18 @@ export async function GET(request: NextRequest) {
 
   const day = new URL(request.url).searchParams.get('day');
   const dayParam = day === 'tomorrow' ? 'tomorrow' : 'today';
+  const startedAt = new Date();
 
   try {
     const summary = await syncRacecards({ day: dayParam });
+    await recordCronRun(
+      buildCronRunRecord({ job: 'racecards', startedAt, ok: true, httpStatus: 200, counts: { ...summary } }),
+    );
     return NextResponse.json({ ok: true, day: dayParam, ...summary });
   } catch (err) {
     const diag = buildCronErrorDiagnostic('cron/racecards', err);
     console.error(formatCronErrorLog(diag));
+    await recordCronRun(buildCronRunRecord({ job: 'racecards', startedAt, ok: false, httpStatus: 500, error: err }));
     return NextResponse.json(
       diag.hint
         ? { ok: false, error: diag.message, hint: diag.hint }

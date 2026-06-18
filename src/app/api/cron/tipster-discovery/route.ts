@@ -28,6 +28,7 @@ import {
   buildCronErrorDiagnostic,
   formatCronErrorLog,
 } from '@/lib/cronDiagnostics';
+import { recordCronRun, buildCronRunRecord } from '@/lib/cronHeartbeat';
 
 export const dynamic = 'force-dynamic';
 // The analysis fan-out makes several throttled requests; give it headroom.
@@ -56,10 +57,20 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const maxTrainers = parseCap(searchParams.get('maxTrainers'), DEFAULT_MAX_TRAINERS);
   const maxJockeys = parseCap(searchParams.get('maxJockeys'), DEFAULT_MAX_JOCKEYS);
+  const startedAt = new Date();
 
   try {
     const signals = await fetchRacingApiSignals({ maxTrainers, maxJockeys });
     const result = await discoverTipsters(signals);
+    await recordCronRun(
+      buildCronRunRecord({
+        job: 'tipster-discovery', startedAt, ok: true, httpStatus: 200,
+        counts: {
+          received: result.received, deduped: result.deduped,
+          promoted: result.promoted, demoted: result.demoted, written: result.written,
+        },
+      }),
+    );
     return NextResponse.json({
       ok: true,
       source: 'The Racing API',
@@ -73,6 +84,7 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     const diag = buildCronErrorDiagnostic('cron/tipster-discovery', err);
     console.error(formatCronErrorLog(diag));
+    await recordCronRun(buildCronRunRecord({ job: 'tipster-discovery', startedAt, ok: false, httpStatus: 500, error: err }));
     return NextResponse.json(
       diag.hint
         ? { ok: false, error: diag.message, hint: diag.hint }

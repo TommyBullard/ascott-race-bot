@@ -34,6 +34,7 @@ import {
   buildCronErrorDiagnostic,
   formatCronErrorLog,
 } from '@/lib/cronDiagnostics';
+import { recordCronRun, buildCronRunRecord } from '@/lib/cronHeartbeat';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -52,16 +53,21 @@ export async function GET(request: NextRequest) {
     date: searchParams.get('date'),
   });
 
+  const startedAt = new Date();
   try {
     // `now` stays the real poll time (stamped on each snapshot); only the target
     // meeting day is overridden so ?day=tomorrow / ?date=YYYY-MM-DD work.
     const summary = await syncOddsFromBetfair(new Date(), undefined, {
       meetingDate: resolved.meetingDate,
     });
+    await recordCronRun(
+      buildCronRunRecord({ job: 'odds', startedAt, ok: true, httpStatus: 200, counts: { ...summary } }),
+    );
     return NextResponse.json({ ok: true, day: resolved.source, ...summary });
   } catch (err) {
     const diag = buildCronErrorDiagnostic('cron/odds', err);
     console.error(formatCronErrorLog(diag));
+    await recordCronRun(buildCronRunRecord({ job: 'odds', startedAt, ok: false, httpStatus: 500, error: err }));
     return NextResponse.json(
       diag.hint
         ? { ok: false, error: diag.message, hint: diag.hint }

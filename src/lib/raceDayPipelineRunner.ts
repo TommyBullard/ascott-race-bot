@@ -102,6 +102,20 @@ export async function runPipelineCommitCycle(
     try {
       const { ok, body } = await deps.callCron(racecardsUrl);
       racecards = ok ? 'ok' : 'failed';
+      // --- TEMP DIAGNOSTICS (remove after debugging "racecards: failed") ---
+      // The summary line below only reads tier/racesInserted/runnersInserted, so a
+      // failure body ({ ok:false, error, hint }) renders as "(tier=? racesInserted=?
+      // runnersInserted=?)" and the real reason is hidden. Surface URL + body here.
+      if (!ok) {
+        const e = body as { error?: unknown; hint?: unknown } | null;
+        errorLog(`  [TEMP-DIAG] racecards URL: ${racecardsUrl}`);
+        errorLog(`  [TEMP-DIAG] racecards response body: ${JSON.stringify(body)}`);
+        if (e && typeof e === 'object') {
+          if (e.error != null) errorLog(`  [TEMP-DIAG] racecards error: ${String(e.error)}`);
+          if (e.hint != null) errorLog(`  [TEMP-DIAG] racecards hint:  ${String(e.hint)}`);
+        }
+      }
+      // --- END TEMP DIAGNOSTICS ---
       const b = body as { tier?: string; racesInserted?: number; runnersInserted?: number } | null;
       log(
         `  racecards: ${racecards}` +
@@ -110,6 +124,10 @@ export async function runPipelineCommitCycle(
     } catch (err) {
       racecards = 'failed';
       errorLog(`  racecards: failed  ${err instanceof Error ? err.message : String(err)}`);
+      // --- TEMP DIAGNOSTICS (remove after debugging "racecards: failed") ---
+      errorLog(`  [TEMP-DIAG] racecards URL (threw): ${racecardsUrl}`);
+      if (err instanceof Error && err.stack) errorLog(`  [TEMP-DIAG] racecards stack: ${err.stack}`);
+      // --- END TEMP DIAGNOSTICS ---
     }
   } else {
     log(`  racecards: skipped  (${opts.date} is not today/tomorrow)`);
@@ -205,6 +223,16 @@ export function createCallCron(): (url: string) => Promise<CronCallResult> {
       body && typeof body === 'object' && 'ok' in (body as Record<string, unknown>)
         ? (body as { ok?: unknown }).ok === true
         : res.ok;
+    // --- TEMP DIAGNOSTICS (remove after debugging "racecards: failed") ---
+    // res.status is only visible here (CronCallResult hides it). Print the HTTP
+    // status + raw body for any failing cron call so the underlying reason shows.
+    if (!(res.ok && okFlag)) {
+      console.error(
+        `[TEMP-DIAG callCron] ${url} -> HTTP ${res.status} ${res.statusText} ` +
+          `(res.ok=${res.ok} okFlag=${okFlag}) body=${JSON.stringify(body)}`,
+      );
+    }
+    // --- END TEMP DIAGNOSTICS ---
     return { ok: res.ok && okFlag, body };
   };
 }

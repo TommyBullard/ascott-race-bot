@@ -72,6 +72,21 @@ export function getTipsterModelAlignmentFromConfig(
   return null;
 }
 
+/**
+ * Returns the `tipster_consensus_engine` object (Phase 4E quality-weighted
+ * consensus) when it is structurally usable (an object exposing `strength`),
+ * else `null`.
+ */
+export function getConsensusEngineFromConfig(
+  configJson: unknown,
+): Record<string, unknown> | null {
+  const engine = getProp(configJson, 'tipster_consensus_engine');
+  if (isObject(engine) && 'strength' in engine) {
+    return engine;
+  }
+  return null;
+}
+
 /** A human-readable summary read from config_json. */
 export interface ConfigSummary {
   summary: string[];
@@ -140,6 +155,8 @@ export interface ModelRunObservability {
   tipsterModelAlignment: Record<string, unknown> | null;
   tipsterConsensusShortSummary: string | null;
   tipsterConsensusSummary: string[];
+  /** Phase 4E quality-weighted consensus engine output (strength/type/detail). */
+  tipsterConsensusEngine: Record<string, unknown> | null;
 }
 
 /**
@@ -169,5 +186,6 @@ export function getModelObservabilityFromConfig(
     tipsterModelAlignment: getTipsterModelAlignmentFromConfig(configJson),
     tipsterConsensusShortSummary: consensusSummary.short_summary,
     tipsterConsensusSummary: consensusSummary.summary,
+    tipsterConsensusEngine: getConsensusEngineFromConfig(configJson),
   };
 }

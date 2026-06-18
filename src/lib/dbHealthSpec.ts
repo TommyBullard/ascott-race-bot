@@ -122,7 +122,8 @@ export const REQUIRED_TABLES: readonly TableSpec[] = [
     name: 'tipster_source_registry',
     columns: [
       'id', 'source_label', 'source_name', 'source_url', 'is_approved',
-      'notes', 'created_at', 'approved_at',
+      'notes', 'created_at', 'approved_at', 'supports_discovery',
+      'last_discovered_at',
     ],
   },
   {
@@ -134,6 +135,66 @@ export const REQUIRED_TABLES: readonly TableSpec[] = [
       'created_at', 'race_name', 'proof_url', 'confidence_text',
       'evidence_confidence', 'notes',
     ],
+  },
+  {
+    name: 'tipster_discovery_runs',
+    columns: [
+      'id', 'source_label', 'started_at', 'finished_at', 'long_window_days',
+      'recent_window_days', 'profiles_found', 'candidates_new',
+      'candidates_updated', 'dry_run', 'notes',
+    ],
+  },
+  {
+    name: 'tipster_discovery_candidates',
+    columns: [
+      'id', 'discovery_run_id', 'source_label', 'source_url', 'discovered_name',
+      'normalized_name', 'raw_affiliation', 'profile_url', 'tipster_id', 'status',
+      'sample_size', 'strike_rate', 'roi', 'roi_recent', 'winner_rate',
+      'placed_rate', 'last_seen_date', 'recency_days', 'discovery_confidence',
+      'confidence_tier', 'confidence_reasons', 'first_seen_at', 'last_seen_at',
+      'reviewed_at', 'review_notes',
+    ],
+  },
+  {
+    name: 'tipster_dynamic_weights',
+    columns: [
+      'id', 'tipster_id', 'as_of_date', 'bets_count', 'dynamic_weight',
+      'raw_skill', 'reliability', 'coverage', 'ramp_alpha', 'effective_weight',
+      'roi', 'strike_rate', 'recent_roi', 'ascot_roi', 'ascot_sample_size',
+      'festival_roi', 'festival_sample_size', 'calibration_score',
+      'calibration_sample_size', 'factors', 'reasons', 'created_at',
+    ],
+  },
+  {
+    name: 'genai_commentary',
+    columns: [
+      'id', 'race_id', 'model_run_id', 'kind', 'commentary_text',
+      'prompt_version', 'generator_name', 'generator_version', 'status',
+      'model_active', 'review_status', 'problems', 'grounding', 'generated_at',
+      'reviewed_at', 'review_notes',
+    ],
+  },
+  {
+    name: 'cron_runs',
+    columns: [
+      'id', 'job', 'started_at', 'finished_at', 'duration_ms', 'ok',
+      'http_status', 'counts', 'error', 'created_at',
+    ],
+  },
+  {
+    name: 'ml_training_examples',
+    columns: [
+      'id', 'race_id', 'runner_id', 'model_run_id', 'meeting_date', 'course',
+      'off_time', 'model_version', 'field_size', 'recommended',
+      'recommendation_rank', 'model_prob', 'market_prob', 'edge', 'ev', 'odds',
+      'confidence_score', 'confidence_label', 'is_favourite', 'finish_pos', 'won',
+      'placed', 'favourite_won', 'favourite_placed', 'bsp_decimal', 'sp_decimal',
+      'captured_at',
+    ],
+  },
+  {
+    name: 'model_run_locks',
+    columns: ['race_id', 'owner', 'acquired_at', 'expires_at'],
   },
 ];
 
@@ -147,6 +208,18 @@ export const REQUIRED_INDEXES: readonly IndexSpec[] = [
   { name: 'tipster_selections_dedupe_idx', table: 'tipster_selections', columns: 'race_id, runner_id, raw_tipster_name' },
   { name: 'tipster_selection_candidates_status_idx', table: 'tipster_selection_candidates', columns: 'status' },
   { name: 'tipster_selection_candidates_source_idx', table: 'tipster_selection_candidates', columns: 'source_label' },
+  { name: 'tipster_discovery_candidates_source_name_uidx', table: 'tipster_discovery_candidates', columns: 'source_label, normalized_name' },
+  { name: 'tipster_discovery_candidates_status_idx', table: 'tipster_discovery_candidates', columns: 'status' },
+  { name: 'tipster_discovery_candidates_tipster_idx', table: 'tipster_discovery_candidates', columns: 'tipster_id' },
+  { name: 'tipster_discovery_runs_source_idx', table: 'tipster_discovery_runs', columns: 'source_label' },
+  { name: 'tipster_dynamic_weights_tipster_date_uidx', table: 'tipster_dynamic_weights', columns: 'tipster_id, as_of_date' },
+  { name: 'tipster_dynamic_weights_as_of_idx', table: 'tipster_dynamic_weights', columns: 'as_of_date' },
+  { name: 'genai_commentary_race_idx', table: 'genai_commentary', columns: 'race_id' },
+  { name: 'genai_commentary_review_idx', table: 'genai_commentary', columns: 'review_status, status' },
+  { name: 'cron_runs_job_finished_idx', table: 'cron_runs', columns: 'job, finished_at desc' },
+  { name: 'cron_runs_finished_idx', table: 'cron_runs', columns: 'finished_at desc' },
+  { name: 'ml_training_examples_race_runner_uidx', table: 'ml_training_examples', columns: 'race_id, runner_id' },
+  { name: 'ml_training_examples_meeting_idx', table: 'ml_training_examples', columns: 'meeting_date' },
 ];
 
 /** Tables whose `is_current` / `superseded_at` history columns are required. */

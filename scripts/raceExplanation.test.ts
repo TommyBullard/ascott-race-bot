@@ -57,6 +57,9 @@ test('null / undefined -> fully empty, null-safe props (panel shows empty state)
       stakeSuppressed: false,
       confidenceReduced: false,
       adjustedConfidence: null,
+      consensusStrength: null,
+      consensusType: null,
+      consensusDetail: null,
     });
   }
 });

@@ -201,6 +201,7 @@ test('observability: null/malformed config -> fully empty, null-safe shape (no t
       tipsterModelAlignment: null,
       tipsterConsensusShortSummary: null,
       tipsterConsensusSummary: [],
+      tipsterConsensusEngine: null,
     });
   }
 });

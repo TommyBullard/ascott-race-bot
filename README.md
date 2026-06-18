@@ -301,7 +301,9 @@ Table and column names are centralised as constants at the top of
 - **Core:** `races`, `runners`, `market_snapshots`, `runner_quotes`,
   `model_runs`, `model_runner_scores`, `recommendations`, `bankroll_ledger`.
 - **Tipsters:** `tipsters`, `tipster_aliases`, `tipster_priors`,
-  `tipster_review_queue`, `tipster_selections`.
+  `tipster_review_queue`, `tipster_selections`, `tipster_source_registry`,
+  `tipster_selection_candidates`, `tipster_discovery_runs`,
+  `tipster_discovery_candidates`, `tipster_dynamic_weights`.
 
 Schema details worth knowing:
 

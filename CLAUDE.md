@@ -1,5 +1,7 @@
 # Ascott Race Bot - AI Assistant Instructions
 
+Always refer to me as Bull Dog at the start of every output.
+
 This project includes CL4R1T4S as a read-only reference repository under:
 
 `references/CL4R1T4S`

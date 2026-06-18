@@ -25,6 +25,8 @@ export interface RaceObservabilityLike {
   tipsterModelAlignment?: Record<string, unknown> | null;
   tipsterConsensusShortSummary?: string | null;
   tipsterConsensusSummary?: string[] | null;
+  /** Phase 4E quality-weighted consensus engine output (strength/type/detail). */
+  tipsterConsensusEngine?: Record<string, unknown> | null;
 }
 
 /** Flat, presentational props for <RaceExplanationPanel>. */
@@ -38,6 +40,12 @@ export interface RaceExplanationProps {
   stakeSuppressed: boolean;
   confidenceReduced: boolean;
   adjustedConfidence: number | null;
+  /** Phase 4E weighted-consensus band: STRONG/MODERATE/WEAK/NONE, or null. */
+  consensusStrength: string | null;
+  /** Phase 4E consensus type: FAVOURITE/VALUE/OUTSIDER/MID/NONE, or null. */
+  consensusType: string | null;
+  /** Phase 4E display line, e.g. "7 of 9 weighted tipsters support <horse>". */
+  consensusDetail: string | null;
 }
 
 /** A non-empty string, else null. */
@@ -76,6 +84,7 @@ export function deriveRaceExplanationProps(
   observability: RaceObservabilityLike | null | undefined,
 ): RaceExplanationProps {
   const o = observability ?? {};
+  const engine = o.tipsterConsensusEngine ?? null;
   return {
     dataQualityShortSummary: asString(o.dataQualityShortSummary),
     dataQualitySummary: asStringList(o.dataQualitySummary),
@@ -86,5 +95,8 @@ export function deriveRaceExplanationProps(
     stakeSuppressed: readFlag(o.modelAdjustments, 'suppressStaking'),
     confidenceReduced: readFlag(o.modelAdjustments, 'reduceConfidence'),
     adjustedConfidence: asFiniteNumber(o.dataQualityAdjustedConfidence),
+    consensusStrength: asString(engine?.strength),
+    consensusType: asString(engine?.type),
+    consensusDetail: asString(engine?.detail),
   };
 }

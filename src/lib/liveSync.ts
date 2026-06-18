@@ -427,23 +427,55 @@ export async function syncResults(
 
   // Re-run the model for today's remaining unsettled races so the next-race
   // pick refreshes off the latest odds. Market-only (no tipster_selections).
-  const { data: remaining, error: remErr } = await supabaseAdmin
+  const refresh = await refreshModelForMeeting(meetingDate);
+  summary.modelRerun += refresh.modelReran;
+
+  return summary;
+}
+
+/** Summary of a market-only model refresh across a meeting's unsettled races. */
+export interface ModelRefreshSummary {
+  meetingDate: string;
+  /** Unsettled races considered (status != 'result'). */
+  racesConsidered: number;
+  /** Races whose model run was (re)written. */
+  modelReran: number;
+  /** Per-race model failures (isolated; the batch continues). */
+  failures: number;
+}
+
+/**
+ * Re-runs the model for a meeting's NOT-YET-SETTLED races so the dashboard pick
+ * refreshes off the latest odds. Market-only (never writes `tipster_selections`)
+ * and per-race isolated (one failure does not sink the batch). This is the SAME
+ * refresh the results cron performs, extracted so a DEDICATED model cron can keep
+ * the model fresh INDEPENDENTLY of result settlement (so a results-feed outage
+ * never also freezes the model). Decision-support only — it never places a bet.
+ *
+ * @throws only if the initial races lookup fails.
+ */
+export async function refreshModelForMeeting(meetingDate: string): Promise<ModelRefreshSummary> {
+  const { data: remaining, error } = await supabaseAdmin
     .from('races')
     .select('id')
     .eq('meeting_date', meetingDate)
     .neq('status', 'result');
-  if (remErr) throw new Error(`remaining races fetch failed: ${remErr.message}`);
-  for (const row of (remaining ?? []) as { id: string }[]) {
+  if (error) throw new Error(`remaining races fetch failed: ${error.message}`);
+
+  const rows = (remaining ?? []) as { id: string }[];
+  let modelReran = 0;
+  let failures = 0;
+  for (const row of rows) {
     try {
       const result = await runModelForRace(String(row.id));
-      if (result) summary.modelRerun++;
+      if (result) modelReran++;
     } catch (err) {
+      failures++;
       console.warn(
-        `[syncResults] runModelForRace(${row.id}) failed: ` +
+        `[refreshModelForMeeting] runModelForRace(${row.id}) failed: ` +
           (err instanceof Error ? err.message : String(err)),
       );
     }
   }
-
-  return summary;
+  return { meetingDate, racesConsidered: rows.length, modelReran, failures };
 }

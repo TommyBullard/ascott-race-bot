@@ -71,6 +71,11 @@ import {
   buildTipsterConsensusSummary,
 } from './modelTipsterConsensus';
 import {
+  buildConsensusEngineResult,
+  tipsterQualityWeight,
+} from './tipsterConsensusEngine';
+import { withModelRunLock } from './modelRunLock';
+import {
   buildSupersedePatch,
   currentMarker,
   notCurrentMarker,
@@ -248,14 +253,40 @@ function traceModel(message: string): void {
 
 /**
  * Computes and stores a model run for `raceId`, returning a summary, or `null`
- * when the race has no priced runners / market snapshot to model.
+ * when the race has no priced runners / market snapshot to model, OR when another
+ * run already holds the per-race model lease (a concurrent trigger is already
+ * scoring this race — the holder produces the run, and the model re-runs each
+ * cycle regardless, so skipping is safe and idempotent).
+ *
+ * CONCURRENCY (Phase 5): serialised by a per-race TTL lease lock
+ * ({@link withModelRunLock}) so the model cron, results cron, manual
+ * /api/run-model, and the operator pipeline cannot insert+supersede for the SAME
+ * race simultaneously (the Ascot Day-1 class of `is_current` corruption).
+ * FAIL-OPEN: if the lock RPC/table is absent the run proceeds exactly as before.
+ * Model maths, recommendation, and staking are UNCHANGED — the lock only gates
+ * entry.
+ *
+ * @throws if any insert/supersede update fails (see {@link runModelForRaceUnlocked}).
+ */
+export async function runModelForRace(
+  raceId: string,
+  options: RunModelOptions = {},
+): Promise<RunModelResult | null> {
+  return withModelRunLock(raceId, () => runModelForRaceUnlocked(raceId, options));
+}
+
+/**
+ * The UNCHANGED model producer: scores `raceId`, persists the run + scores +
+ * recommendation, then supersedes prior current output. Invoked only while the
+ * per-race lease is held (or fail-open when the lock RPC is unavailable). Do not
+ * call directly — go through {@link runModelForRace} so the lease is enforced.
  *
  * @throws if any insert/supersede update fails (notably a `bet_mode` enum
  *   mismatch). The new run is inserted before any supersede, so a failed insert
  *   leaves the previous current run intact; a failed supersede leaves extra
  *   current runs that readers tolerate (newest wins) and the next run cleans up.
  */
-export async function runModelForRace(
+async function runModelForRaceUnlocked(
   raceId: string,
   options: RunModelOptions = {},
 ): Promise<RunModelResult | null> {
@@ -469,6 +500,30 @@ export async function runModelForRace(
     tipsterModelAlignment,
   );
 
+  // Quality-weighted Tipster Consensus Engine (Phase 4E): an EXPLAINABLE consensus
+  // verdict (strength band STRONG/MODERATE/WEAK/NONE + favourite/value/outsider
+  // type), weighting agreement by each tipster's quality. Purely observational —
+  // persisted in config_json only; it does NOT feed probabilities, confidence,
+  // staking, selection, or ranking. Odds + model edge come from the already-
+  // scored field; names from the priced runners (for the display line).
+  const consensusWeights = new Map(
+    tipsterStats.map((s) => [String(s.tipster_id), tipsterQualityWeight(s)]),
+  );
+  const consensusRunnerNames = new Map(
+    inputs.runners.map((r) => [String(r.runner_id), r.horse_name]),
+  );
+  const tipsterConsensusEngine = buildConsensusEngineResult(
+    scored.map((s) => ({
+      runner_id: s.runner_id,
+      odds: s.odds,
+      model_prob: s.model_prob,
+      market_prob: s.market_prob,
+      edge: s.edge,
+    })),
+    tipsterSelections,
+    { weights: consensusWeights, runnerNames: consensusRunnerNames },
+  );
+
   const metadata = buildModelRunMetadata({
     hasUsableTipsterSelections: tipsterSelections.length > 0,
     dataQualityFlags: dataQuality.flags,
@@ -500,6 +555,7 @@ export async function runModelForRace(
       tipster_model_alignment: tipsterModelAlignment,
       tipster_consensus_summary: tipsterConsensusSummary.summary,
       tipster_consensus_short_summary: tipsterConsensusSummary.short_summary,
+      tipster_consensus_engine: tipsterConsensusEngine,
     },
   });
 

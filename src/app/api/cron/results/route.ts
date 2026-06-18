@@ -27,6 +27,7 @@ import {
   buildCronErrorDiagnostic,
   formatCronErrorLog,
 } from '@/lib/cronDiagnostics';
+import { recordCronRun, buildCronRunRecord } from '@/lib/cronHeartbeat';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -39,12 +40,17 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  const startedAt = new Date();
   try {
     const summary = await syncResults();
+    await recordCronRun(
+      buildCronRunRecord({ job: 'results', startedAt, ok: true, httpStatus: 200, counts: { ...summary } }),
+    );
     return NextResponse.json({ ok: true, ...summary });
   } catch (err) {
     const diag = buildCronErrorDiagnostic('cron/results', err);
     console.error(formatCronErrorLog(diag));
+    await recordCronRun(buildCronRunRecord({ job: 'results', startedAt, ok: false, httpStatus: 500, error: err }));
     return NextResponse.json(
       diag.hint
         ? { ok: false, error: diag.message, hint: diag.hint }
