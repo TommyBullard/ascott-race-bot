@@ -107,3 +107,6 @@ import './genaiCommentaryView.test';
 import './raceDayNav.test';
 import './tipsterMatchVerify.test';
 import './mlPromotionAudit.test';
+import './confidenceLadder.test';
+import './tipsterOpinions.test';
+import './tipsterSourceRegistry.test';

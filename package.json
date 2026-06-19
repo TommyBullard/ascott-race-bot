@@ -36,6 +36,8 @@
     "load:races": "tsx scripts/loadHistoricalRaces.ts",
     "import:tipster-selections": "tsx scripts/importTipsterSelections.ts",
     "verify:tipster-match": "tsx scripts/verifyTipsterMatch.ts",
+    "tipsters:extract-opinions": "tsx scripts/extractTipsterOpinions.ts",
+    "tipsters:review-opinions": "tsx scripts/reviewTipsterOpinions.ts",
     "review:tipster-candidates": "tsx scripts/reviewTipsterCandidates.ts",
     "import:tipster-candidates": "tsx scripts/importTipsterCandidatesCsv.ts",
     "discover:tipsters": "tsx scripts/discoverTipsterProfiles.ts",

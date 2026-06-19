@@ -38,6 +38,7 @@ import {
 } from '@/lib/raceExplanation';
 import { formatRelativeAge, isStaleAge } from '@/lib/relativeTime';
 import { STALE_ODDS_THRESHOLD_MS } from '@/lib/modelDataQuality';
+import { cardConfidenceLadder, type LadderLabel } from '@/lib/confidenceLadder';
 import {
   hasRaceDayScope,
   selectDashboardSummary,
@@ -225,6 +226,11 @@ function displayConfidence(label: string): ConfidenceLabel {
     default:
       return 'Low';
   }
+}
+
+/** Maps an evidence-ladder label (LOW/MEDIUM/HIGH) to a display label. */
+function ladderToDisplay(label: LadderLabel): ConfidenceLabel {
+  return label === 'HIGH' ? 'High' : label === 'MEDIUM' ? 'Medium' : 'Low';
 }
 
 /** Formats a decimal odds value, or a dash when unknown. */
@@ -940,6 +946,7 @@ function NextRacePanel({ card, nowMs }: { card: RaceCard | null; nowMs: number }
   const state = raceStateBadge(deriveRaceState(stateInput));
   const result = resultStatusBadge(deriveResultStatus(stateInput));
   const pick = card.modelPick;
+  const ladder = pick ? cardConfidenceLadder(card, nowMs) : null;
   return (
     <div style={styles.nextRace}>
       <div style={styles.nextRaceTop}>
@@ -969,11 +976,14 @@ function NextRacePanel({ card, nowMs }: { card: RaceCard | null; nowMs: number }
           </span>
           <span
             style={{
-              color: CONFIDENCE_COLORS[displayConfidence(pick.confidence_label)],
+              color:
+                CONFIDENCE_COLORS[
+                  ladder ? ladderToDisplay(ladder.label) : displayConfidence(pick.confidence_label)
+                ],
               fontWeight: 600,
             }}
           >
-            {displayConfidence(pick.confidence_label)} conf
+            {ladder ? ladderToDisplay(ladder.label) : displayConfidence(pick.confidence_label)} conf
           </span>
         </div>
       ) : (
@@ -992,10 +1002,11 @@ function NextRacePanel({ card, nowMs }: { card: RaceCard | null; nowMs: number }
 function RaceCardView({ card, nowMs }: { card: RaceCard; nowMs: number }) {
   const cd = countdownTo(card.off_time, nowMs);
   const pick = card.modelPick;
+  const ladder = pick ? cardConfidenceLadder(card, nowMs) : null;
   const tags = pick ? deriveWhyTags(pick) : [];
   const explain = deriveRaceExplanationProps(card.observability);
   const warningChips = buildRaceWarningChips({
-    confidenceLabel: pick?.confidence_label ?? null,
+    confidenceLabel: ladder ? ladder.label.toLowerCase() : pick?.confidence_label ?? null,
     runQuality: explain.runQuality,
     alignmentLabel: explain.alignmentLabel,
   });
@@ -1086,13 +1097,20 @@ function RaceCardView({ card, nowMs }: { card: RaceCard; nowMs: number }) {
               <span
                 style={{
                   color:
-                    CONFIDENCE_COLORS[displayConfidence(pick.confidence_label)],
+                    CONFIDENCE_COLORS[
+                      ladder ? ladderToDisplay(ladder.label) : displayConfidence(pick.confidence_label)
+                    ],
                   fontWeight: 600,
                 }}
               >
-                {displayConfidence(pick.confidence_label)} confidence
+                {ladder ? ladderToDisplay(ladder.label) : displayConfidence(pick.confidence_label)} confidence
               </span>
             </div>
+            {ladder && (
+              <div style={{ fontSize: 11, color: '#656d76', marginTop: 4, lineHeight: 1.4 }}>
+                {ladder.reason}
+              </div>
+            )}
             {tags.length > 0 && (
               <div style={styles.tagRow}>
                 <span style={{ ...styles.sectionLabel, marginBottom: 0 }}>
@@ -1836,7 +1854,12 @@ export default function RecommendationsPage() {
 
     async function loadTipsterStatus() {
       try {
-        const res = await fetch('/api/tipsters/status', { signal: controller.signal });
+        const { date, course } = readScopeFromUrl();
+        const qs = new URLSearchParams();
+        if (date) qs.set('date', date);
+        if (course) qs.set('course', course);
+        const suffix = qs.toString() ? `?${qs.toString()}` : '';
+        const res = await fetch(`/api/tipsters/status${suffix}`, { signal: controller.signal });
         if (!res.ok) {
           return;
         }
