@@ -105,3 +105,5 @@ import './railwayCronPlan.test';
 import './openAiShadowGenerator.test';
 import './genaiCommentaryView.test';
 import './raceDayNav.test';
+import './tipsterMatchVerify.test';
+import './mlPromotionAudit.test';

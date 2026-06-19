@@ -20,7 +20,7 @@
  *     evidence available" report instead of inventing commentary.
  *
  * Usage:
- *   npm run genai:commentary -- --date YYYY-MM-DD --course COURSE \
+ *   npm run genai:report -- --date YYYY-MM-DD --course COURSE \
  *     --notes data/race-notes/example.json --output reports/genai-commentary-<date>-<course>.md [--live]
  */
 
@@ -201,10 +201,10 @@ function raceNameMatches(noteRaceName: string, storedRaceName: string | null): b
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   if (args.errors.length > 0) {
-    console.error('genai:commentary — shadow-only race commentary (read-only DB, offline by default).\n');
+    console.error('genai:report — shadow-only race commentary (read-only DB, offline by default).\n');
     for (const e of args.errors) console.error(`  - ${e}`);
     console.error(
-      '\nUsage: npm run genai:commentary -- --date YYYY-MM-DD [--course <name>] [--notes <notes.json>] [--output <report.md>] [--live]',
+      '\nUsage: npm run genai:report -- --date YYYY-MM-DD [--course <name>] [--notes <notes.json>] [--output <report.md>] [--live]',
     );
     console.error('Read-only: SELECT-only DB reads; no model run, no DB writes, no commit flag. --live needs OPENAI_API_KEY.');
     process.exitCode = 1;

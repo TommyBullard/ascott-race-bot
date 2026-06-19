@@ -52,23 +52,24 @@ Offline + dry-run by default (no OpenAI call, no DB writes):
 
 ```bash
 # Plan only — lists eligible race/kind pairs, writes nothing, calls nothing:
-npm run genai:generate -- --date 2026-06-19 --course Ascot
+npm run genai:commentary -- --date 2026-06-19 --course Ascot
 
 # Call OpenAI (needs OPENAI_API_KEY), still no DB writes:
-npm run genai:generate -- --date 2026-06-19 --course Ascot --live
+npm run genai:commentary -- --date 2026-06-19 --course Ascot --live
 
 # Generate AND store pending candidates for review (needs the genai_commentary table):
 #   WRITE — stores model_active=false, review_status='pending' rows only.
-npm run genai:generate -- --date 2026-06-19 --course Ascot --live --commit
+npm run genai:commentary -- --date 2026-06-19 --course Ascot --live --commit
 ```
 
 - `--live` without `OPENAI_API_KEY` **fails safely** (value-free error) and writes nothing.
 - If the `genai_commentary` table is missing, it explains the migration and writes nothing.
 - Stored rows are **pending** — nothing appears on the dashboard until a human approves it.
 
-> The existing `npm run genai:commentary` is a **separate** offline tool that
-> writes a Markdown *report* (it does not store DB candidates). Use
-> `genai:generate` for the review-store pipeline.
+> `npm run genai:commentary` is the generate → guardrails → store pipeline above
+> (`genai:generate` is a back-compatible alias for the same script). A **separate**
+> offline tool, `npm run genai:report`, writes a Markdown *report* from reviewed
+> notes and stores no DB candidates.
 
 ## 4. Review + surface (read-only on the dashboard)
 
@@ -78,7 +79,8 @@ npm run genai:generate -- --date 2026-06-19 --course Ascot --live --commit
 - Once approved, the dashboard race card shows a read-only **"AI commentary
   (shadow)"** panel with the note, its kind, generator, prompt version, and time,
   under a persistent **"AI shadow note — not betting advice."** disclaimer.
-- The panel renders **nothing** when there is no approved commentary, and it
+- When there is no approved commentary the panel shows a neutral
+  **"No reviewed AI shadow commentary available."** placeholder, and it
   **never** shows pending or rejected text.
 
 ## 5. Kill switch

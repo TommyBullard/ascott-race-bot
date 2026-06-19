@@ -7,10 +7,11 @@
  * persistent "AI shadow note — not betting advice." disclaimer.
  *
  * Hard properties:
- *   - It renders NOTHING when there is no approved commentary (pending / rejected
- *     rows are filtered out by the selector and never shown as fact).
- *   - It is purely presentational: NO data fetching, NO buttons, NO forms, NO
- *     onClick, NO approve/reject controls, NO commit — no write path of any kind.
+ *   - It surfaces ONLY approved commentary; pending / rejected rows are filtered
+ *     out by the selector and never shown as fact. When nothing is approved it
+ *     shows a neutral "No reviewed AI shadow commentary available." placeholder.
+ *   - It is purely presentational: no data fetching and no write controls of any
+ *     kind (no buttons, forms, approve/reject, or commit path).
  *   - It is not model-active and is never betting advice; it only displays
  *     already-reviewed, decision-support prose.
  */
@@ -65,6 +66,11 @@ const styles = {
     color: '#656d76',
     marginTop: 4,
   } as CSSProperties,
+  empty: {
+    fontSize: 12,
+    color: '#656d76',
+    margin: '2px 0 3px',
+  } as CSSProperties,
 } as const;
 
 interface GenaiCommentaryPanelProps {
@@ -75,7 +81,6 @@ interface GenaiCommentaryPanelProps {
 
 export default function GenaiCommentaryPanel({ rows, style }: GenaiCommentaryPanelProps) {
   const view = buildGenaiCommentaryView(rows ?? []);
-  if (!view.hasAny) return null; // hide when there is no reviewed commentary
 
   return (
     <section
@@ -83,17 +88,21 @@ export default function GenaiCommentaryPanel({ rows, style }: GenaiCommentaryPan
       aria-label="AI shadow commentary (read-only)"
     >
       <h3 style={styles.heading}>AI commentary (shadow)</h3>
-      {view.items.map((item, i) => (
-        <div key={`${item.kind}-${i}`} style={styles.item}>
-          <span style={styles.kind}>{item.kind.replace(/_/g, ' ')}</span>
-          <p style={styles.text}>{item.text}</p>
-          <span style={styles.provenance}>
-            {[item.generatorName, item.promptVersion, item.generatedAt]
-              .filter((v): v is string => typeof v === 'string' && v !== '')
-              .join(' · ')}
-          </span>
-        </div>
-      ))}
+      {view.hasAny ? (
+        view.items.map((item, i) => (
+          <div key={`${item.kind}-${i}`} style={styles.item}>
+            <span style={styles.kind}>{item.kind.replace(/_/g, ' ')}</span>
+            <p style={styles.text}>{item.text}</p>
+            <span style={styles.provenance}>
+              {[item.generatorName, item.promptVersion, item.generatedAt]
+                .filter((v): v is string => typeof v === 'string' && v !== '')
+                .join(' · ')}
+            </span>
+          </div>
+        ))
+      ) : (
+        <p style={styles.empty}>{view.emptyMessage}</p>
+      )}
       <p style={styles.disclaimer}>{view.disclaimer}</p>
     </section>
   );

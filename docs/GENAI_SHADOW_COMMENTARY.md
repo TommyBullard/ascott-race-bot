@@ -1,8 +1,8 @@
 # GenAI Shadow Commentary (Phase 4G)
 
 **Status:** core implemented (grounding, prompts, guardrails, storage, tests),
-plus the optional OpenAI generator, the generate+store CLI (`genai:generate`),
-and the read-only dashboard panel. The live LLM call remains **off by default**
+plus the optional OpenAI generator, the generate+store CLI (`genai:commentary`,
+alias `genai:generate`), and the read-only dashboard panel. The live LLM call remains **off by default**
 (injected generator; default refuses) and only runs with `--live` + a present
 `OPENAI_API_KEY`.
 **Mandate:** shadow-only, decision-support, informational. It explains
@@ -150,11 +150,12 @@ the read path is a thin additive API once a reviewed generator is configured.
 ([GenaiCommentaryPanel](../src/components/GenaiCommentaryPanel.tsx)) is wired into
 the dashboard race card, fed by a **fail-open** read in `fetchRaceCard` and the
 pure approved-only selector
-([genaiCommentaryView.ts](../src/lib/genaiCommentaryView.ts)). It renders
-**nothing** until a reviewer approves a candidate — so it is empty today (the
-generator is off and `genai_commentary` holds no approved rows) — and it never
-shows pending or rejected text as fact. There are no approve/reject controls in
-the public UI (review happens out-of-band; see below).
+([genaiCommentaryView.ts](../src/lib/genaiCommentaryView.ts)). Until a reviewer
+approves a candidate it shows a neutral **"No reviewed AI shadow commentary
+available."** placeholder — so it is empty today (the generator is off and
+`genai_commentary` holds no approved rows) — and it never shows pending or
+rejected text as fact. There are no approve/reject controls in the public UI
+(review happens out-of-band; see below).
 
 ---
 
@@ -206,7 +207,7 @@ npm run check:env
 | [prompts/genai-race-commentary.md](../prompts/genai-race-commentary.md) | Versioned prompt framework |
 | [supabase/migrations/20260618020000_genai_commentary.sql](../supabase/migrations/20260618020000_genai_commentary.sql) | Additive shadow store (model_active CHECK) |
 | [src/lib/openAiShadowGenerator.ts](../src/lib/openAiShadowGenerator.ts) | OpenAI → CommentaryGenerator adapter (reuses the genaiClient transport) |
-| [scripts/genaiGenerateCommentary.ts](../scripts/genaiGenerateCommentary.ts) | `genai:generate` CLI: generate → guardrails → store pending candidates (offline + dry-run by default) |
+| [scripts/genaiGenerateCommentary.ts](../scripts/genaiGenerateCommentary.ts) | `genai:commentary` CLI (alias `genai:generate`): generate → guardrails → store pending candidates (offline + dry-run by default) |
 | [src/lib/genaiCommentaryView.ts](../src/lib/genaiCommentaryView.ts) | Pure approved-only selector for the dashboard panel |
 | [src/components/GenaiCommentaryPanel.tsx](../src/components/GenaiCommentaryPanel.tsx) | Read-only "AI commentary (shadow)" dashboard card |
 | [scripts/openAiShadowGenerator.test.ts](../scripts/openAiShadowGenerator.test.ts) / [scripts/genaiCommentaryView.test.ts](../scripts/genaiCommentaryView.test.ts) | Adapter + selector + panel/CLI safety tests (OpenAI mocked) |

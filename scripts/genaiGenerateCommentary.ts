@@ -20,10 +20,10 @@
  *   - GRACEFUL DEGRADE. If `genai_commentary` is missing, it explains the
  *     migration and writes nothing.
  *
- * Usage:
- *   npm run genai:generate -- --date 2026-06-19 --course Ascot            # offline plan, no writes
- *   npm run genai:generate -- --date 2026-06-19 --course Ascot --live     # calls OpenAI, no writes
- *   npm run genai:generate -- --date 2026-06-19 --course Ascot --live --commit  # stores pending candidates
+ * Usage (the npm alias `genai:generate` runs the same script):
+ *   npm run genai:commentary -- --date 2026-06-19 --course Ascot            # offline plan, no writes
+ *   npm run genai:commentary -- --date 2026-06-19 --course Ascot --live     # calls OpenAI, no writes
+ *   npm run genai:commentary -- --date 2026-06-19 --course Ascot --live --commit  # stores pending candidates
  */
 
 import { normalizeCourse } from '../src/lib/raceSync';
@@ -179,10 +179,10 @@ async function commentaryTableExists(): Promise<boolean> {
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   if (args.errors.length > 0) {
-    console.error('genai:generate — generate + store shadow commentary candidates (offline + dry-run by default).\n');
+    console.error('genai:commentary — generate + store shadow commentary candidates (offline + dry-run by default).\n');
     for (const e of args.errors) console.error(`  - ${e}`);
     console.error(
-      '\nUsage: npm run genai:generate -- --date YYYY-MM-DD [--course <name>] [--live] [--commit]',
+      '\nUsage: npm run genai:commentary -- --date YYYY-MM-DD [--course <name>] [--live] [--commit]',
     );
     console.error('Offline + dry-run by default. --live calls OpenAI (needs OPENAI_API_KEY). --commit stores pending candidates.');
     process.exitCode = 1;
@@ -301,6 +301,6 @@ async function main(): Promise<void> {
 
 main().catch((err) => {
   // Never leak a key; surface a generic message.
-  console.error(`genai:generate failed: ${err instanceof Error ? err.message : 'unknown error'}`);
+  console.error(`genai:commentary failed: ${err instanceof Error ? err.message : 'unknown error'}`);
   process.exitCode = 1;
 });

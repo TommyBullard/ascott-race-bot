@@ -39,6 +39,8 @@ export interface GenaiCommentaryView {
   items: GenaiCommentaryItem[];
   hasAny: boolean;
   disclaimer: string;
+  /** Shown when there is no approved commentary to display. */
+  emptyMessage: string;
 }
 
 /** The persistent, always-shown disclaimer on every surfaced note. */
@@ -79,5 +81,10 @@ export function buildGenaiCommentaryView(
   rows: readonly GenaiCommentaryRow[] | null | undefined,
 ): GenaiCommentaryView {
   const items = selectApprovedCommentary(rows);
-  return { items, hasAny: items.length > 0, disclaimer: GENAI_SHADOW_DISCLAIMER };
+  return {
+    items,
+    hasAny: items.length > 0,
+    disclaimer: GENAI_SHADOW_DISCLAIMER,
+    emptyMessage: GENAI_EMPTY_MESSAGE,
+  };
 }

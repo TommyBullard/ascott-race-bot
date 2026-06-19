@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import {
   buildCommentaryPrompt,
   validateCommentaryResponse,
+  MAX_CHARS,
   groundedNumbersFromContext,
   findUngroundedNumbers,
   findForbiddenPhrases,
@@ -89,10 +90,34 @@ test('validate: clean grounded prose passes; forbidden / ungrounded / empty fail
   );
 });
 
-test('validate: over-length prose is rejected', () => {
+test('validate: each kind enforces its length budget (at-budget passes, over-budget rejected)', () => {
   const ctx = context();
-  const long = 'Bravo looks fair on the figures. '.repeat(40); // > 600 chars, no numbers
-  assert.equal(validateCommentaryResponse('race_summary', ctx, long).ok, false);
+  const kinds = ['race_summary', 'trainer_note', 'narrative_risk', 'confidence_commentary', 'disagreement_reason'] as const;
+  for (const kind of kinds) {
+    // 'x' repeats carry no numbers and no forbidden phrases, so only LENGTH can fail.
+    assert.equal(
+      validateCommentaryResponse(kind, ctx, 'x'.repeat(MAX_CHARS[kind])).ok,
+      true,
+      `${kind}: a note exactly at the ${MAX_CHARS[kind]}-char budget must pass`,
+    );
+    const over = validateCommentaryResponse(kind, ctx, 'x'.repeat(MAX_CHARS[kind] + 1));
+    assert.equal(over.ok, false, `${kind}: one char over budget must be rejected`);
+    assert.ok(over.problems.some((p) => /exceeds length budget/.test(p)));
+  }
+});
+
+test('regression: moderate budget increase reduces rejections but the guardrail stays', () => {
+  const ctx = context();
+  // These would have been rejected under the OLD budgets (confidence 500, disagreement 600);
+  // the moderate increase (750 / 850) lets them through, reducing unnecessary rejections.
+  assert.equal(validateCommentaryResponse('confidence_commentary', ctx, 'x'.repeat(700)).ok, true);
+  assert.equal(validateCommentaryResponse('disagreement_reason', ctx, 'x'.repeat(800)).ok, true);
+  // The guardrail is NOT removed: clearly overlong text is STILL rejected on length.
+  for (const kind of ['confidence_commentary', 'disagreement_reason', 'race_summary'] as const) {
+    const res = validateCommentaryResponse(kind, ctx, 'x'.repeat(MAX_CHARS[kind] + 500));
+    assert.equal(res.ok, false);
+    assert.ok(res.problems.some((p) => /exceeds length budget/.test(p)));
+  }
 });
 
 test('preconditions: each kind requires its supporting facts', () => {
@@ -115,13 +140,17 @@ test('preconditions: each kind requires its supporting facts', () => {
   assert.equal(commentaryPrecondition('trainer_note', noTrainer).ok, false);
 });
 
-test('buildCommentaryPrompt: stamps the version, length budget, and grounding contract', () => {
+test('buildCommentaryPrompt: stamps the version, concise length contract, and grounding contract', () => {
   const p = buildCommentaryPrompt('race_summary', context());
   assert.equal(p.promptVersion, PROMPT_VERSION);
-  assert.ok(p.maxChars > 0);
+  assert.equal(p.maxChars, MAX_CHARS.race_summary); // per-kind budget wired into the prompt
   assert.match(p.system, /GROUNDING ONLY/);
   assert.match(p.system, /NO BETTING ADVICE/);
+  assert.match(p.system, /at most 90 words/); // concise instruction
+  assert.match(p.system, /2 short paragraphs/);
+  assert.match(p.system, new RegExp(String(MAX_CHARS.race_summary))); // char cap retained
   assert.match(p.user, /CONTEXT/);
+  assert.match(p.user, /not betting advice/); // disclaimer retained
 });
 
 test('unconfigured generator refuses to run (off by default)', async () => {

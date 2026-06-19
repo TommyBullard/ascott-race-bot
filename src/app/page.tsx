@@ -1162,8 +1162,9 @@ function RaceCardView({ card, nowMs }: { card: RaceCard; nowMs: number }) {
           its own empty state when this race has no usable observability. */}
       <RaceExplanationPanel {...explain} style={styles.explanationPanel} />
 
-      {/* AI shadow commentary: read-only, human-approved notes only. Renders
-          nothing unless a reviewer approved a candidate. Not betting advice. */}
+      {/* AI shadow commentary: read-only, human-approved notes only. Shows a
+          neutral placeholder when no candidate has been approved. Display-only;
+          never affects the model pick, probability, EV, staking, or ranking. */}
       <GenaiCommentaryPanel rows={card.genaiCommentary} style={styles.explanationPanel} />
     </article>
   );
