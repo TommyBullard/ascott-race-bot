@@ -24,10 +24,16 @@ import { supabaseAdmin } from '../src/lib/supabaseAdmin';
 import { normalizeCourse, normalizeHorseName } from '../src/lib/raceSync';
 import {
   parseOpinionRows,
+  parseOpinionCsv,
   reviewOpinions,
   buildApprovedSelectionCsv,
 } from '../src/lib/tipsterOpinions';
 import { parseRegistryCsv } from '../src/lib/tipsterSourceRegistry';
+import {
+  isManualReviewHeader,
+  parseManualReviewCsv,
+  buildManualReviewReport,
+} from '../src/lib/tipsterManualReview';
 
 function loadEnv(): void {
   for (const file of ['.env.local', '.env']) {
@@ -65,6 +71,47 @@ async function main(): Promise<void> {
   } catch (err) {
     console.error(`Failed to read "${args.file}": ${err instanceof Error ? err.message : String(err)}`);
     process.exitCode = 1;
+    return;
+  }
+
+  // Manual-review CSV (the operator's capture sheet) has its own header. Detect
+  // it and run a PURE, READ-ONLY report: counts only, no DB, no writes, no import.
+  const header = parseOpinionCsv(text).header;
+  if (isManualReviewHeader(header)) {
+    const mrRows = parseManualReviewCsv(text);
+    const mr = buildManualReviewReport(mrRows);
+    console.log(
+      `Tipster MANUAL-REVIEW report (read-only) — ${mrRows[0]?.date || '?'} · ${mrRows[0]?.course || 'all courses'}`,
+    );
+    console.log('========================================================================');
+    console.log(`Total rows                 : ${mr.total}`);
+    console.log(`  pending                  : ${mr.pending}`);
+    console.log(`  approved                 : ${mr.approved}`);
+    console.log(`  rejected                 : ${mr.rejected}`);
+    console.log(`  blocked (paid/login/unk) : ${mr.blocked}`);
+    console.log(`  missing runner_name      : ${mr.missingRunnerName}`);
+    console.log(`  missing race_name/time   : ${mr.missingRaceNameOrTime}`);
+    console.log(`  missing evidence_excerpt : ${mr.missingEvidence}`);
+    console.log(`  unknown/blocked licence  : ${mr.unknownOrBlockedLicence}`);
+    console.log(`  model_active_eligible    : ${mr.modelActiveEligible}`);
+    console.log(`  likely matchable         : ${mr.likelyMatchable}`);
+    console.log(`  PR-family rows           : ${mr.prFamily}`);
+    if (args.registry) {
+      try {
+        const reg = parseRegistryCsv(readFileSync(args.registry, 'utf8'));
+        const byLabel = new Map(reg.map((r) => [r.source_label.toLowerCase().trim(), r.source_access_class]));
+        console.log('\nSource access class (from registry):');
+        for (const label of [...new Set(mrRows.map((r) => r.source_label))]) {
+          console.log(`  - ${label}: ${byLabel.get(label.toLowerCase().trim()) ?? 'not-in-registry'}`);
+        }
+      } catch {
+        console.log(`\n(registry "${args.registry}" could not be read — access class omitted)`);
+      }
+    }
+    console.log('\n(read-only) Nothing imported, no database writes, no model run, no bets.');
+    console.log(
+      'Next: manually fill + approve rows, then build data/tipster-opinions-2026-06-19-ascot-approved.csv (import format).',
+    );
     return;
   }
 

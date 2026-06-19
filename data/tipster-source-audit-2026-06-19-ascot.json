@@ -1,0 +1,173 @@
+{
+  "meeting_date": "2026-06-19",
+  "course": "Ascot",
+  "purpose": "Manual source audit for 2026-06-19 Royal Ascot. Lists the public/licensed tipster targets an operator may MANUALLY review. It is a SOURCE audit only — not a list of current selections.",
+  "model_active": false,
+  "disclaimer": "Source-audit rows are never model-active. Nothing here is a 2026-06-19 race selection. A source becomes usable only after a human manually opens a public, non-paywalled, non-login page, confirms a real runner-level opinion, captures a short attributable excerpt, and approves it. No scraping, no paywall bypass, no fabrication.",
+  "rules": [
+    "Do NOT scrape websites or fetch logged-in/paywalled/restricted pages.",
+    "Do NOT copy full articles — short attributable excerpts only.",
+    "Do NOT fabricate tips or let GenAI guess a tipster's opinion.",
+    "Do NOT import anything model-active from these source-audit rows alone.",
+    "Research documents (strict_verification PDF, Research Brief.docx) are a registry/quality/weighting/correlation basis ONLY — never current selections.",
+    "Default every manually captured row to review_status=pending and model_active_eligible=false until explicitly approved."
+  ],
+  "checked_status_values": ["manual_required", "blocked_login", "no_current_tips_found"],
+  "sources": [
+    {
+      "source_label": "Freetips / Jon Vine",
+      "url": "https://www.freetips.com",
+      "source_access_class": "public_free",
+      "checked_status": "manual_required",
+      "why": "Public free tips page; operator must open it manually, confirm it loads without login, and verify any Jon Vine runner-level opinion for 2026-06-19 Ascot.",
+      "usable_for_model_review": false,
+      "notes": "No current selection captured. Confirm the exact public Royal Ascot Day 4 URL manually; capture only a short excerpt."
+    },
+    {
+      "source_label": "RacingInsider / Jon Vine",
+      "url": "",
+      "source_access_class": "public_free",
+      "checked_status": "manual_required",
+      "why": "Public page; operator must supply and confirm the exact public URL, then verify any Jon Vine opinion manually.",
+      "usable_for_model_review": false,
+      "notes": "URL left blank deliberately — do not guess. Operator confirms the public page before any capture."
+    },
+    {
+      "source_label": "OLBG Royal Ascot public tips",
+      "url": "https://www.olbg.com",
+      "source_access_class": "media_public",
+      "checked_status": "manual_required",
+      "why": "Public community tips. Operator opens the Royal Ascot section manually and confirms public, attributable content.",
+      "usable_for_model_review": false,
+      "notes": "Public handles vary in quality; verify the specific tipster + runner + race before capture."
+    },
+    {
+      "source_label": "HorseRacing.net Day 4 / RaceOlly",
+      "url": "https://www.horseracing.net",
+      "source_access_class": "media_public",
+      "checked_status": "manual_required",
+      "why": "Public media tips for Royal Ascot Day 4. Operator confirms the page is public and identifies RaceOlly's runner-level view.",
+      "usable_for_model_review": false,
+      "notes": "Confirm the Day-4 (2026-06-19) page manually; short excerpt only."
+    },
+    {
+      "source_label": "Thatsagoal / Brian Healy",
+      "url": "",
+      "source_access_class": "public_free",
+      "checked_status": "manual_required",
+      "why": "Public tipster column; operator supplies and confirms the exact public URL before any capture.",
+      "usable_for_model_review": false,
+      "notes": "URL left blank deliberately — do not guess. Verify Brian Healy's runner-level opinion manually."
+    },
+    {
+      "source_label": "Racing TV public tips",
+      "url": "https://www.racingtv.com",
+      "source_access_class": "media_public",
+      "checked_status": "manual_required",
+      "why": "Some Racing TV tips are public; others sit behind membership. Operator confirms the content is public and not login-gated.",
+      "usable_for_model_review": false,
+      "notes": "If any content requires login/membership, mark blocked_login and do not use it."
+    },
+    {
+      "source_label": "The Independent / Jonathan Doidge",
+      "url": "https://www.independent.co.uk",
+      "source_access_class": "media_public",
+      "checked_status": "manual_required",
+      "why": "Public newspaper racing tips. Operator confirms the article is public (no paywall) before capturing a short excerpt.",
+      "usable_for_model_review": false,
+      "notes": "Attribute to Jonathan Doidge; never copy the full article."
+    },
+    {
+      "source_label": "Freetips newspaper roundup",
+      "url": "https://www.freetips.com",
+      "source_access_class": "media_public",
+      "checked_status": "manual_required",
+      "why": "Public aggregated newspaper roundup. Operator confirms public access and attributes each tip to its newspaper tipster.",
+      "usable_for_model_review": false,
+      "notes": "Roundups aggregate other tipsters — attribute correctly and avoid double-counting."
+    },
+    {
+      "source_label": "Daily Mail / Newsboy",
+      "url": "https://www.dailymail.co.uk",
+      "source_access_class": "media_public",
+      "checked_status": "manual_required",
+      "why": "Public newspaper tips (Newsboy). Operator confirms public access before capturing a short excerpt.",
+      "usable_for_model_review": false,
+      "notes": "Attribute to Newsboy; short excerpt only."
+    },
+    {
+      "source_label": "The Sun / Templegate",
+      "url": "https://www.thesun.co.uk",
+      "source_access_class": "media_public",
+      "checked_status": "manual_required",
+      "why": "Public newspaper tips (Templegate). Operator confirms public access before capture.",
+      "usable_for_model_review": false,
+      "notes": "Attribute to Templegate; short excerpt only."
+    },
+    {
+      "source_label": "The Times / Rob Wright",
+      "url": "https://www.thetimes.co.uk",
+      "source_access_class": "paid_login",
+      "checked_status": "blocked_login",
+      "why": "The Times is subscription/paywalled. Content behind the paywall must NOT be accessed, bypassed, or copied.",
+      "usable_for_model_review": false,
+      "notes": "Blocked: paywall. Only usable if the operator has a permitted, public, attributable excerpt — otherwise excluded."
+    },
+    {
+      "source_label": "AtTheRaces public tips",
+      "url": "https://www.attheraces.com",
+      "source_access_class": "media_public",
+      "checked_status": "manual_required",
+      "why": "Public media tips. Operator confirms public access and identifies the tipster + runner + race manually.",
+      "usable_for_model_review": false,
+      "notes": "Short attributable excerpt only."
+    },
+    {
+      "source_label": "Betfair Blog public racing tips",
+      "url": "https://betting.betfair.com",
+      "source_access_class": "media_public",
+      "checked_status": "manual_required",
+      "why": "Public blog tips. Operator confirms public access (no login) and attributes the named tipster.",
+      "usable_for_model_review": false,
+      "notes": "Do not use any logged-in Betfair area; public blog only."
+    },
+    {
+      "source_label": "Timeform public tips",
+      "url": "https://www.timeform.com",
+      "source_access_class": "media_public",
+      "checked_status": "manual_required",
+      "why": "Timeform has both free public and premium content. Operator uses only the free public tips and confirms no paywall.",
+      "usable_for_model_review": false,
+      "notes": "If a tip sits behind premium, mark blocked_login and do not use it."
+    },
+    {
+      "source_label": "Core Tipstrr-style pool",
+      "url": "",
+      "source_access_class": "paid_login",
+      "checked_status": "blocked_login",
+      "why": "Tipstrr/Betting Gods/Tipsters Empire current picks are typically paid/login/manual-review sources.",
+      "usable_for_model_review": false,
+      "notes": "Blocked: paid/login. Only usable via operator-supplied, permitted/manual selections — never scraped or bypassed."
+    },
+    {
+      "source_label": "PR family",
+      "url": "",
+      "source_access_class": "login_unknown",
+      "correlation_group": "PR_family",
+      "duplicate_family_signal": true,
+      "checked_status": "blocked_login",
+      "why": "The Profit Rocket, UNDERDOG Racing Tips, and ACTIVE Betting Hub are ONE duplicated PR family — they must not count as three independent votes.",
+      "usable_for_model_review": false,
+      "notes": "Correlation group PR_family. Cap to a single representative (The Profit Rocket) at ingestion; never three votes. Paid/login style — manual only."
+    },
+    {
+      "source_label": "OLBG public handles",
+      "url": "https://www.olbg.com",
+      "source_access_class": "media_public",
+      "checked_status": "manual_required",
+      "why": "Individual public OLBG tipster handles. Operator confirms each handle's public page and verifies a runner-level opinion manually.",
+      "usable_for_model_review": false,
+      "notes": "Verify per-handle; quality varies. Short attributable excerpt only."
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+# EXAMPLE ONLY — DO NOT IMPORT. Every data row below contains the word EXAMPLE,
+# which the importer REFUSES to commit (its built-in placeholder guard). The
+# filename also ends in .example.csv, so the import command never points here.
+#
+# To go live: create  data/tipster-opinions-2026-06-19-ascot-approved.csv
+# from REAL, manually verified + approved rows only, using this exact header.
+# Map your manual-review rows: off_time = race_time (HH:MM), horse_name = runner_name.
+#
+# The importer also only inserts rows whose race + runner resolve to a real DB
+# row, so fake names can never become selections even if you tried.
+meeting_date,course,off_time,horse_name,tipster_name,raw_affiliation,source_label
+2026-06-19,Ascot,14:30,EXAMPLE_RUNNER_DO_NOT_IMPORT,EXAMPLE_TIPSTER,EXAMPLE_AFFILIATION,EXAMPLE_SOURCE_DO_NOT_IMPORT
+2026-06-19,Ascot,15:20,EXAMPLE_RUNNER_DO_NOT_IMPORT,EXAMPLE_TIPSTER,EXAMPLE_AFFILIATION,EXAMPLE_SOURCE_DO_NOT_IMPORT
