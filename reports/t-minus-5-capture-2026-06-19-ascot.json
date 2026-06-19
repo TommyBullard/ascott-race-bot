@@ -1,0 +1,410 @@
+{
+  "date": "2026-06-19",
+  "course": "Ascot",
+  "minutes_before": 5,
+  "generatedAt": "2026-06-19T04:50:15.614Z",
+  "races": [
+    {
+      "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+      "race_name": "Albany Stakes (Group 3) (Fillies)",
+      "course": "Ascot",
+      "off_time": "2026-06-19T13:30:00+00:00",
+      "capture_target_time": "2026-06-19T13:25:00.000Z",
+      "selected_run_id": "8eeea81d-25a2-490d-bd1f-f6f91da2734f",
+      "selected_run_time": "2026-06-19T04:50:00.635+00:00",
+      "selected_run_is_current": true,
+      "later_pre_off_run_exists": false,
+      "post_off_run_count": 0,
+      "pick": {
+        "horse_name": "Light Of Dawn",
+        "odds": 10,
+        "ev": 0.02285495458788711,
+        "model_prob": 0.1022854954587887,
+        "market_prob": 0.0971000068989173,
+        "stake": 1,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Sun Goddess",
+        "odds": 2.48,
+        "ev": 0.02285495458788689,
+        "model_prob": 0.4124415139467286,
+        "market_prob": 0.39153228588273103
+      },
+      "alternatives": [
+        {
+          "horse_name": "Jolivette",
+          "odds": 12,
+          "ev": 0.02285495458788689,
+          "model_prob": 0.08523791288232391,
+          "market_prob": 0.0809166724157644
+        },
+        {
+          "horse_name": "Silent Beauty",
+          "odds": 10.5,
+          "ev": 0.02285495458788689,
+          "model_prob": 0.09741475757979876,
+          "market_prob": 0.0924761970465879
+        }
+      ],
+      "run_quality": "DEGRADED",
+      "data_quality_flags": [
+        "MISSING_RUNNER_ODDS",
+        "NO_TIPSTER_SELECTIONS"
+      ],
+      "data_quality_short_summary": "DEGRADED — Missing runner odds (22/25 priced), No tipster selections",
+      "tipster_short_summary": "No tipster consensus",
+      "tipster_alignment_label": "NO_TIPSTER_CONSENSUS",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": true,
+        "laterPreOffRunExists": false,
+        "postOffRunsIgnored": false
+      }
+    },
+    {
+      "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+      "race_name": "Commonwealth Cup (Group 1) (No Geldings)",
+      "course": "Ascot",
+      "off_time": "2026-06-19T14:05:00+00:00",
+      "capture_target_time": "2026-06-19T14:00:00.000Z",
+      "selected_run_id": "8f228ce4-8178-4dfd-a4f1-0e16ec664907",
+      "selected_run_time": "2026-06-19T04:50:01.267+00:00",
+      "selected_run_is_current": true,
+      "later_pre_off_run_exists": false,
+      "post_off_run_count": 0,
+      "pick": {
+        "horse_name": "Albert Einstein",
+        "odds": 9.2,
+        "ev": 0.04528845926642244,
+        "model_prob": 0.11361831078982854,
+        "market_prob": 0.10441892123815098,
+        "stake": 1,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Venetian Sun",
+        "odds": 2.7,
+        "ev": 0.04528845926642244,
+        "model_prob": 0.3871438738023787,
+        "market_prob": 0.3557978057003663
+      },
+      "alternatives": [
+        {
+          "horse_name": "Venetian Sun",
+          "odds": 2.7,
+          "ev": 0.04528845926642244,
+          "model_prob": 0.3871438738023787,
+          "market_prob": 0.3557978057003663
+        },
+        {
+          "horse_name": "Fitzella",
+          "odds": 160,
+          "ev": -0.11150480962354081,
+          "model_prob": 0.00555309493985287,
+          "market_prob": 0.006004087971193682
+        }
+      ],
+      "run_quality": "OK",
+      "data_quality_flags": [
+        "NO_TIPSTER_SELECTIONS"
+      ],
+      "data_quality_short_summary": "OK — No tipster selections",
+      "tipster_short_summary": "No tipster consensus",
+      "tipster_alignment_label": "NO_TIPSTER_CONSENSUS",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": true,
+        "laterPreOffRunExists": false,
+        "postOffRunsIgnored": false
+      }
+    },
+    {
+      "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+      "race_name": "Duke Of Edinburgh Stakes (Handicap) (GBBPlus Race)",
+      "course": "Ascot",
+      "off_time": "2026-06-19T14:40:00+00:00",
+      "capture_target_time": "2026-06-19T14:35:00.000Z",
+      "selected_run_id": "2dc6640b-bf76-4cbc-995b-1dc7c9661f1e",
+      "selected_run_time": "2026-06-19T04:50:01.956+00:00",
+      "selected_run_is_current": true,
+      "later_pre_off_run_exists": false,
+      "post_off_run_count": 0,
+      "pick": {
+        "horse_name": "Warrant Holder",
+        "odds": 5.8,
+        "ev": 0.029694365029357073,
+        "model_prob": 0.17753351121195812,
+        "market_prob": 0.1660957309327182,
+        "stake": 1,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Hopewell Rock",
+        "odds": 5.5,
+        "ev": 0.02969436502935685,
+        "model_prob": 0.1872171572780649,
+        "market_prob": 0.1751554980745028
+      },
+      "alternatives": [
+        {
+          "horse_name": "Emit",
+          "odds": 9.4,
+          "ev": 0.029694365029357073,
+          "model_prob": 0.10954195372652734,
+          "market_prob": 0.1024845999372091
+        },
+        {
+          "horse_name": "Hopewell Rock",
+          "odds": 5.5,
+          "ev": 0.02969436502935685,
+          "model_prob": 0.1872171572780649,
+          "market_prob": 0.1751554980745028
+        }
+      ],
+      "run_quality": "OK",
+      "data_quality_flags": [
+        "NO_TIPSTER_SELECTIONS"
+      ],
+      "data_quality_short_summary": "OK — No tipster selections",
+      "tipster_short_summary": "No tipster consensus",
+      "tipster_alignment_label": "NO_TIPSTER_CONSENSUS",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": true,
+        "laterPreOffRunExists": false,
+        "postOffRunsIgnored": false
+      }
+    },
+    {
+      "race_id": "c1a95554-e69d-4896-878a-f58aa29e9042",
+      "race_name": "Coronation Stakes (Group 1) (Fillies)",
+      "course": "Ascot",
+      "off_time": "2026-06-19T15:20:00+00:00",
+      "capture_target_time": "2026-06-19T15:15:00.000Z",
+      "selected_run_id": "592ab1f8-eabb-4262-8cbb-93fa48ace7fb",
+      "selected_run_time": "2026-06-19T04:50:02.538+00:00",
+      "selected_run_is_current": true,
+      "later_pre_off_run_exists": false,
+      "post_off_run_count": 0,
+      "pick": {
+        "horse_name": "True Love",
+        "odds": 4.3,
+        "ev": 0.14121626645857255,
+        "model_prob": 0.26539913173455176,
+        "market_prob": 0.2268691940056732,
+        "stake": 3.1316465655492927,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Precise",
+        "odds": 1.67,
+        "ev": -0.0870269868331418,
+        "model_prob": 0.5466904270460229,
+        "market_prob": 0.5841542121104161
+      },
+      "alternatives": [
+        {
+          "horse_name": "Black Caviar Gold",
+          "odds": 55,
+          "ev": -0.029966173510213356,
+          "model_prob": 0.017636978663450667,
+          "market_prob": 0.017737046076807178
+        },
+        {
+          "horse_name": "Moon Target",
+          "odds": 95,
+          "ev": -0.029966173510213356,
+          "model_prob": 0.010210882384103018,
+          "market_prob": 0.010268816149730471
+        }
+      ],
+      "run_quality": "OK",
+      "data_quality_flags": [
+        "NO_TIPSTER_SELECTIONS"
+      ],
+      "data_quality_short_summary": "OK — No tipster selections",
+      "tipster_short_summary": "No tipster consensus",
+      "tipster_alignment_label": "NO_TIPSTER_CONSENSUS",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": true,
+        "laterPreOffRunExists": false,
+        "postOffRunsIgnored": false
+      }
+    },
+    {
+      "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+      "race_name": "Sandringham Stakes (Handicap) (Fillies)",
+      "course": "Ascot",
+      "off_time": "2026-06-19T16:00:00+00:00",
+      "capture_target_time": "2026-06-19T15:55:00.000Z",
+      "selected_run_id": "efdce073-bd33-4391-81d7-03bac74c9de7",
+      "selected_run_time": "2026-06-19T04:50:03.041+00:00",
+      "selected_run_is_current": true,
+      "later_pre_off_run_exists": false,
+      "post_off_run_count": 0,
+      "pick": {
+        "horse_name": "Seet",
+        "odds": 6.4,
+        "ev": 0.052978700742743134,
+        "model_prob": 0.16452792199105362,
+        "market_prob": 0.14914732790740262,
+        "stake": 1,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Seet",
+        "odds": 6.4,
+        "ev": 0.052978700742743134,
+        "model_prob": 0.16452792199105362,
+        "market_prob": 0.14914732790740262
+      },
+      "alternatives": [
+        {
+          "horse_name": "Glyfada",
+          "odds": 6.6,
+          "ev": 0.052978700742743134,
+          "model_prob": 0.1595422273852641,
+          "market_prob": 0.1446277119102086
+        },
+        {
+          "horse_name": "Bintaziza",
+          "odds": 11.5,
+          "ev": 0.05297870074274291,
+          "model_prob": 0.09156336528197764,
+          "market_prob": 0.08300373031368492
+        }
+      ],
+      "run_quality": "DEGRADED",
+      "data_quality_flags": [
+        "MISSING_RUNNER_ODDS",
+        "NO_TIPSTER_SELECTIONS"
+      ],
+      "data_quality_short_summary": "DEGRADED — Missing runner odds (28/30 priced), No tipster selections",
+      "tipster_short_summary": "No tipster consensus",
+      "tipster_alignment_label": "NO_TIPSTER_CONSENSUS",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": true,
+        "laterPreOffRunExists": false,
+        "postOffRunsIgnored": false
+      }
+    },
+    {
+      "race_id": "d41b28e9-903f-4a1c-8a26-b223e8ef544d",
+      "race_name": "King Edward VII Stakes (Group 2) (Colts & Geldings)",
+      "course": "Ascot",
+      "off_time": "2026-06-19T16:35:00+00:00",
+      "capture_target_time": "2026-06-19T16:30:00.000Z",
+      "selected_run_id": "2ba31cbb-01b7-4212-b9fa-5c02b5e08ba4",
+      "selected_run_time": "2026-06-19T04:50:03.588+00:00",
+      "selected_run_is_current": true,
+      "later_pre_off_run_exists": false,
+      "post_off_run_count": 0,
+      "pick": {
+        "horse_name": "Golden Story",
+        "odds": 10.5,
+        "ev": 0.00048751109050959585,
+        "model_prob": 0.09528452486576282,
+        "market_prob": 0.09362968155297419,
+        "stake": 1,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Water To Wine",
+        "odds": 2.32,
+        "ev": 0.00048751109050959585,
+        "model_prob": 0.4312446168493576,
+        "market_prob": 0.42375502426992634
+      },
+      "alternatives": [
+        {
+          "horse_name": "Water To Wine",
+          "odds": 2.32,
+          "ev": 0.00048751109050959585,
+          "model_prob": 0.4312446168493576,
+          "market_prob": 0.42375502426992634
+        },
+        {
+          "horse_name": "Causeway",
+          "odds": 2.68,
+          "ev": 0.0004875110905093738,
+          "model_prob": 0.37331623548153337,
+          "market_prob": 0.3668327075769511
+        }
+      ],
+      "run_quality": "OK",
+      "data_quality_flags": [
+        "NO_TIPSTER_SELECTIONS"
+      ],
+      "data_quality_short_summary": "OK — No tipster selections",
+      "tipster_short_summary": "No tipster consensus",
+      "tipster_alignment_label": "NO_TIPSTER_CONSENSUS",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": true,
+        "laterPreOffRunExists": false,
+        "postOffRunsIgnored": false
+      }
+    },
+    {
+      "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+      "race_name": "Palace Of Holyroodhouse (Handicap)",
+      "course": "Ascot",
+      "off_time": "2026-06-19T17:10:00+00:00",
+      "capture_target_time": "2026-06-19T17:05:00.000Z",
+      "selected_run_id": "431ba1b3-e594-4a85-b7e9-32269ade2931",
+      "selected_run_time": "2026-06-19T04:50:04.084+00:00",
+      "selected_run_is_current": true,
+      "later_pre_off_run_exists": false,
+      "post_off_run_count": 0,
+      "pick": {
+        "horse_name": "Jazl",
+        "odds": 11,
+        "ev": 0.09914938922319338,
+        "model_prob": 0.09992267174756303,
+        "market_prob": 0.08772498848678639,
+        "stake": 1,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Gold Digger",
+        "odds": 9.8,
+        "ev": 0.09914938922319316,
+        "model_prob": 0.11215810094114216,
+        "market_prob": 0.098466823811699
+      },
+      "alternatives": [
+        {
+          "horse_name": "Gold Digger",
+          "odds": 9.8,
+          "ev": 0.09914938922319316,
+          "model_prob": 0.11215810094114216,
+          "market_prob": 0.098466823811699
+        },
+        {
+          "horse_name": "Sovereign Spell",
+          "odds": 40,
+          "ev": -0.06572301916028556,
+          "model_prob": 0.02335692452099286,
+          "market_prob": 0.02412437183386626
+        }
+      ],
+      "run_quality": "DEGRADED",
+      "data_quality_flags": [
+        "MISSING_RUNNER_ODDS",
+        "NO_TIPSTER_SELECTIONS"
+      ],
+      "data_quality_short_summary": "DEGRADED — Missing runner odds (27/28 priced), No tipster selections",
+      "tipster_short_summary": "No tipster consensus",
+      "tipster_alignment_label": "NO_TIPSTER_CONSENSUS",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": true,
+        "laterPreOffRunExists": false,
+        "postOffRunsIgnored": false
+      }
+    }
+  ]
+}

@@ -22,6 +22,13 @@ import ProofOfUpdatePanel from '@/components/ProofOfUpdatePanel';
 import GenaiCommentaryPanel from '@/components/GenaiCommentaryPanel';
 import type { GenaiCommentaryRow } from '@/lib/genaiCommentaryView';
 import {
+  TODAY_ASCOT_HREF,
+  YESTERDAY_ASCOT_HREF,
+  VIEW_TODAY_LABEL,
+  VIEW_YESTERDAY_LABEL,
+  RACE_DAY_NAV_EMPTY_MESSAGE,
+} from '@/lib/raceDayNav';
+import {
   buildTipsterStatusLines,
   type TipsterStatusSummary,
 } from '@/lib/tipsterStatus';
@@ -1544,6 +1551,49 @@ function SafetyBanner() {
   );
 }
 
+/**
+ * Homepage race-day navigation: a prominent link to today's Ascot dashboard and
+ * a secondary link to yesterday's results. NAVIGATION ONLY — plain in-app anchors
+ * (`/?date=…&course=…`); no API/cron call, no DB write, no bet, no --commit. When
+ * unscoped it shows a short "choose a view" prompt.
+ */
+function RaceDayNav({ scoped }: { scoped: boolean }) {
+  return (
+    <div style={{ margin: '12px 0 4px' }}>
+      {!scoped && (
+        <p style={{ margin: '0 0 8px', fontSize: 14, color: '#1f2328' }}>
+          {RACE_DAY_NAV_EMPTY_MESSAGE}
+        </p>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+        <a href={TODAY_ASCOT_HREF} style={raceDayPrimaryButtonStyle}>
+          {VIEW_TODAY_LABEL}
+        </a>
+        <a href={YESTERDAY_ASCOT_HREF} style={raceDaySecondaryLinkStyle}>
+          {VIEW_YESTERDAY_LABEL}
+        </a>
+      </div>
+    </div>
+  );
+}
+
+const raceDayPrimaryButtonStyle: CSSProperties = {
+  display: 'inline-block',
+  background: '#1f883d',
+  color: '#ffffff',
+  fontSize: 15,
+  fontWeight: 700,
+  padding: '10px 18px',
+  borderRadius: 8,
+  textDecoration: 'none',
+};
+
+const raceDaySecondaryLinkStyle: CSSProperties = {
+  fontSize: 13,
+  color: '#0969da',
+  textDecoration: 'none',
+};
+
 const safetyBannerStyle: CSSProperties = {
   fontSize: 12.5,
   lineHeight: 1.5,
@@ -2016,6 +2066,8 @@ export default function RecommendationsPage() {
         nowMs={nowMs}
       />
       <SafetyBanner />
+
+      <RaceDayNav scoped={scoped} />
 
       <NextRacePanel card={nextRace} nowMs={nowMs} />
 

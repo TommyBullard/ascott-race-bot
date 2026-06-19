@@ -1,0 +1,18 @@
+{
+  "source_document_id": "ascot-2026-06-18-operator-001",
+  "source_type": "operator_observation",
+  "source_label": "Operator trackside notes (synthetic example)",
+  "source_url": "https://example.com/operator-notes/ascot-2026-06-18",
+  "licence_status": "manual",
+  "retrieved_at": "2026-06-18T08:30:00Z",
+  "race_date": "2026-06-18",
+  "course": "Ascot",
+  "race_name": "Example Handicap (synthetic)",
+  "raw_note_text": "Synthetic operator note for testing only. Ground walked on the easy side of good after light overnight rain; far side looked to ride a touch quicker in the previous race. A couple of first-time-out types in the field, so the early market may be unsettled. This is our own short observation, not a copied article.",
+  "notes": [
+    { "topic": "going", "text": "Easy side of good after overnight rain; may dry through the card." },
+    { "topic": "pace", "text": "Likely an even-to-strong gallop; hold-up types may be favoured." },
+    { "topic": "draw", "text": "Far side appeared a fraction quicker earlier in the day." },
+    "A few unraced/first-time-out runners in the field — early prices may move."
+  ]
+}
