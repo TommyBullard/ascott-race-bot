@@ -110,3 +110,4 @@ import './mlPromotionAudit.test';
 import './confidenceLadder.test';
 import './tipsterOpinions.test';
 import './tipsterSourceRegistry.test';
+import './tipsterWebDiscovery.test';

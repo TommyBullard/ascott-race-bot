@@ -42,8 +42,8 @@ test('seed registry contains every core-pool name + the synthetic Jon Vine profi
   const labels = new Set(rows.map((r) => r.source_label));
   for (const name of CORE) assert.ok(labels.has(name), `missing ${name}`);
   assert.ok([...labels].some((l) => /Jon Vine/i.test(l)));
-  // Jon Vine is synthetic_shadow_only.
-  const jv = rows.find((r) => /Jon Vine/i.test(r.source_label))!;
+  // The synthetic "What Would Jon Vine Do" profile is synthetic_shadow_only.
+  const jv = rows.find((r) => r.source_label === 'What Would Jon Vine Do')!;
   assert.equal(jv.source_access_class, 'synthetic_shadow_only');
 });
 

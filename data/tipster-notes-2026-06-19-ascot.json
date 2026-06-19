@@ -1,0 +1,68 @@
+{
+  "_README": "LOCAL notes for tipsters:extract-opinions. EXAMPLE/template content only — replace with REAL, permitted, licence-cleared notes. Never paste full copyrighted articles; use SHORT excerpts. Every opinion needs an evidence_excerpt that appears verbatim in source_text. Nothing here is a real tip; all rows extract as review_status=pending and are blocked from model-active until reviewed.",
+  "notes": [
+    {
+      "date": "2026-06-19",
+      "course": "Ascot",
+      "source_label": "EXAMPLE operator manual note",
+      "tipster_name": "EXAMPLE_OPERATOR_REPLACE_ME",
+      "licence_status": "manual",
+      "source_url": "",
+      "source_text": "EXAMPLE operator note (template). Sun Goddess (EXAMPLE) looks the strongest filly here on the figures. Venetian Sun (EXAMPLE) is feared in the sprint but the draw is a worry.",
+      "opinions": [
+        {
+          "race_name": "Albany Stakes",
+          "off_time": "13:30",
+          "runner_name": "Sun Goddess",
+          "opinion_type": "selection",
+          "confidence": "medium",
+          "evidence_excerpt": "Sun Goddess (EXAMPLE) looks the strongest filly here on the figures",
+          "notes": "EXAMPLE only"
+        },
+        {
+          "race_name": "Commonwealth Cup",
+          "off_time": "14:05",
+          "runner_name": "Venetian Sun",
+          "opinion_type": "danger",
+          "confidence": "low",
+          "evidence_excerpt": "Venetian Sun (EXAMPLE) is feared in the sprint but the draw is a worry"
+        },
+        {
+          "race_name": "Albany Stakes",
+          "off_time": "13:30",
+          "runner_name": "A Runner With No Evidence",
+          "opinion_type": "selection",
+          "confidence": "high",
+          "evidence_excerpt": ""
+        },
+        {
+          "race_name": "Coronation Stakes",
+          "off_time": "15:20",
+          "runner_name": "Precise",
+          "opinion_type": "selection",
+          "confidence": "high",
+          "evidence_excerpt": "this sentence is NOT present in the source_text so it must be dropped as ungrounded"
+        }
+      ]
+    },
+    {
+      "date": "2026-06-19",
+      "course": "Ascot",
+      "source_label": "What Would Jon Vine Do (synthetic strategy)",
+      "tipster_name": "Jon Vine Strategy (synthetic / shadow-only)",
+      "licence_status": "manual",
+      "source_text": "EXAMPLE synthetic strategy heuristic (NOT a real Jon Vine tip): the strategy prefers value at bigger prices over short-priced favourites.",
+      "opinions": [
+        {
+          "race_name": "Duke Of Edinburgh Stakes",
+          "off_time": "14:40",
+          "runner_name": "Hopewell Rock",
+          "opinion_type": "selection",
+          "confidence": "low",
+          "evidence_excerpt": "the strategy prefers value at bigger prices over short-priced favourites",
+          "notes": "Synthetic strategy profile — must stay shadow-only until backtested; never treated as a real sourced tipster."
+        }
+      ]
+    }
+  ]
+}

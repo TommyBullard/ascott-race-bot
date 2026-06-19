@@ -1182,8 +1182,17 @@ function RaceCardView({ card, nowMs }: { card: RaceCard; nowMs: number }) {
 
       {/* AI shadow commentary: read-only, human-approved notes only. Shows a
           neutral placeholder when no candidate has been approved. Display-only;
-          never affects the model pick, probability, EV, staking, or ranking. */}
-      <GenaiCommentaryPanel rows={card.genaiCommentary} style={styles.explanationPanel} />
+          never affects the model pick, probability, EV, staking, or ranking.
+          A staleness guard hides any note whose pick no longer matches the
+          current run or that predates it. */}
+      <GenaiCommentaryPanel
+        rows={card.genaiCommentary}
+        guard={{
+          currentModelPickHorse: pick?.horse_name ?? null,
+          currentModelRunTime: card.latestModelRunTime ?? null,
+        }}
+        style={styles.explanationPanel}
+      />
     </article>
   );
 }

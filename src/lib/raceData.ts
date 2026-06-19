@@ -820,6 +820,19 @@ interface RecommendationCardRow extends RecommendationRow {
  * @throws if any Supabase query fails.
  */
 /**
+ * Reads `grounding.modelPick.horseName` (the model pick a shadow note was
+ * generated for) from a stored grounding object, or null. Pure; null-safe. Used
+ * by the dashboard staleness guard to hide notes whose pick no longer matches.
+ */
+function extractGroundedModelPick(grounding: unknown): string | null {
+  if (!grounding || typeof grounding !== 'object') return null;
+  const mp = (grounding as Record<string, unknown>).modelPick;
+  if (!mp || typeof mp !== 'object') return null;
+  const horse = (mp as Record<string, unknown>).horseName;
+  return typeof horse === 'string' && horse.trim() !== '' ? horse : null;
+}
+
+/**
  * Read-only: human-APPROVED shadow GenAI commentary for a race
  * (review_status='approved' AND status='candidate'). FAIL-OPEN — any error,
  * including a missing genai_commentary table, yields [] so the dashboard card
@@ -830,13 +843,23 @@ async function fetchApprovedGenaiCommentary(raceId: string): Promise<GenaiCommen
     const { data, error } = await supabaseAdmin
       .from('genai_commentary')
       .select(
-        'kind, commentary_text, prompt_version, generator_name, generated_at, status, review_status',
+        'kind, commentary_text, prompt_version, generator_name, generated_at, status, review_status, grounding',
       )
       .eq('race_id', raceId)
       .eq('review_status', 'approved')
       .eq('status', 'candidate');
     if (error || !Array.isArray(data)) return [];
-    return data as unknown as GenaiCommentaryRow[];
+    return (data as Array<Record<string, unknown>>).map((r) => ({
+      kind: typeof r.kind === 'string' ? r.kind : 'commentary',
+      commentary_text: typeof r.commentary_text === 'string' ? r.commentary_text : null,
+      prompt_version: typeof r.prompt_version === 'string' ? r.prompt_version : null,
+      generator_name: typeof r.generator_name === 'string' ? r.generator_name : null,
+      generated_at: typeof r.generated_at === 'string' ? r.generated_at : null,
+      status: typeof r.status === 'string' ? r.status : null,
+      review_status: typeof r.review_status === 'string' ? r.review_status : null,
+      model_pick_horse: extractGroundedModelPick(r.grounding),
+      model_run_id: null,
+    }));
   } catch {
     return [];
   }

@@ -20,6 +20,7 @@ import type { CSSProperties } from 'react';
 import {
   buildGenaiCommentaryView,
   type GenaiCommentaryRow,
+  type GenaiCommentaryGuard,
 } from '@/lib/genaiCommentaryView';
 
 const styles = {
@@ -76,11 +77,13 @@ const styles = {
 interface GenaiCommentaryPanelProps {
   /** Raw genai_commentary rows for the race; only approved candidates render. */
   rows?: GenaiCommentaryRow[] | null;
+  /** Current model state; notes stale vs this run (pick changed / older run) are hidden. */
+  guard?: GenaiCommentaryGuard;
   style?: CSSProperties;
 }
 
-export default function GenaiCommentaryPanel({ rows, style }: GenaiCommentaryPanelProps) {
-  const view = buildGenaiCommentaryView(rows ?? []);
+export default function GenaiCommentaryPanel({ rows, guard, style }: GenaiCommentaryPanelProps) {
+  const view = buildGenaiCommentaryView(rows ?? [], guard);
 
   return (
     <section

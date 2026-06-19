@@ -14,9 +14,11 @@ import { readFileSync } from 'node:fs';
 import {
   selectApprovedCommentary,
   buildGenaiCommentaryView,
+  countStaleHidden,
   GENAI_SHADOW_DISCLAIMER,
   GENAI_EMPTY_MESSAGE,
   type GenaiCommentaryRow,
+  type GenaiCommentaryGuard,
 } from '../src/lib/genaiCommentaryView';
 
 function row(over: Partial<GenaiCommentaryRow>): GenaiCommentaryRow {
@@ -80,11 +82,87 @@ test('constants: disclaimer + empty message are launch-safe wording', () => {
 });
 
 /* -------------------------------------------------------------------------- */
+/* Staleness guard                                                            */
+/* -------------------------------------------------------------------------- */
+
+const GUARD: GenaiCommentaryGuard = {
+  currentModelPickHorse: 'Sun Goddess',
+  currentModelRunTime: '2026-06-19T09:00:00Z',
+};
+
+test('guard: a fresh note whose pick matches the current pick is shown', () => {
+  const items = selectApprovedCommentary(
+    [row({ model_pick_horse: 'Sun Goddess', generated_at: '2026-06-19T09:05:00Z' })],
+    GUARD,
+  );
+  assert.equal(items.length, 1);
+});
+
+test('guard: a note whose model pick no longer matches the current pick is HIDDEN', () => {
+  const items = selectApprovedCommentary(
+    [row({ model_pick_horse: 'Old Pick', generated_at: '2026-06-19T09:05:00Z' })],
+    GUARD,
+  );
+  assert.equal(items.length, 0);
+});
+
+test('guard: a note generated BEFORE the current model run is HIDDEN (stale)', () => {
+  const items = selectApprovedCommentary(
+    [row({ model_pick_horse: 'Sun Goddess', generated_at: '2026-06-19T08:00:00Z' })],
+    GUARD,
+  );
+  assert.equal(items.length, 0);
+});
+
+test('guard: same model_run_id is shown even if generated_at predates the run time', () => {
+  const items = selectApprovedCommentary(
+    [row({ model_pick_horse: 'Sun Goddess', generated_at: '2026-06-19T08:00:00Z', model_run_id: 'run-1' })],
+    { ...GUARD, currentModelRunId: 'run-1' },
+  );
+  assert.equal(items.length, 1);
+});
+
+test('guard: a note with an unknown model pick is HIDDEN (fail-closed)', () => {
+  const items = selectApprovedCommentary(
+    [row({ model_pick_horse: null, generated_at: '2026-06-19T09:05:00Z' })],
+    GUARD,
+  );
+  assert.equal(items.length, 0);
+});
+
+test('guard: no current displayed pick hides all notes', () => {
+  const items = selectApprovedCommentary([row({ model_pick_horse: 'Sun Goddess' })], {
+    currentModelPickHorse: null,
+    currentModelRunTime: '2026-06-19T09:00:00Z',
+  });
+  assert.equal(items.length, 0);
+});
+
+test('countStaleHidden counts approved notes hidden by the staleness guard', () => {
+  const rows = [
+    row({ model_pick_horse: 'Sun Goddess', generated_at: '2026-06-19T09:05:00Z' }), // shown
+    row({ model_pick_horse: 'Old Pick', generated_at: '2026-06-19T09:05:00Z' }), // hidden (pick)
+    row({ model_pick_horse: 'Sun Goddess', generated_at: '2026-06-19T08:00:00Z' }), // hidden (stale)
+  ];
+  assert.equal(countStaleHidden(rows, GUARD), 2);
+});
+
+test('no guard: staleness filtering is skipped (backward compatible)', () => {
+  assert.equal(selectApprovedCommentary([row({ model_pick_horse: 'Anything' })]).length, 1);
+});
+
+/* -------------------------------------------------------------------------- */
 /* Source scans — panel + generate CLI safety                                 */
 /* -------------------------------------------------------------------------- */
 
 const PANEL_SRC = readFileSync('src/components/GenaiCommentaryPanel.tsx', 'utf8');
 const CLI_SRC = readFileSync('scripts/genaiGenerateCommentary.ts', 'utf8');
+const PAGE_SRC = readFileSync('src/app/page.tsx', 'utf8');
+
+test('page: passes the staleness guard (current pick + run time) to the panel', () => {
+  assert.match(PAGE_SRC, /currentModelPickHorse/);
+  assert.match(PAGE_SRC, /currentModelRunTime/);
+});
 
 test('panel: read-only — no write controls, no fetch, renders disclaimer + empty-state message', () => {
   // Require real JSX usage (onClick=, <button) so prose like "no buttons" in the

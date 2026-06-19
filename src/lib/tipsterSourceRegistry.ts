@@ -389,6 +389,31 @@ export function buildRegistrySeedRows(): SourceRegistryRow[] {
     );
   }
 
+  // Public / media sources: candidates for evidenced, ToS-cleared current picks.
+  // NEVER auto-fetched — the operator confirms robots.txt/ToS and supplies short,
+  // attributable excerpts locally. Evidence numbers stay blank until reviewed.
+  const PUBLIC_MEDIA_SEED: Array<{ label: string; cls: SourceAccessClass }> = [
+    { label: 'OLBG (public tips)', cls: 'media_public' },
+    { label: 'HorseRacing.net (public tips)', cls: 'media_public' },
+    { label: 'Newspaper racing-tips roundup', cls: 'media_public' },
+    { label: 'Freetips (public)', cls: 'public_free' },
+    { label: 'RacingInsider (public)', cls: 'public_free' },
+    { label: 'Jon Vine (public page)', cls: 'public_free' },
+    { label: 'Thatsagoal / Brian Healy (public)', cls: 'public_free' },
+  ];
+  for (const s of PUBLIC_MEDIA_SEED) {
+    rows.push(
+      seedRow({
+        source_label: s.label,
+        tipster_name: s.label,
+        source_access_class: s.cls,
+        notes:
+          'Public/media source — NEVER auto-scraped. Operator must confirm robots.txt/ToS permits reuse and ' +
+          'supply SHORT attributable excerpts locally (no full articles). Ingest only real, evidenced current picks.',
+      }),
+    );
+  }
+
   // Synthetic strategy profile.
   rows.push(
     seedRow({
