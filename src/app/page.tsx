@@ -20,6 +20,7 @@ import SettlementStatusPanel from '@/components/SettlementStatusPanel';
 import PlaceAuditPanel from '@/components/PlaceAuditPanel';
 import ProofOfUpdatePanel from '@/components/ProofOfUpdatePanel';
 import GenaiCommentaryPanel from '@/components/GenaiCommentaryPanel';
+import MlShadowComparisonPanel from '@/components/MlShadowComparisonPanel';
 import type { GenaiCommentaryRow } from '@/lib/genaiCommentaryView';
 import {
   TODAY_ASCOT_HREF,
@@ -142,6 +143,21 @@ interface RaceCard {
    * model-active; not a decision input.
    */
   genaiCommentary?: GenaiCommentaryRow[] | null;
+}
+
+/**
+ * One ML SHADOW race entry from the read-only /api/ml/shadow-comparison overlay.
+ * Research/display only; never model-active and never a decision input.
+ */
+interface MlShadowApiRace {
+  race_id: string;
+  ml_pick: { runner_name: string | null; ml_prob: number | null; ml_rank: number | null } | null;
+  warnings?: {
+    small_sample?: boolean;
+    small_sample_text?: string | null;
+    data_differs?: boolean;
+    data_differs_text?: string | null;
+  } | null;
 }
 
 /** Live model accuracy snapshot (mirrors the server `ModelAccuracy`). */
@@ -999,7 +1015,7 @@ function NextRacePanel({ card, nowMs }: { card: RaceCard | null; nowMs: number }
   );
 }
 
-function RaceCardView({ card, nowMs }: { card: RaceCard; nowMs: number }) {
+function RaceCardView({ card, nowMs, mlShadow }: { card: RaceCard; nowMs: number; mlShadow?: MlShadowApiRace | null }) {
   const cd = countdownTo(card.off_time, nowMs);
   const pick = card.modelPick;
   const ladder = pick ? cardConfidenceLadder(card, nowMs) : null;
@@ -1191,6 +1207,48 @@ function RaceCardView({ card, nowMs }: { card: RaceCard; nowMs: number }) {
           currentModelPickHorse: pick?.horse_name ?? null,
           currentModelRunTime: card.latestModelRunTime ?? null,
         }}
+        style={styles.explanationPanel}
+      />
+
+      {/* ML shadow comparison: candidate ML pick shown NEXT TO the regular model
+          pick and the market favourite. Read-only research overlay from a
+          separate endpoint; never model-active, never changes the pick, EV,
+          staking, confidence, or the no-bet gate. Absent overlay -> "not
+          available" without touching the regular pick. */}
+      <MlShadowComparisonPanel
+        regular={
+          pick
+            ? {
+                name: pick.horse_name,
+                odds: pick.odds,
+                ev: pick.ev,
+                confidence: pick.confidence_score,
+                stake: pick.stake_amount,
+              }
+            : null
+        }
+        marketFav={
+          card.favourite
+            ? {
+                name: card.favourite.horse_name,
+                odds: card.favourite.odds,
+                impliedProb: card.favourite.market_prob,
+              }
+            : null
+        }
+        ml={
+          mlShadow?.ml_pick
+            ? {
+                runner_name: mlShadow.ml_pick.runner_name,
+                ml_prob: mlShadow.ml_pick.ml_prob,
+                ml_rank: mlShadow.ml_pick.ml_rank,
+                smallSample: mlShadow.warnings?.small_sample ?? false,
+                smallSampleText: mlShadow.warnings?.small_sample_text ?? null,
+                dataDiffers: mlShadow.warnings?.data_differs ?? false,
+                dataDiffersText: mlShadow.warnings?.data_differs_text ?? null,
+              }
+            : null
+        }
         style={styles.explanationPanel}
       />
     </article>
@@ -1690,6 +1748,9 @@ function NextActionWidget({ action }: { action: NextAction }) {
 
 export default function RecommendationsPage() {
   const [cards, setCards] = useState<RaceCard[]>([]);
+  // Read-only SHADOW overlay (separate endpoint). race_id -> ML shadow entry.
+  // Never model-active; best-effort; absence leaves the regular pick untouched.
+  const [mlByRace, setMlByRace] = useState<Record<string, MlShadowApiRace>>({});
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [error, setError] = useState<string>('');
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
@@ -1751,6 +1812,26 @@ export default function RecommendationsPage() {
         setCards(list);
         setCardsUpdatedMs(Date.now());
         setStatus('ready');
+
+        // Read-only SHADOW overlay from a SEPARATE endpoint. Fail-open: any
+        // problem leaves the overlay empty and never affects the recommendation
+        // cards. This is research-only and never model-active.
+        try {
+          const mlRes = await fetch(`/api/ml/shadow-comparison${query}`, {
+            signal: controller.signal,
+          });
+          if (mlRes.ok) {
+            const mlData = await mlRes.json();
+            const mlRaces: MlShadowApiRace[] = Array.isArray(mlData?.races) ? mlData.races : [];
+            const map: Record<string, MlShadowApiRace> = {};
+            for (const r of mlRaces) {
+              if (r && typeof r.race_id === 'string') map[r.race_id] = r;
+            }
+            setMlByRace(map);
+          }
+        } catch {
+          // Shadow overlay is best-effort; never blocks the dashboard.
+        }
       } catch (err) {
         if (controller.signal.aborted) {
           return;
@@ -2146,7 +2227,7 @@ export default function RecommendationsPage() {
       {status === 'ready' && cards.length > 0 && (
         <div style={styles.cardList}>
           {cards.map((card) => (
-            <RaceCardView key={card.race_id} card={card} nowMs={nowMs} />
+            <RaceCardView key={card.race_id} card={card} nowMs={nowMs} mlShadow={mlByRace[card.race_id] ?? null} />
           ))}
         </div>
       )}

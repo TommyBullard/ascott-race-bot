@@ -93,6 +93,8 @@ import './tipsterAudit.test';
 import './confidenceDiagnostics.test';
 import './noBetGateAudit.test';
 import './mlShadowEvaluation.test';
+import './mlShadowModel.test';
+import './mlShadowComparison.test';
 import './raceDayAutopilot.test';
 import './raceDayLivePlan.test';
 import './raceDayOperate.test';

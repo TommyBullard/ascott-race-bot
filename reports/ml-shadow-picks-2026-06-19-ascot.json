@@ -1,0 +1,1376 @@
+{
+  "generated_at": "2026-06-19T08:11:13.379Z",
+  "date": "2026-06-19",
+  "course": "Ascot",
+  "model_active": false,
+  "model": {
+    "trained_at": "2026-06-19T08:10:49.914Z",
+    "training_date_range": {
+      "from": "2026-06-16",
+      "to": "2026-06-18"
+    },
+    "settled_count": 268,
+    "settled_race_count": 21,
+    "feature_columns": [
+      "model_prob_pre_off",
+      "market_rank_pre_off",
+      "model_rank_pre_off",
+      "ev_pre_off",
+      "confidence",
+      "pre_off_odds",
+      "field_size",
+      "is_handicap"
+    ],
+    "label": "won",
+    "small_sample": true,
+    "in_sample_brier": 0.062283985041595435,
+    "in_sample_log_loss": 0.22554035640525463,
+    "in_sample_top1_race_hit_rate": 0.42857142857142855
+  },
+  "races": [
+    {
+      "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+      "off_time": "2026-06-19T13:30:00+00:00",
+      "race_name": "Albany Stakes (Group 3) (Fillies)",
+      "field_size": 25,
+      "ml_pick": {
+        "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+        "runner_id": "3a9c6270-e042-4a18-8eb2-62331f02cc6a",
+        "runner_name": "Sun Goddess",
+        "ml_prob": 0.608512100320243,
+        "ml_rank": 1,
+        "odds": 2.44
+      },
+      "ranked": [
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "3a9c6270-e042-4a18-8eb2-62331f02cc6a",
+          "runner_name": "Sun Goddess",
+          "ml_prob": 0.608512100320243,
+          "ml_rank": 1,
+          "odds": 2.44
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "a49a1276-3ccf-40e3-8f09-40a5452c871d",
+          "runner_name": "Light Of Dawn",
+          "ml_prob": 0.1161911801401042,
+          "ml_rank": 2,
+          "odds": 10
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "10208f69-435d-4101-bd6c-f3b0aac33908",
+          "runner_name": "Libertango",
+          "ml_prob": 0.10878359522248916,
+          "ml_rank": 3,
+          "odds": 14
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "f894fe95-825c-452d-87d1-70bfad97017a",
+          "runner_name": "Silent Beauty",
+          "ml_prob": 0.09688151452704304,
+          "ml_rank": 4,
+          "odds": 11.5
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "6ceea724-c920-476a-8bbd-4df3911f5c64",
+          "runner_name": "Jolivette",
+          "ml_prob": 0.08605599129488935,
+          "ml_rank": 5,
+          "odds": 12
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "9e7d2507-f13d-4f36-bd66-7367b424389d",
+          "runner_name": "Dark Issue",
+          "ml_prob": 0.08425896714898017,
+          "ml_rank": 6,
+          "odds": 22
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "e9b40219-4dee-432a-b266-3352b789e14d",
+          "runner_name": "Topaz",
+          "ml_prob": 0.07179465816584461,
+          "ml_rank": 7,
+          "odds": 28
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "cc564e27-f02a-4863-b9c0-7d9280ff6609",
+          "runner_name": "Valentina Bella",
+          "ml_prob": 0.05967883489474686,
+          "ml_rank": 8,
+          "odds": 42
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "6cce0232-5f09-40ec-9cfe-90c1b96d66a7",
+          "runner_name": "Hidden Gift",
+          "ml_prob": 0.05370512049288391,
+          "ml_rank": 9,
+          "odds": 44
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "1f1ca280-1ae2-499f-83d9-db267fc4ef48",
+          "runner_name": "Dee's Funny Girl",
+          "ml_prob": 0.05299871661712515,
+          "ml_rank": 10,
+          "odds": null
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "ab0c3164-d9b6-41c7-9311-6fe97f9d53f7",
+          "runner_name": "Ron's Angel",
+          "ml_prob": 0.05299871661712515,
+          "ml_rank": 11,
+          "odds": null
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "ed96ab08-54b0-438c-b633-469b6a525ffc",
+          "runner_name": "King's Prize",
+          "ml_prob": 0.05299871661712515,
+          "ml_rank": 12,
+          "odds": null
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "70472511-7a75-4db6-9fea-3134a3c57ebb",
+          "runner_name": "Bated Benevolence",
+          "ml_prob": 0.04540514509561871,
+          "ml_rank": 13,
+          "odds": 65
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "de3b40ff-aef7-45c3-ac13-bec83403d61a",
+          "runner_name": "Acclamation Star",
+          "ml_prob": 0.041175528209887936,
+          "ml_rank": 14,
+          "odds": 65
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "d246bd07-2aea-43ba-a9db-73b07669ee69",
+          "runner_name": "Love Is",
+          "ml_prob": 0.03525212577855314,
+          "ml_rank": 15,
+          "odds": 90
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "2c78831f-56d3-4842-9b6a-4e026a52bf27",
+          "runner_name": "Roxelina",
+          "ml_prob": 0.03133060866646693,
+          "ml_rank": 16,
+          "odds": 100
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "f92388a1-54b1-4838-8713-7267a10cea74",
+          "runner_name": "Tall Trees",
+          "ml_prob": 0.02837310553526315,
+          "ml_rank": 17,
+          "odds": 100
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "51b30611-1bc3-4dbe-91f2-3d8ccf2a0d70",
+          "runner_name": "What A Girl Wants",
+          "ml_prob": 0.023658837688491176,
+          "ml_rank": 18,
+          "odds": 150
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "6f0e7fc0-0d7a-46eb-b3f1-8b3cbe1885e1",
+          "runner_name": "Glamorize",
+          "ml_prob": 0.021409517683262293,
+          "ml_rank": 19,
+          "odds": 150
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "e41fb74b-98f8-4f86-96d8-750ff524ef8d",
+          "runner_name": "Crazy Cubana",
+          "ml_prob": 0.01908265586482521,
+          "ml_rank": 20,
+          "odds": 160
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "33ea33bb-bfe9-47fd-95b8-c17ccf55e80a",
+          "runner_name": "Kochella",
+          "ml_prob": 0.01607717280695655,
+          "ml_rank": 21,
+          "odds": 210
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "8aad643b-69c6-4ca7-b4c0-fa9cbe9c7e09",
+          "runner_name": "Dubai Charm",
+          "ml_prob": 0.014339922717600722,
+          "ml_rank": 22,
+          "odds": 220
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "173b9f3f-ddbe-49e7-890b-4a72f8e255e6",
+          "runner_name": "Magnesium",
+          "ml_prob": 0.010922224587857809,
+          "ml_rank": 23,
+          "odds": 350
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "9f37c169-6421-4f0a-b3bf-f3f75dbf8eac",
+          "runner_name": "Blue Sign",
+          "ml_prob": 0.009257763574249839,
+          "ml_rank": 24,
+          "odds": 400
+        },
+        {
+          "race_id": "962470d9-11c1-4522-91fa-3341cfa18bb6",
+          "runner_id": "34e71b1c-e3b6-4a25-8743-689dc6b6321e",
+          "runner_name": "Desert Sands",
+          "ml_prob": 0.007949509322983814,
+          "ml_rank": 25,
+          "odds": 440
+        }
+      ],
+      "regular_model_pick_name": "Sun Goddess",
+      "market_favourite_name": "Sun Goddess",
+      "agreement": {
+        "ml_agrees_with_regular_pick": true,
+        "ml_agrees_with_market_favourite": true,
+        "regular_agrees_with_market_favourite": true,
+        "all_three_agree": true,
+        "all_three_disagree": false,
+        "badge": "all_agree",
+        "badge_label": "All three agree (ML, model, market)"
+      },
+      "warnings": {
+        "small_sample": true,
+        "small_sample_text": "Small training sample (21 settled races < 100); treat the ML shadow pick as low-confidence research only.",
+        "data_differs": false,
+        "data_differs_text": null
+      }
+    },
+    {
+      "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+      "off_time": "2026-06-19T14:05:00+00:00",
+      "race_name": "Commonwealth Cup (Group 1) (No Geldings)",
+      "field_size": 22,
+      "ml_pick": {
+        "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+        "runner_id": "49887a33-5c16-45c9-bbdb-7c963ce7c665",
+        "runner_name": "Venetian Sun",
+        "ml_prob": 0.5429594274122492,
+        "ml_rank": 1,
+        "odds": 2.66
+      },
+      "ranked": [
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "49887a33-5c16-45c9-bbdb-7c963ce7c665",
+          "runner_name": "Venetian Sun",
+          "ml_prob": 0.5429594274122492,
+          "ml_rank": 1,
+          "odds": 2.66
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "d722183e-c4a7-42d0-8ff1-64b9c3f73a3e",
+          "runner_name": "Coppull",
+          "ml_prob": 0.1309615987587681,
+          "ml_rank": 2,
+          "odds": 14
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "9723e450-2c33-4331-b1b5-5ece081be5dd",
+          "runner_name": "Albert Einstein",
+          "ml_prob": 0.12498797018944406,
+          "ml_rank": 3,
+          "odds": 9.6
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "3b9cff71-6b20-4f01-b9f0-88f8f023beda",
+          "runner_name": "Division",
+          "ml_prob": 0.11496050318731968,
+          "ml_rank": 4,
+          "odds": 15.5
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "17a774f8-a1ec-4f20-8fe3-b7d8a73bc628",
+          "runner_name": "Wise Approach",
+          "ml_prob": 0.10250848501594245,
+          "ml_rank": 5,
+          "odds": 16.5
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "97307876-e40c-4d91-b643-3c46e83d2cff",
+          "runner_name": "Charles Darwin",
+          "ml_prob": 0.09348043722832966,
+          "ml_rank": 6,
+          "odds": 16.5
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "226c27d6-872d-49ed-9903-a2e8f634d905",
+          "runner_name": "Samangan",
+          "ml_prob": 0.08102471809260683,
+          "ml_rank": 7,
+          "odds": 19
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "20e8a5be-c58b-4347-bc7c-4e195a25e239",
+          "runner_name": "Zanthos",
+          "ml_prob": 0.06789439516097745,
+          "ml_rank": 8,
+          "odds": 25
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "512a421f-5354-4db4-a95b-abb7d4e78706",
+          "runner_name": "Outfielder",
+          "ml_prob": 0.058044369161967604,
+          "ml_rank": 9,
+          "odds": 32
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "83c60d54-1948-40af-ad15-fd289e9c1aa2",
+          "runner_name": "Song Of The Clyde",
+          "ml_prob": 0.05077687175681862,
+          "ml_rank": 10,
+          "odds": 38
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "b6a04dad-5f43-4775-b047-47db1ae8e3c5",
+          "runner_name": "Havana Anna",
+          "ml_prob": 0.046071013512767114,
+          "ml_rank": 11,
+          "odds": 38
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "2c4d2a4d-da80-4ac2-bb7c-c0ba2da791fa",
+          "runner_name": "Midnight Tango",
+          "ml_prob": 0.040574390145821516,
+          "ml_rank": 12,
+          "odds": 44
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "2f6c338d-f255-42cc-9cf0-7a55542ff534",
+          "runner_name": "Havana Hurricane",
+          "ml_prob": 0.035284288530017534,
+          "ml_rank": 13,
+          "odds": 55
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "0cf78b3c-5aee-4842-8475-bd2db747330e",
+          "runner_name": "Aspect Island",
+          "ml_prob": 0.02993313309382445,
+          "ml_rank": 14,
+          "odds": 80
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "0a616b9d-0ba5-4ea7-a63a-0ebaccfffb6d",
+          "runner_name": "Northern Champion",
+          "ml_prob": 0.02628693547304134,
+          "ml_rank": 15,
+          "odds": 95
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "a4a85ed1-1e9b-40f6-9f77-e1ed8a7dce2a",
+          "runner_name": "Brussels",
+          "ml_prob": 0.02379384318696897,
+          "ml_rank": 16,
+          "odds": 95
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "f7d65b44-0fb8-4608-b44f-7b41eed09fb1",
+          "runner_name": "My Calyx Cen",
+          "ml_prob": 0.021329924394184144,
+          "ml_rank": 17,
+          "odds": 100
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "3da5f02f-8cf2-46b3-a024-0251dd8d84cd",
+          "runner_name": "Rock On Thunder",
+          "ml_prob": 0.018953507275567476,
+          "ml_rank": 18,
+          "odds": 110
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "8896fb7a-2cbf-4e8d-a2e3-d404a132443f",
+          "runner_name": "Spicy Marg",
+          "ml_prob": 0.017143682733152654,
+          "ml_rank": 19,
+          "odds": 110
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "9078b6af-6bb2-4dcd-906e-a08cc8d50f9d",
+          "runner_name": "Fitzella",
+          "ml_prob": 0.014993592067131824,
+          "ml_rank": 20,
+          "odds": 130
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "1024d712-fb41-4032-a946-c624cb6df36c",
+          "runner_name": "Kimi Rey",
+          "ml_prob": 0.013343954175874239,
+          "ml_rank": 21,
+          "odds": 140
+        },
+        {
+          "race_id": "64a61c4d-a150-4f14-bad7-2fb64fc35c8b",
+          "runner_id": "f1613f9c-14c6-4fab-8973-6e5af9893e73",
+          "runner_name": "Super Soldier",
+          "ml_prob": 0.009412871653397693,
+          "ml_rank": 22,
+          "odds": 320
+        }
+      ],
+      "regular_model_pick_name": "Venetian Sun",
+      "market_favourite_name": "Venetian Sun",
+      "agreement": {
+        "ml_agrees_with_regular_pick": true,
+        "ml_agrees_with_market_favourite": true,
+        "regular_agrees_with_market_favourite": true,
+        "all_three_agree": true,
+        "all_three_disagree": false,
+        "badge": "all_agree",
+        "badge_label": "All three agree (ML, model, market)"
+      },
+      "warnings": {
+        "small_sample": true,
+        "small_sample_text": "Small training sample (21 settled races < 100); treat the ML shadow pick as low-confidence research only.",
+        "data_differs": false,
+        "data_differs_text": null
+      }
+    },
+    {
+      "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+      "off_time": "2026-06-19T14:40:00+00:00",
+      "race_name": "Duke Of Edinburgh Stakes (Handicap) (GBBPlus Race)",
+      "field_size": 19,
+      "ml_pick": {
+        "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+        "runner_id": "4e02f590-48e7-49e8-9a54-f7b7f0e9aed6",
+        "runner_name": "Hopewell Rock",
+        "ml_prob": 0.3012193897191461,
+        "ml_rank": 1,
+        "odds": 4.9
+      },
+      "ranked": [
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "4e02f590-48e7-49e8-9a54-f7b7f0e9aed6",
+          "runner_name": "Hopewell Rock",
+          "ml_prob": 0.3012193897191461,
+          "ml_rank": 1,
+          "odds": 4.9
+        },
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "7e351265-afb8-460b-917f-e002c619fd32",
+          "runner_name": "Warrant Holder",
+          "ml_prob": 0.2488450840430258,
+          "ml_rank": 2,
+          "odds": 5.5
+        },
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "a05d2334-9f6a-4c76-bd00-30a2bce1eb7b",
+          "runner_name": "Opportunity",
+          "ml_prob": 0.16530330668284615,
+          "ml_rank": 3,
+          "odds": 8
+        },
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "8385ad9d-6c00-4901-90a9-2baba74b81ac",
+          "runner_name": "Emit",
+          "ml_prob": 0.1350169687102406,
+          "ml_rank": 4,
+          "odds": 9.4
+        },
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "01fbf52c-c42f-4589-8a8a-55b9fae97dbc",
+          "runner_name": "Plage De Havre",
+          "ml_prob": 0.13329462701577682,
+          "ml_rank": 5,
+          "odds": 13
+        },
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "e8c56811-630f-4be3-af1d-0c51cb3a7214",
+          "runner_name": "Insanity",
+          "ml_prob": 0.10877225334137985,
+          "ml_rank": 6,
+          "odds": 17.5
+        },
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "c1e55097-55a7-47ef-bd98-b2d9c65e2f5a",
+          "runner_name": "Omni Man",
+          "ml_prob": 0.09507171527928161,
+          "ml_rank": 7,
+          "odds": 20
+        },
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "d223812b-f1ed-47e7-820d-62fa754798ba",
+          "runner_name": "Mondo Man",
+          "ml_prob": 0.08663540869299667,
+          "ml_rank": 8,
+          "odds": 20
+        },
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "ff8f460d-a36b-48d6-b078-a9444941efd3",
+          "runner_name": "Nightime Dancer",
+          "ml_prob": 0.07772046066007335,
+          "ml_rank": 9,
+          "odds": 21
+        },
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "4cabf0b6-6deb-462c-aed3-78bf04b23ba1",
+          "runner_name": "Regal Ulixes",
+          "ml_prob": 0.0648962822823216,
+          "ml_rank": 10,
+          "odds": 29
+        },
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "88ca1f2b-d108-44d4-b040-07f9fc9b79e5",
+          "runner_name": "French Duke",
+          "ml_prob": 0.05849774184861324,
+          "ml_rank": 11,
+          "odds": 30
+        },
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "05ee3ff8-7f31-4045-afb4-fd2f62fc45aa",
+          "runner_name": "Burdett Road",
+          "ml_prob": 0.04643583624157646,
+          "ml_rank": 12,
+          "odds": 60
+        },
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "8486499d-825d-4f1f-99a5-4a87f3a2348c",
+          "runner_name": "Ambiente Friendly",
+          "ml_prob": 0.040105230745269595,
+          "ml_rank": 13,
+          "odds": 80
+        },
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "e0c0a37b-fa32-4aec-a667-23be64fd77d4",
+          "runner_name": "Teumessias Fox",
+          "ml_prob": 0.035972917476480626,
+          "ml_rank": 14,
+          "odds": 85
+        },
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "9b0b8303-0ad7-4ce3-be20-d5f0e986618d",
+          "runner_name": "Dain Ma Nut In",
+          "ml_prob": 0.03166687893201792,
+          "ml_rank": 15,
+          "odds": 100
+        },
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "0b2d1659-7739-4f94-a792-bbe74963a012",
+          "runner_name": "Serengeti",
+          "ml_prob": 0.02770914580972203,
+          "ml_rank": 16,
+          "odds": 120
+        },
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "1ea9ffa8-4064-446b-aa36-6b1f7590a95f",
+          "runner_name": "Tuscan Hills",
+          "ml_prob": 0.024684442384246597,
+          "ml_rank": 17,
+          "odds": 130
+        },
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "46dc3ae4-9af1-479b-92c7-c91ff5ee0998",
+          "runner_name": "Military Academy",
+          "ml_prob": 0.02199473172485896,
+          "ml_rank": 18,
+          "odds": 140
+        },
+        {
+          "race_id": "e0b67805-a05e-4989-af1d-13dce32a4707",
+          "runner_id": "bf7a80be-a3a0-4ca2-aaff-b82beb1d148b",
+          "runner_name": "Nesthorn",
+          "ml_prob": 0.017999846812963106,
+          "ml_rank": 19,
+          "odds": 210
+        }
+      ],
+      "regular_model_pick_name": "Hopewell Rock",
+      "market_favourite_name": "Hopewell Rock",
+      "agreement": {
+        "ml_agrees_with_regular_pick": true,
+        "ml_agrees_with_market_favourite": true,
+        "regular_agrees_with_market_favourite": true,
+        "all_three_agree": true,
+        "all_three_disagree": false,
+        "badge": "all_agree",
+        "badge_label": "All three agree (ML, model, market)"
+      },
+      "warnings": {
+        "small_sample": true,
+        "small_sample_text": "Small training sample (21 settled races < 100); treat the ML shadow pick as low-confidence research only.",
+        "data_differs": false,
+        "data_differs_text": null
+      }
+    },
+    {
+      "race_id": "c1a95554-e69d-4896-878a-f58aa29e9042",
+      "off_time": "2026-06-19T15:20:00+00:00",
+      "race_name": "Coronation Stakes (Group 1) (Fillies)",
+      "field_size": 9,
+      "ml_pick": {
+        "race_id": "c1a95554-e69d-4896-878a-f58aa29e9042",
+        "runner_id": "458f3f60-17b7-4795-93c1-493f378898a3",
+        "runner_name": "Precise",
+        "ml_prob": 0.805143970567866,
+        "ml_rank": 1,
+        "odds": 1.78
+      },
+      "ranked": [
+        {
+          "race_id": "c1a95554-e69d-4896-878a-f58aa29e9042",
+          "runner_id": "458f3f60-17b7-4795-93c1-493f378898a3",
+          "runner_name": "Precise",
+          "ml_prob": 0.805143970567866,
+          "ml_rank": 1,
+          "odds": 1.78
+        },
+        {
+          "race_id": "c1a95554-e69d-4896-878a-f58aa29e9042",
+          "runner_id": "5c206627-4e68-4c7c-893c-0cd8e3c79d99",
+          "runner_name": "True Love",
+          "ml_prob": 0.22643505640138686,
+          "ml_rank": 2,
+          "odds": 3.95
+        },
+        {
+          "race_id": "c1a95554-e69d-4896-878a-f58aa29e9042",
+          "runner_id": "32d7561d-3cf5-4eb6-a3f2-6f90b754c285",
+          "runner_name": "Touleen",
+          "ml_prob": 0.101936872473816,
+          "ml_rank": 3,
+          "odds": 16
+        },
+        {
+          "race_id": "c1a95554-e69d-4896-878a-f58aa29e9042",
+          "runner_id": "ae54634f-6d8c-4691-b1b6-eaa1621dc45e",
+          "runner_name": "Balantina",
+          "ml_prob": 0.08875042797245378,
+          "ml_rank": 4,
+          "odds": 18
+        },
+        {
+          "race_id": "c1a95554-e69d-4896-878a-f58aa29e9042",
+          "runner_id": "e4fed939-7da1-42ee-a2f6-6d61287b3f55",
+          "runner_name": "Timeforshowcasing",
+          "ml_prob": 0.06341855224180634,
+          "ml_rank": 5,
+          "odds": 44
+        },
+        {
+          "race_id": "c1a95554-e69d-4896-878a-f58aa29e9042",
+          "runner_id": "551812a8-15cb-4f42-a897-36d601bc6167",
+          "runner_name": "Black Caviar Gold",
+          "ml_prob": 0.056632098605535315,
+          "ml_rank": 6,
+          "odds": 48
+        },
+        {
+          "race_id": "c1a95554-e69d-4896-878a-f58aa29e9042",
+          "runner_id": "09b35b9e-a4df-43eb-a356-4343ca0583c1",
+          "runner_name": "Moon Target",
+          "ml_prob": 0.04930739637273164,
+          "ml_rank": 7,
+          "odds": 60
+        },
+        {
+          "race_id": "c1a95554-e69d-4896-878a-f58aa29e9042",
+          "runner_id": "c18a210c-b599-4041-95ec-2631f7d92fa6",
+          "runner_name": "Sukanya",
+          "ml_prob": 0.044731307304713565,
+          "ml_rank": 8,
+          "odds": 60
+        },
+        {
+          "race_id": "c1a95554-e69d-4896-878a-f58aa29e9042",
+          "runner_id": "cdaf88cf-643f-4e2c-a00b-4fc9b20d1489",
+          "runner_name": "Rose Ghaiyyath",
+          "ml_prob": 0.03809168751705392,
+          "ml_rank": 9,
+          "odds": 85
+        }
+      ],
+      "regular_model_pick_name": "Precise",
+      "market_favourite_name": "Precise",
+      "agreement": {
+        "ml_agrees_with_regular_pick": true,
+        "ml_agrees_with_market_favourite": true,
+        "regular_agrees_with_market_favourite": true,
+        "all_three_agree": true,
+        "all_three_disagree": false,
+        "badge": "all_agree",
+        "badge_label": "All three agree (ML, model, market)"
+      },
+      "warnings": {
+        "small_sample": true,
+        "small_sample_text": "Small training sample (21 settled races < 100); treat the ML shadow pick as low-confidence research only.",
+        "data_differs": false,
+        "data_differs_text": null
+      }
+    },
+    {
+      "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+      "off_time": "2026-06-19T16:00:00+00:00",
+      "race_name": "Sandringham Stakes (Handicap) (Fillies)",
+      "field_size": 30,
+      "ml_pick": {
+        "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+        "runner_id": "f4f4cd21-d5e1-4d6b-a26e-1eb6c3ef6345",
+        "runner_name": "Glyfada",
+        "ml_prob": 0.2612278666833968,
+        "ml_rank": 1,
+        "odds": 6
+      },
+      "ranked": [
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "f4f4cd21-d5e1-4d6b-a26e-1eb6c3ef6345",
+          "runner_name": "Glyfada",
+          "ml_prob": 0.2612278666833968,
+          "ml_rank": 1,
+          "odds": 6
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "40737b39-cd16-4b22-8581-9fb4f897b6e4",
+          "runner_name": "Seet",
+          "ml_prob": 0.2225973711826629,
+          "ml_rank": 2,
+          "odds": 6.6
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "a46434e0-9f24-4ee2-bc45-9dcc61d55190",
+          "runner_name": "Bintaziza",
+          "ml_prob": 0.15522612220034301,
+          "ml_rank": 3,
+          "odds": 9.6
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "14b74605-9504-49ce-9090-717f9314a6ec",
+          "runner_name": "Quiet Mutiny",
+          "ml_prob": 0.1494644467089702,
+          "ml_rank": 4,
+          "odds": 14.5
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "9282e55e-fff1-45e5-9a2a-8bd761eed830",
+          "runner_name": "Green Carrera",
+          "ml_prob": 0.1335419723386249,
+          "ml_rank": 5,
+          "odds": 15.5
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "e94d8126-966e-4437-9f53-10357f58bbce",
+          "runner_name": "Rosa Inglesa",
+          "ml_prob": 0.12215276271480803,
+          "ml_rank": 6,
+          "odds": 15.5
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "52d69e52-fbce-47da-9b2c-1e03b7f50737",
+          "runner_name": "Passing Thought",
+          "ml_prob": 0.10095898099664329,
+          "ml_rank": 7,
+          "odds": 21
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "4c8792db-b424-43bc-9236-4e63721ade72",
+          "runner_name": "Symbol Of Majesty",
+          "ml_prob": 0.08609432702679459,
+          "ml_rank": 8,
+          "odds": 27
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "3e769935-1556-460e-a386-b397629a6eb3",
+          "runner_name": "Darn Hot Gallop",
+          "ml_prob": 0.07538207821329398,
+          "ml_rank": 9,
+          "odds": 32
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "862cdd51-e028-4fe0-9f0b-7e263a73f602",
+          "runner_name": "Repel",
+          "ml_prob": 0.06856058309838005,
+          "ml_rank": 10,
+          "odds": 32
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "e75c78ba-c38c-4123-90c3-9a1dc0a1465f",
+          "runner_name": "Brigid's Well",
+          "ml_prob": 0.06419985719481372,
+          "ml_rank": 11,
+          "odds": null
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "fded10ce-f910-425f-9498-adea3ab2595c",
+          "runner_name": "Blingy's Sister",
+          "ml_prob": 0.06419985719481372,
+          "ml_rank": 12,
+          "odds": null
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "0b1b01e7-feab-4f4e-950b-797b35a039e0",
+          "runner_name": "Lyrics Of Life",
+          "ml_prob": 0.060775939851198606,
+          "ml_rank": 13,
+          "odds": 36
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "48686521-1eee-4fbc-a482-9361b7f59684",
+          "runner_name": "Mubasimah",
+          "ml_prob": 0.055197282712175895,
+          "ml_rank": 14,
+          "odds": 36
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "1babaf06-0f5c-42fb-9052-bd7b25e5bbcc",
+          "runner_name": "Mixed Feelings",
+          "ml_prob": 0.049051934788489265,
+          "ml_rank": 15,
+          "odds": 40
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "963ccadf-d107-41a4-8742-d93e276eba32",
+          "runner_name": "Crownright",
+          "ml_prob": 0.04449844471633851,
+          "ml_rank": 16,
+          "odds": 40
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "2d5c0ba5-9399-47e4-83ef-d6b4e3d76502",
+          "runner_name": "Awaken",
+          "ml_prob": 0.03961406561383244,
+          "ml_rank": 17,
+          "odds": 44
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "4cd21dbb-e17a-43ed-bc65-727a7322b4ee",
+          "runner_name": "Harlequin Angel",
+          "ml_prob": 0.035903614408077364,
+          "ml_rank": 18,
+          "odds": 44
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "37474896-0565-4496-8bfd-19db433650a2",
+          "runner_name": "Zooming",
+          "ml_prob": 0.03200419757395589,
+          "ml_rank": 19,
+          "odds": 48
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "d78ad238-87b5-4ecb-ac2f-2d8468d4774a",
+          "runner_name": "Spinning Around",
+          "ml_prob": 0.02898501254343247,
+          "ml_rank": 20,
+          "odds": 48
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "45a022b7-ac29-40ad-902e-b8148fa8a236",
+          "runner_name": "True Test",
+          "ml_prob": 0.0260470256236882,
+          "ml_rank": 21,
+          "odds": 50
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "24cad4e4-d449-42f7-857e-40e0b8196d96",
+          "runner_name": "She Commands",
+          "ml_prob": 0.02282215132623137,
+          "ml_rank": 22,
+          "odds": 60
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "40da2aef-8a52-4cd7-89c9-12d0ddf4c880",
+          "runner_name": "Hope Queen",
+          "ml_prob": 0.02036466183080858,
+          "ml_rank": 23,
+          "odds": 65
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "1246bc76-36fd-4904-b154-a424126afb4b",
+          "runner_name": "Spinning Lizzie",
+          "ml_prob": 0.017770123322283646,
+          "ml_rank": 24,
+          "odds": 80
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "b7e52543-5049-40ff-8cfe-506c723c2a68",
+          "runner_name": "Thankfully",
+          "ml_prob": 0.016071446115480604,
+          "ml_rank": 25,
+          "odds": 80
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "1a6a55c7-2c11-47ca-a88c-3a76f52f05eb",
+          "runner_name": "Dream Camp",
+          "ml_prob": 0.013962954841080382,
+          "ml_rank": 26,
+          "odds": 100
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "aff2bf91-0bf4-4b1d-8127-d76a4ee2e8ba",
+          "runner_name": "Harlequin Breeze",
+          "ml_prob": 0.012623534289023065,
+          "ml_rank": 27,
+          "odds": 100
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "54e42a33-a94f-4b61-9654-23a8c5000b29",
+          "runner_name": "Al Rateel",
+          "ml_prob": 0.011208036200918415,
+          "ml_rank": 28,
+          "odds": 110
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "0749717d-8d8b-47e5-a9f5-fd82896d42f6",
+          "runner_name": "Just Call Me Angel",
+          "ml_prob": 0.009797680197377208,
+          "ml_rank": 29,
+          "odds": 130
+        },
+        {
+          "race_id": "bdc027db-61e7-4980-bac2-c737f390b213",
+          "runner_id": "3548a990-0c3a-498d-886b-b6386b78b3c6",
+          "runner_name": "Tavana",
+          "ml_prob": 0.008583021065941616,
+          "ml_rank": 30,
+          "odds": 150
+        }
+      ],
+      "regular_model_pick_name": "Glyfada",
+      "market_favourite_name": "Glyfada",
+      "agreement": {
+        "ml_agrees_with_regular_pick": true,
+        "ml_agrees_with_market_favourite": true,
+        "regular_agrees_with_market_favourite": true,
+        "all_three_agree": true,
+        "all_three_disagree": false,
+        "badge": "all_agree",
+        "badge_label": "All three agree (ML, model, market)"
+      },
+      "warnings": {
+        "small_sample": true,
+        "small_sample_text": "Small training sample (21 settled races < 100); treat the ML shadow pick as low-confidence research only.",
+        "data_differs": false,
+        "data_differs_text": null
+      }
+    },
+    {
+      "race_id": "d41b28e9-903f-4a1c-8a26-b223e8ef544d",
+      "off_time": "2026-06-19T16:35:00+00:00",
+      "race_name": "King Edward VII Stakes (Group 2) (Colts & Geldings)",
+      "field_size": 6,
+      "ml_pick": {
+        "race_id": "d41b28e9-903f-4a1c-8a26-b223e8ef544d",
+        "runner_id": "b9c6eaca-cb15-45d6-a115-01e9b812e30e",
+        "runner_name": "Causeway",
+        "ml_prob": 0.6150086543173597,
+        "ml_rank": 1,
+        "odds": 2.42
+      },
+      "ranked": [
+        {
+          "race_id": "d41b28e9-903f-4a1c-8a26-b223e8ef544d",
+          "runner_id": "b9c6eaca-cb15-45d6-a115-01e9b812e30e",
+          "runner_name": "Causeway",
+          "ml_prob": 0.6150086543173597,
+          "ml_rank": 1,
+          "odds": 2.42
+        },
+        {
+          "race_id": "d41b28e9-903f-4a1c-8a26-b223e8ef544d",
+          "runner_id": "8db08e0a-9aa4-4cba-88e4-6c0e7a77524e",
+          "runner_name": "Water To Wine",
+          "ml_prob": 0.5621881922842231,
+          "ml_rank": 2,
+          "odds": 2.52
+        },
+        {
+          "race_id": "d41b28e9-903f-4a1c-8a26-b223e8ef544d",
+          "runner_id": "ee19d101-4f6f-4f26-9659-200253f7e9b2",
+          "runner_name": "Golden Story",
+          "ml_prob": 0.12324825465421327,
+          "ml_rank": 3,
+          "odds": 10
+        },
+        {
+          "race_id": "d41b28e9-903f-4a1c-8a26-b223e8ef544d",
+          "runner_id": "1094d497-6c78-4dce-82fb-23b256a07639",
+          "runner_name": "Ancient Egypt",
+          "ml_prob": 0.12223186326809078,
+          "ml_rank": 4,
+          "odds": 12.5
+        },
+        {
+          "race_id": "d41b28e9-903f-4a1c-8a26-b223e8ef544d",
+          "runner_id": "8d001e32-c38a-4759-a5bd-89429fd6356f",
+          "runner_name": "Venetian Prince",
+          "ml_prob": 0.08174811662653468,
+          "ml_rank": 5,
+          "odds": 36
+        },
+        {
+          "race_id": "d41b28e9-903f-4a1c-8a26-b223e8ef544d",
+          "runner_id": "35d18e12-f8e5-4be8-a9d4-8dda144ea9cb",
+          "runner_name": "Echo Of Stars",
+          "ml_prob": 0.06486417288775137,
+          "ml_rank": 6,
+          "odds": 80
+        }
+      ],
+      "regular_model_pick_name": "Causeway",
+      "market_favourite_name": "Causeway",
+      "agreement": {
+        "ml_agrees_with_regular_pick": true,
+        "ml_agrees_with_market_favourite": true,
+        "regular_agrees_with_market_favourite": true,
+        "all_three_agree": true,
+        "all_three_disagree": false,
+        "badge": "all_agree",
+        "badge_label": "All three agree (ML, model, market)"
+      },
+      "warnings": {
+        "small_sample": true,
+        "small_sample_text": "Small training sample (21 settled races < 100); treat the ML shadow pick as low-confidence research only.",
+        "data_differs": false,
+        "data_differs_text": null
+      }
+    },
+    {
+      "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+      "off_time": "2026-06-19T17:10:00+00:00",
+      "race_name": "Palace Of Holyroodhouse (Handicap)",
+      "field_size": 28,
+      "ml_pick": {
+        "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+        "runner_id": "9b7b35e1-85c8-4aa4-a0c1-991aadf1ef27",
+        "runner_name": "Bacio",
+        "ml_prob": 0.19031838507491508,
+        "ml_rank": 1,
+        "odds": 7.8
+      },
+      "ranked": [
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "9b7b35e1-85c8-4aa4-a0c1-991aadf1ef27",
+          "runner_name": "Bacio",
+          "ml_prob": 0.19031838507491508,
+          "ml_rank": 1,
+          "odds": 7.8
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "cecb55d6-b7b2-45fb-8f37-b06bb7ac56fb",
+          "runner_name": "Moojeed",
+          "ml_prob": 0.1489961563290224,
+          "ml_rank": 2,
+          "odds": 13
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "f06c3595-ee2d-4ee7-9fa9-6e010dd92655",
+          "runner_name": "Gold Digger",
+          "ml_prob": 0.14692799969587814,
+          "ml_rank": 3,
+          "odds": 10
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "47a0a783-6d18-46ff-9da7-457ed47096c4",
+          "runner_name": "Dickensian",
+          "ml_prob": 0.1270370905617531,
+          "ml_rank": 4,
+          "odds": 15.5
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "cbaaeb92-2fc5-4739-9b64-46962d55ff20",
+          "runner_name": "Jazl",
+          "ml_prob": 0.12075135749663175,
+          "ml_rank": 5,
+          "odds": 12
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "3e6c0397-8c1d-497e-abe4-4c212ef62a14",
+          "runner_name": "Starmade",
+          "ml_prob": 0.11224527001721268,
+          "ml_rank": 6,
+          "odds": 17
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "5e18b20b-f944-473e-ad97-0a554917f984",
+          "runner_name": "Calico Blue",
+          "ml_prob": 0.09560101361179181,
+          "ml_rank": 7,
+          "odds": 21
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "d6897f9c-e679-48cc-b398-e72b553f4913",
+          "runner_name": "Westport",
+          "ml_prob": 0.08712226093529417,
+          "ml_rank": 8,
+          "odds": 21
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "8928b8ab-76ba-4e23-9286-e4f37fbecbc9",
+          "runner_name": "Stargazed",
+          "ml_prob": 0.07632037215089248,
+          "ml_rank": 9,
+          "odds": 24
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "d9d4e910-fec9-4bf5-919d-3f9165d92b32",
+          "runner_name": "May Angel",
+          "ml_prob": 0.06942034361218281,
+          "ml_rank": 10,
+          "odds": 24
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "cf916e12-cd88-470e-a965-79dfa2342520",
+          "runner_name": "Sandal's Song",
+          "ml_prob": 0.06331158923159792,
+          "ml_rank": 11,
+          "odds": null
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "e6338056-e37e-4c0c-bf07-6dd627ff1d5a",
+          "runner_name": "Simplify",
+          "ml_prob": 0.062399227262594316,
+          "ml_rank": 12,
+          "odds": 25
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "b76da356-4ad8-4c87-b87f-5515b070d34b",
+          "runner_name": "Cherry Baker",
+          "ml_prob": 0.05608898051347106,
+          "ml_rank": 13,
+          "odds": 26
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "7405b251-0c68-4c94-b27d-176c343865bf",
+          "runner_name": "Sovereign Spell",
+          "ml_prob": 0.05041756817493389,
+          "ml_rank": 14,
+          "odds": 27
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "8ec89834-6c1d-4946-8d7c-89067490012b",
+          "runner_name": "Ipanema Queen",
+          "ml_prob": 0.04492609714590984,
+          "ml_rank": 15,
+          "odds": 29
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "1751f980-0121-4afc-a22e-87af05f94fdf",
+          "runner_name": "Tricky Tel",
+          "ml_prob": 0.03925046488021421,
+          "ml_rank": 16,
+          "odds": 34
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "fb93ee2d-a4e3-4e74-95cf-3e26b2811a4b",
+          "runner_name": "Sirius A",
+          "ml_prob": 0.03557280887213949,
+          "ml_rank": 17,
+          "odds": 34
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "b65c3f34-ccdc-44b2-a120-f0eebae3113d",
+          "runner_name": "Ten Carat Harry",
+          "ml_prob": 0.03146179523612034,
+          "ml_rank": 18,
+          "odds": 38
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "a1f598a2-8d05-4a61-87aa-e9f1f96b2c7d",
+          "runner_name": "Black Star Boy",
+          "ml_prob": 0.027914646422211555,
+          "ml_rank": 19,
+          "odds": 42
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "cfd4a89d-2ed3-4dc5-8488-bf33ea93dafc",
+          "runner_name": "Revival Power",
+          "ml_prob": 0.025039653086747216,
+          "ml_rank": 20,
+          "odds": 44
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "0ec7eae4-e4e3-4b9e-9b77-0fdc23958b84",
+          "runner_name": "Miss Yechance",
+          "ml_prob": 0.02211510855113987,
+          "ml_rank": 21,
+          "odds": 50
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "837079c6-76cf-4c77-b204-c3120114b069",
+          "runner_name": "Comical Point",
+          "ml_prob": 0.018835805073540678,
+          "ml_rank": 22,
+          "odds": 70
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "90551adc-92ef-4a97-a9c6-fbd64a35f4fb",
+          "runner_name": "Dazzling Haze",
+          "ml_prob": 0.016640541941025315,
+          "ml_rank": 23,
+          "odds": 80
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "0571dd46-3d55-47bc-b464-b5e31f9aae29",
+          "runner_name": "Zelaina",
+          "ml_prob": 0.01488654031852677,
+          "ml_rank": 24,
+          "odds": 85
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "6c8aed36-c82d-4150-9582-d533cfe2aad3",
+          "runner_name": "Ghost Mode",
+          "ml_prob": 0.0131910133832653,
+          "ml_rank": 25,
+          "odds": 95
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "94da550d-695d-46d6-96c5-26a20105c2d4",
+          "runner_name": "Gentle George",
+          "ml_prob": 0.011924747118826587,
+          "ml_rank": 26,
+          "odds": 95
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "e801c20d-b6b1-4eb4-8cb6-b5e3c173ce3d",
+          "runner_name": "Baker Blue",
+          "ml_prob": 0.010306198378359322,
+          "ml_rank": 27,
+          "odds": 120
+        },
+        {
+          "race_id": "40a9b6e6-37aa-4bbb-86c7-65b7d3109c03",
+          "runner_id": "697e6694-5978-4305-84f0-4a8cac6de984",
+          "runner_name": "Exclamation",
+          "ml_prob": 0.009162247444422542,
+          "ml_rank": 28,
+          "odds": 130
+        }
+      ],
+      "regular_model_pick_name": "Bacio",
+      "market_favourite_name": "Bacio",
+      "agreement": {
+        "ml_agrees_with_regular_pick": true,
+        "ml_agrees_with_market_favourite": true,
+        "regular_agrees_with_market_favourite": true,
+        "all_three_agree": true,
+        "all_three_disagree": false,
+        "badge": "all_agree",
+        "badge_label": "All three agree (ML, model, market)"
+      },
+      "warnings": {
+        "small_sample": true,
+        "small_sample_text": "Small training sample (21 settled races < 100); treat the ML shadow pick as low-confidence research only.",
+        "data_differs": false,
+        "data_differs_text": null
+      }
+    }
+  ],
+  "disclaimer": "ML shadow pick — not model-active. Research only. Does not affect staking or recommendations."
+}

@@ -1,0 +1,83 @@
+{
+  "kind": "logistic_regression",
+  "model_active": false,
+  "seed": 42,
+  "trained_at": "2026-06-19T08:10:49.914Z",
+  "training_date_range": {
+    "from": "2026-06-16",
+    "to": "2026-06-18"
+  },
+  "course": "Ascot",
+  "row_count": 384,
+  "race_count": 21,
+  "settled_count": 268,
+  "settled_race_count": 21,
+  "feature_columns": [
+    "model_prob_pre_off",
+    "market_rank_pre_off",
+    "model_rank_pre_off",
+    "ev_pre_off",
+    "confidence",
+    "pre_off_odds",
+    "field_size",
+    "is_handicap"
+  ],
+  "label": "won",
+  "leakage_check": {
+    "passed": true,
+    "forbidden": [],
+    "checkedFeatures": [
+      "model_prob_pre_off",
+      "market_rank_pre_off",
+      "model_rank_pre_off",
+      "ev_pre_off",
+      "confidence",
+      "pre_off_odds",
+      "field_size",
+      "is_handicap"
+    ]
+  },
+  "standardization": {
+    "mean": [
+      0.06246367910782135,
+      10.046332046332047,
+      10.046332046332047,
+      -0.030827913599201732,
+      0.04576388555177637,
+      65.38204633204633,
+      21.32089552238806,
+      0.373134328358209
+    ],
+    "std": [
+      0.07786398017004462,
+      6.785017566675323,
+      6.785017566675323,
+      0.08234469096150476,
+      0.09638447963492487,
+      96.97472606722087,
+      7.018207393553931,
+      0.4836373655528267
+    ]
+  },
+  "weights": [
+    0.56076288947149,
+    -0.37765063153334977,
+    -0.3157939942523231,
+    -0.17769777677437118,
+    -0.11701755407132054,
+    -0.12116616714043993,
+    0.05222018764156066,
+    0.08049101188897287
+  ],
+  "bias": -2.848307600099002,
+  "evaluation": {
+    "in_sample_brier": 0.062283985041595435,
+    "in_sample_log_loss": 0.22554035640525463,
+    "in_sample_top1_race_hit_rate": 0.42857142857142855,
+    "positives": 21,
+    "negatives": 247,
+    "iterations": 600,
+    "learning_rate": 0.1
+  },
+  "notes": "ML shadow model — not model-active. Research/decision-support only. Does not affect production probabilities, EV, staking, confidence, the no-bet gate, or any recommendation."
+}
