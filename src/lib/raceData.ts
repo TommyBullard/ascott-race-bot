@@ -1566,9 +1566,13 @@ export async function computeModelPerformance(
  *
  * @throws if a Supabase query fails for a reason other than a missing table.
  */
-export async function fetchTipsterStatusSummary(): Promise<TipsterStatusSummary> {
+export async function fetchTipsterStatusSummary(
+  scope?: { date?: string | null; course?: string | null },
+): Promise<TipsterStatusSummary> {
   const summary: TipsterStatusSummary = {
     approvedSelections: null,
+    matchedToday: null,
+    scopeLabel: null,
     candidatesPending: null,
     candidatesApproved: null,
     candidatesRejected: null,
@@ -1609,6 +1613,34 @@ export async function fetchTipsterStatusSummary(): Promise<TipsterStatusSummary>
     summary.candidatesPending = pending;
     summary.candidatesApproved = approved;
     summary.candidatesRejected = rejected;
+  }
+
+  // 3. Selections MATCHED to the current date/course races (model-active today).
+  //    Read-only; only computed when a date scope is supplied, so the panel never
+  //    implies historical selections feed a different day.
+  const scopeDate = (scope?.date ?? '').trim();
+  if (scopeDate !== '' && /^\d{4}-\d{2}-\d{2}$/.test(scopeDate)) {
+    const scopeCourse = (scope?.course ?? '').trim();
+    const wantCourse = scopeCourse ? normalizeCourse(scopeCourse) : null;
+    summary.scopeLabel = scopeCourse ? `${scopeCourse} ${scopeDate}` : scopeDate;
+    const { data: raceRows, error: raceErr } = await supabaseAdmin
+      .from(RACES_TABLE)
+      .select('id, course')
+      .eq('meeting_date', scopeDate);
+    if (!raceErr) {
+      const raceIds = (raceRows ?? [])
+        .filter((r) => !wantCourse || (r.course ? normalizeCourse(r.course) : '') === wantCourse)
+        .map((r) => r.id);
+      if (raceIds.length === 0) {
+        summary.matchedToday = 0;
+      } else {
+        const { count: matchCount, error: matchErr } = await supabaseAdmin
+          .from(TIPSTER_SELECTIONS_TABLE)
+          .select('*', { head: true, count: 'exact' })
+          .in('race_id', raceIds);
+        if (!matchErr) summary.matchedToday = matchCount ?? 0;
+      }
+    }
   }
 
   return summary;

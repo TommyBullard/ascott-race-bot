@@ -16,8 +16,16 @@
 
 /** Read-only tipster-state counts (mirrors the server summary). */
 export interface TipsterStatusSummary {
-  /** Approved, model-active selections in `tipster_selections` (null if absent). */
+  /** Approved, model-active selections in `tipster_selections` across ALL dates (null if absent). */
   approvedSelections: number | null;
+  /**
+   * Approved selections MATCHED to the current date/course races — i.e. the ones
+   * actually feeding today's model. `null` when no date/course scope was given
+   * (so the panel does not imply stale selections feed today).
+   */
+  matchedToday: number | null;
+  /** Human label for the current scope (e.g. "Ascot 2026-06-19"), or null. */
+  scopeLabel: string | null;
   /** Candidate tips awaiting review (null if the candidate table is absent). */
   candidatesPending: number | null;
   /** Candidates already approved (null if absent). */
@@ -39,10 +47,11 @@ function plural(count: number, singular: string, suffix = 's'): string {
  * negative signal. Pure; never throws.
  */
 export function buildTipsterStatusLines(summary: TipsterStatusSummary): string[] {
-  const { approvedSelections, candidatesPending } = summary;
+  const { approvedSelections, matchedToday, scopeLabel, candidatesPending, candidatesRejected } = summary;
   const lines: string[] = [];
+  const scope = scopeLabel ?? "today's races";
 
-  // 1. Model-mode line (always present).
+  // 1. Model-mode line — distinguishes ALL-TIME approved from MATCHED-TO-TODAY.
   if (approvedSelections === null) {
     lines.push(
       'No approved tipster selections are set up yet — the model is running in ' +
@@ -53,29 +62,45 @@ export function buildTipsterStatusLines(summary: TipsterStatusSummary): string[]
       'No approved tipster selections yet — the model is running in market-only ' +
         'mode (market prices only).',
     );
+  } else if (matchedToday === null) {
+    lines.push(
+      `${plural(approvedSelections, 'approved tipster selection')} on record (across ` +
+        'all dates). A selection feeds the model only for the race it matches.',
+    );
+  } else if (matchedToday === 0) {
+    lines.push(
+      `${plural(approvedSelections, 'approved tipster selection')} on record, but NONE ` +
+        `are matched to ${scope} — these races run market-only. Historical selections ` +
+        'do not feed other days.',
+    );
   } else {
     lines.push(
-      `${plural(approvedSelections, 'approved tipster selection')} feeding the ` +
-        'model.',
+      `${plural(matchedToday, 'tipster selection')} matched to ${scope} and model-active ` +
+        `for those races (${approvedSelections} approved on record overall).`,
     );
   }
 
-  // 2. Candidate line (only when candidate counts are available).
+  // 2. Candidate / pending line (only when candidate counts are available).
   if (candidatesPending !== null) {
     if (candidatesPending > 0) {
       lines.push(
-        `${plural(candidatesPending, 'candidate tip')} pending review — captured ` +
+        `${plural(candidatesPending, 'candidate opinion')} pending review — captured ` +
           'but NOT model-active until approved.',
       );
     } else {
-      lines.push('No candidate tips are pending review.');
+      lines.push('No candidate opinions are pending review.');
     }
   }
 
-  // 3. Clarify what "no consensus" means while nothing is approved.
-  if (approvedSelections !== null && approvedSelections === 0) {
+  // 3. Review-blocked line.
+  if (candidatesRejected !== null && candidatesRejected > 0) {
+    lines.push(`${plural(candidatesRejected, 'opinion')} review-blocked (rejected) — never model-active.`);
+  }
+
+  // 4. Clarify what "no consensus" means when nothing is matched to today.
+  if (matchedToday === 0 || (approvedSelections !== null && approvedSelections === 0)) {
     lines.push(
-      '"No tipster consensus" on a race just means there are no approved ' +
+      '"No tipster consensus" on a race just means there are no matched approved ' +
         'selections for it — not a negative signal.',
     );
   }

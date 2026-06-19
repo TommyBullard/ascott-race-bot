@@ -21,6 +21,8 @@ import {
 function summary(overrides: Partial<TipsterStatusSummary> = {}): TipsterStatusSummary {
   return {
     approvedSelections: 0,
+    matchedToday: null,
+    scopeLabel: null,
     candidatesPending: 0,
     candidatesApproved: 0,
     candidatesRejected: 0,
@@ -39,40 +41,59 @@ test('pending candidates -> "not model-active until approved" line', () => {
   const lines = buildTipsterStatusLines(summary({ candidatesPending: 3 }));
   assert.ok(
     lines.some(
-      (l) => l.includes('3 candidate tips pending review') && l.includes('NOT model-active'),
+      (l) => l.includes('3 candidate opinions pending review') && l.includes('NOT model-active'),
     ),
   );
 });
 
 test('singular candidate is pluralised correctly', () => {
   const lines = buildTipsterStatusLines(summary({ candidatesPending: 1 }));
-  assert.ok(lines.some((l) => l.includes('1 candidate tip pending review')));
-  assert.equal(lines.some((l) => l.includes('1 candidate tips')), false);
+  assert.ok(lines.some((l) => l.includes('1 candidate opinion pending review')));
+  assert.equal(lines.some((l) => l.includes('1 candidate opinions')), false);
 });
 
-test('zero pending candidates -> "No candidate tips are pending review."', () => {
+test('zero pending candidates -> "No candidate opinions are pending review."', () => {
   const lines = buildTipsterStatusLines(summary({ candidatesPending: 0 }));
-  assert.ok(lines.some((l) => l.includes('No candidate tips are pending review')));
+  assert.ok(lines.some((l) => l.includes('No candidate opinions are pending review')));
 });
 
-test('approved selections present -> "feeding the model", no market-only/clarifier', () => {
+test('approved on record but matchedToday unknown -> "on record (across all dates)"', () => {
   const lines = buildTipsterStatusLines(
-    summary({ approvedSelections: 5, candidatesPending: 0 }),
+    summary({ approvedSelections: 5, matchedToday: null, candidatesPending: 0 }),
   );
-  assert.ok(lines.some((l) => l.includes('5 approved tipster selections feeding the model')));
-  assert.equal(lines.some((l) => l.includes('market-only')), false);
-  assert.equal(lines.some((l) => l.includes('No tipster consensus')), false);
+  assert.ok(lines.some((l) => l.includes('5 approved tipster selections on record (across all dates)')));
+  assert.equal(lines.some((l) => l.includes('feeding the model.')), false);
 });
 
-test('one approved selection is singular', () => {
-  const lines = buildTipsterStatusLines(summary({ approvedSelections: 1 }));
-  assert.ok(lines.some((l) => l.includes('1 approved tipster selection feeding the model')));
-  assert.equal(lines.some((l) => l.includes('1 approved tipster selections')), false);
+test('stale historical selections are NOT counted as current-day support', () => {
+  // 5 approved on record, but NONE matched to today's scope -> market-only today.
+  const lines = buildTipsterStatusLines(
+    summary({ approvedSelections: 5, matchedToday: 0, scopeLabel: 'Ascot 2026-06-19', candidatesPending: 0 }),
+  );
+  assert.ok(lines.some((l) => l.includes('NONE are matched to Ascot 2026-06-19')));
+  assert.ok(lines.some((l) => l.includes('market-only')));
+  assert.ok(lines.some((l) => l.includes('Historical selections do not feed other days')));
+  assert.ok(lines.some((l) => l.includes('No tipster consensus')));
+});
+
+test('matched selections today -> "model-active for those races"', () => {
+  const lines = buildTipsterStatusLines(
+    summary({ approvedSelections: 7, matchedToday: 2, scopeLabel: 'Ascot 2026-06-19', candidatesPending: 0 }),
+  );
+  assert.ok(lines.some((l) => l.includes('2 tipster selections matched to Ascot 2026-06-19 and model-active')));
+  assert.equal(lines.some((l) => l.includes('market-only')), false);
+});
+
+test('review-blocked (rejected) opinions surface a never-model-active line', () => {
+  const lines = buildTipsterStatusLines(summary({ candidatesRejected: 4 }));
+  assert.ok(lines.some((l) => l.includes('4 opinions review-blocked (rejected)')));
 });
 
 test('candidate table absent (null) -> no candidate line, still explains market-only', () => {
   const lines = buildTipsterStatusLines({
     approvedSelections: 0,
+    matchedToday: null,
+    scopeLabel: null,
     candidatesPending: null,
     candidatesApproved: null,
     candidatesRejected: null,
@@ -85,6 +106,8 @@ test('candidate table absent (null) -> no candidate line, still explains market-
 test('selections table absent (null) -> market-only setup line, no crash', () => {
   const lines = buildTipsterStatusLines({
     approvedSelections: null,
+    matchedToday: null,
+    scopeLabel: null,
     candidatesPending: null,
     candidatesApproved: null,
     candidatesRejected: null,

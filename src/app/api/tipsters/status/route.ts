@@ -19,9 +19,12 @@ import { fetchTipsterStatusSummary } from '@/lib/raceData';
 // Always reflect the latest review/approval state.
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const status = await fetchTipsterStatusSummary();
+    const url = new URL(request.url);
+    const date = url.searchParams.get('date');
+    const course = url.searchParams.get('course');
+    const status = await fetchTipsterStatusSummary({ date, course });
     return NextResponse.json({ status }, { status: 200 });
   } catch (error) {
     console.error('Failed to fetch tipster status:', error);
