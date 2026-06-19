@@ -1,7 +1,10 @@
 # GenAI Shadow Commentary (Phase 4G)
 
-**Status:** core implemented (grounding, prompts, guardrails, storage, tests).
-The live LLM call is intentionally **off** (injected generator; default refuses).
+**Status:** core implemented (grounding, prompts, guardrails, storage, tests),
+plus the optional OpenAI generator, the generate+store CLI (`genai:generate`),
+and the read-only dashboard panel. The live LLM call remains **off by default**
+(injected generator; default refuses) and only runs with `--live` + a present
+`OPENAI_API_KEY`.
 **Mandate:** shadow-only, decision-support, informational. It explains
 already-computed model output in plain English for a human reviewer and can
 **never** affect the model or become betting logic.
@@ -143,16 +146,70 @@ Surfaced through the existing decision-support seam, clearly fenced:
 No dashboard wiring is shipped yet because the generator is off (nothing to show);
 the read path is a thin additive API once a reviewed generator is configured.
 
+**Now shipped (read path):** the read-only panel
+([GenaiCommentaryPanel](../src/components/GenaiCommentaryPanel.tsx)) is wired into
+the dashboard race card, fed by a **fail-open** read in `fetchRaceCard` and the
+pure approved-only selector
+([genaiCommentaryView.ts](../src/lib/genaiCommentaryView.ts)). It renders
+**nothing** until a reviewer approves a candidate — so it is empty today (the
+generator is off and `genai_commentary` holds no approved rows) — and it never
+shows pending or rejected text as fact. There are no approve/reject controls in
+the public UI (review happens out-of-band; see below).
+
 ---
 
-## 6. Files
+## 6. Environment & enabling (`OPENAI_API_KEY`)
+
+A future OpenAI-backed generator reads **one optional** environment variable,
+`OPENAI_API_KEY`. The preflight around it is deliberately conservative:
+
+- **Where it goes.** Put it in your git-ignored **`.env.local`** (the scripts load
+  `.env.local` first, then `.env`). It is also listed, empty, in
+  [.env.example](../.env.example) as the canonical reference.
+- **Never commit it.** `.env*.local` is git-ignored; `.env.example` must stay
+  empty of real values. The key is a secret — never log, print, or commit it.
+- **Optional — the app never needs it.** Racecards, odds, the model, staking,
+  ranking, EV, recommendations and the no-bet logic all run without it.
+  `npm run check:env` stays green when it is blank and reports the key as
+  *optional, shadow-only* with the reassurance that it is read only when a GenAI
+  command is explicitly run.
+- **Shadow-only / decision-support.** GenAI **does not make selections**, **does
+  not place bets**, and is **never model-active**. The key is read **only** when a
+  GenAI command is explicitly run — never during normal app operation and never
+  by the model/staking/recommendation path.
+- **Fails closed.** GenAI tooling reads the key through
+  `requireOpenAiApiKey(env)` in
+  [src/lib/genaiEnvPreflight.ts](../src/lib/genaiEnvPreflight.ts), which throws a
+  value-free `GenAiKeyMissingError` when the key is absent, so a GenAI command
+  fails safely instead of running un-keyed. The presence check
+  (`summarizeGenAiEnv`) only ever reports a NAME + a boolean, never the value.
+- **Off by default regardless.** Even with the key set, no commentary is produced
+  until a reviewed `CommentaryGenerator` is explicitly injected (§0, §4). The key
+  alone does not turn anything on; the kill switch is to stop injecting a
+  generator (and/or unset the key).
+
+```bash
+# Verify presence (prints names + present/missing only — never values):
+npm run check:env
+```
+
+---
+
+## 7. Files
 
 | File | Role |
 | --- | --- |
 | [src/lib/genaiShadowCommentary.ts](../src/lib/genaiShadowCommentary.ts) | Pure context/prompt/guardrails + injected generator + orchestrator |
 | [scripts/genaiShadowCommentary.test.ts](../scripts/genaiShadowCommentary.test.ts) | 10 guardrail tests (grounding, forbidden, preconditions, shadow invariants) |
+| [src/lib/genaiEnvPreflight.ts](../src/lib/genaiEnvPreflight.ts) | Pure, secret-safe `OPENAI_API_KEY` presence summary + fail-closed `requireOpenAiApiKey` gate |
+| [scripts/genaiEnvPreflight.test.ts](../scripts/genaiEnvPreflight.test.ts) | Env-preflight tests (optional key, no value logged, fail-safe gate, no OpenAI import in model/staking/recommendation code) |
 | [prompts/genai-race-commentary.md](../prompts/genai-race-commentary.md) | Versioned prompt framework |
 | [supabase/migrations/20260618020000_genai_commentary.sql](../supabase/migrations/20260618020000_genai_commentary.sql) | Additive shadow store (model_active CHECK) |
+| [src/lib/openAiShadowGenerator.ts](../src/lib/openAiShadowGenerator.ts) | OpenAI → CommentaryGenerator adapter (reuses the genaiClient transport) |
+| [scripts/genaiGenerateCommentary.ts](../scripts/genaiGenerateCommentary.ts) | `genai:generate` CLI: generate → guardrails → store pending candidates (offline + dry-run by default) |
+| [src/lib/genaiCommentaryView.ts](../src/lib/genaiCommentaryView.ts) | Pure approved-only selector for the dashboard panel |
+| [src/components/GenaiCommentaryPanel.tsx](../src/components/GenaiCommentaryPanel.tsx) | Read-only "AI commentary (shadow)" dashboard card |
+| [scripts/openAiShadowGenerator.test.ts](../scripts/openAiShadowGenerator.test.ts) / [scripts/genaiCommentaryView.test.ts](../scripts/genaiCommentaryView.test.ts) | Adapter + selector + panel/CLI safety tests (OpenAI mocked) |
 
 **Out of scope (by mandate):** any change to model probability, EV, staking,
 ranking, recommendations; any live API call until a generator is explicitly

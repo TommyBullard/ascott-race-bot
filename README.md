@@ -128,7 +128,7 @@ and protected by an optional `CRON_SECRET` bearer token (Vercel Cron sends it).
 | `/api/cron/tipster-discovery`  | `0 6 * * *`     | Pull trainer/jockey performance from The Racing API, score tipster momentum, upsert tipsters.  |
 | `/api/cron/racecards`          | `0 7 * * *`     | Pull today's UK & IRE racecards, upsert `races` (`scheduled`) + `runners`.                      |
 | `/api/cron/odds`               | `*/5 * * * *`   | Poll Betfair Exchange for live prices, write `market_snapshots` + `runner_quotes`.             |
-| `/api/cron/results`            | `*/5 * * * *`   | Pull settled results (finish pos, BSP/SP), mark races settled, then **re-run the model**.      |
+| `/api/cron/results`            | `*/5 * * * *`   | Settle results (finish pos + SP/BSP via `/v1/results`); on a Standard-plan block, falls back **today** to `/v1/results/today` then `/v1/results/today/free` (finish positions only, no SP/BSP), then **re-runs the model**. |
 
 **Entity matching:** the `races` / `runners` tables hold no external provider id,
 so API entities are matched back to DB rows on a normalised **(course + off-time)**
@@ -439,6 +439,13 @@ all environment variables above in every environment.
 - **Live runs are market-only.** Until `tipster_selections` is populated for a
   race (via the manual CSV importer), the model scores from market odds alone
   (no tipster weighting).
+- **Same-day results settle automatically; SP/BSP + non-today need more.** When
+  `/v1/results` (Standard plan) is plan-blocked, `results:auto` and
+  `/api/cron/results` settle **today's** finishing positions via
+  `/v1/results/today` (Basic) → `/v1/results/today/free` (Free) — no SP/BSP (left
+  null, never fabricated). Use `results:auto --commit` only on a clean dry-run
+  audit; use the manual CSV importer (`import:results`) for SP/BSP, non-today
+  dates, or when the today endpoints are unavailable.
 - **`/api/recommend-bet` has no auth.** Add authentication before exposing it,
   since it reads staking logic backed by service-role data access.
   `POST /api/run-model` and the cron routes are gated by `CRON_SECRET` when it

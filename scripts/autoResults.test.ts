@@ -259,19 +259,21 @@ test('render: does not leak env/secret-looking content (sanity)', () => {
 
 /* ----------------------- read-only guards (source scan) ------------------- */
 
-test('the auto-results script writes ONLY commit-gated finish_pos / race-status updates', () => {
+test('the auto-results script performs NO direct DB access (settlement moved to the shared lib)', () => {
   const src = readFileSync('scripts/autoResults.ts', 'utf8');
+  // The script orchestrates + renders only; all DB I/O now lives in the shared
+  // todayResultsSettlement lib (its own source scan guards the write invariant).
+  assert.equal(/supabaseAdmin/.test(src), false);
   assert.equal(/\.insert\s*\(/.test(src), false);
   assert.equal(/\.upsert\s*\(/.test(src), false);
+  assert.equal(/\.update\s*\(/.test(src), false);
   assert.equal(/\.delete\s*\(/.test(src), false);
   assert.equal(/\.rpc\s*\(/.test(src), false);
-  // SELECT reads exist; the only updates are commit-gated finish_pos + race status.
-  assert.ok(/\.select\s*\(/.test(src));
-  assert.match(src, /if \(commit\)/);
-  assert.match(src, /\.update\(\{ finish_pos: u\.finish_pos \}\)/);
-  assert.match(src, /\.update\(\{ status: 'result', official_result_time: nowIso \}\)/);
-  // never writes SP/BSP.
+  // never references SP/BSP.
   assert.equal(/sp_decimal|bsp_decimal/.test(src), false);
+  // writes stay gated: settlement only happens via settleTodayResults, and the
+  // script passes the --commit flag straight through to it.
+  assert.match(src, /settleTodayResults\(\{ date, course, commit \}\)/);
 });
 
 test('no DB access: the pure helper module never imports a DB client, fs, or env', () => {

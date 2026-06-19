@@ -14,6 +14,24 @@
 .env.development
 .env.production
 
+# Secrets / keys / certificates — NEVER commit (only .env.example is tracked)
+*.key
+*.crt
+*.cer
+*.csr
+*.p12
+*.pfx
+*.jks
+*.keystore
+betfair-*-env.txt
+client-*.key
+client-*.crt
+client-*.csr
+id_rsa
+id_rsa.pub
+id_ecdsa
+id_ed25519
+
 # Logs
 npm-debug.log*
 yarn-debug.log*

@@ -327,7 +327,7 @@ test('buildRaceWarningChips: LOW confidence raises a warn chip (any casing)', ()
   for (const lbl of ['Low', 'low', 'LOW', ' low ']) {
     const chips = buildRaceWarningChips({ confidenceLabel: lbl });
     assert.ok(
-      chips.some((c) => c.label === 'LOW confidence' && c.tone === 'warn'),
+      chips.some((c) => c.label === 'Low confidence' && c.tone === 'warn'),
       lbl,
     );
   }
@@ -345,7 +345,7 @@ test('buildRaceWarningChips: degraded/stale/invalid data raises a warn chip', ()
 
 test('buildRaceWarningChips: NO_TIPSTER_CONSENSUS raises a chip', () => {
   const chips = buildRaceWarningChips({ alignmentLabel: 'NO_TIPSTER_CONSENSUS' });
-  assert.ok(chips.some((c) => c.label === 'NO_TIPSTER_CONSENSUS'));
+  assert.ok(chips.some((c) => c.label === 'No tipster consensus'));
   assert.deepEqual(buildRaceWarningChips({ alignmentLabel: 'ALIGNED' }), []);
 });
 

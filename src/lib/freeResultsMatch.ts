@@ -20,14 +20,19 @@
 
 import {
   evaluateSettlementSafety,
+  TODAY_FREE_RESULTS_SOURCE_LABEL,
+  type ResultSource,
   type ResultSourceStatus,
   type SettlementAudit,
   type SettlementSafety,
 } from './autoResults';
 import type { ResultFreeRace, ResultFreeRunner } from './racingApi';
 
-/** Label for the free daily results source. */
-export const FREE_RESULTS_SOURCE_LABEL = 'The Racing API /v1/results/today/free';
+/**
+ * Label for the free daily results source. Re-exported from the shared source
+ * labels so the three result endpoints stay in one place (value unchanged).
+ */
+export const FREE_RESULTS_SOURCE_LABEL = TODAY_FREE_RESULTS_SOURCE_LABEL;
 
 /** Max page size for the free endpoint (the API caps `limit` at 100). */
 export const FREE_RESULTS_MAX_LIMIT = 100;
@@ -415,6 +420,8 @@ export interface FreeResultsReport {
   primary_status: ResultSourceStatus;
   primary_detail: string | null;
   free_source: string;
+  /** Which same-day endpoint actually produced the settlement (basic vs free). */
+  result_source: ResultSource;
   free_attempted: boolean;
   free_not_applicable_reason: string | null;
   free_results_found: number;
@@ -459,6 +466,12 @@ export function buildFreeResultsReport(input: {
   settlements: readonly FreeRaceSettlement[];
   pendingDbRaces: readonly PendingDbRace[];
   manualImportCommand: string;
+  /**
+   * The actual same-day source used (label + kind). Defaults to the FREE source
+   * for backward compatibility when a caller does not specify one.
+   */
+  freeSource?: string;
+  resultSource?: ResultSource;
   /** Actual write outcome (set by the CLI writer; omit for dry-run). */
   committedRaces?: number;
   committedRunners?: number;
@@ -488,7 +501,8 @@ export function buildFreeResultsReport(input: {
     primary_source: input.primarySource,
     primary_status: input.primaryStatus,
     primary_detail: input.primaryDetail,
-    free_source: FREE_RESULTS_SOURCE_LABEL,
+    free_source: input.freeSource ?? FREE_RESULTS_SOURCE_LABEL,
+    result_source: input.resultSource ?? 'today_free',
     free_attempted: input.freeAttempted,
     free_not_applicable_reason: input.freeNotApplicableReason,
     free_results_found: input.freeResultsFound,
@@ -530,6 +544,7 @@ export function renderFreeResultsSummary(report: FreeResultsReport): string {
   }
 
   lines.push(`  free results returned (course-filtered): ${report.free_results_found}`);
+  lines.push(`  source used: ${report.free_source} (${report.result_source})`);
 
   if (report.settlements.length === 0 && report.pending_db_races.length === 0) {
     lines.push(`  matched races: ${DASH} (no stored races matched the free results)`);

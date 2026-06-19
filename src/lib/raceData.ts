@@ -44,6 +44,7 @@ import { isHistoricalRaceView } from './modelRunGuard';
 import { normalizeCourse } from './raceSync';
 import { classifyTableProbe } from './dbHealthSpec';
 import type { TipsterStatusSummary } from './tipsterStatus';
+import type { GenaiCommentaryRow } from './genaiCommentaryView';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { TipsterSelection } from './modelProbabilities';
 
@@ -782,6 +783,12 @@ export interface RaceCard {
    * not used by any decision logic. (Batch J1.)
    */
   observability: ModelRunObservability;
+  /**
+   * Read-only, human-APPROVED shadow GenAI commentary for this race (display
+   * only). Absent/empty unless a reviewer has approved a candidate. Never
+   * model-active; not a decision input. Fail-open: any read error yields [].
+   */
+  genaiCommentary?: GenaiCommentaryRow[];
 }
 
 interface ScoreRankRow {
@@ -812,6 +819,29 @@ interface RecommendationCardRow extends RecommendationRow {
  *
  * @throws if any Supabase query fails.
  */
+/**
+ * Read-only: human-APPROVED shadow GenAI commentary for a race
+ * (review_status='approved' AND status='candidate'). FAIL-OPEN — any error,
+ * including a missing genai_commentary table, yields [] so the dashboard card
+ * never breaks. Display-only; never model-active; not a decision input.
+ */
+async function fetchApprovedGenaiCommentary(raceId: string): Promise<GenaiCommentaryRow[]> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('genai_commentary')
+      .select(
+        'kind, commentary_text, prompt_version, generator_name, generated_at, status, review_status',
+      )
+      .eq('race_id', raceId)
+      .eq('review_status', 'approved')
+      .eq('status', 'candidate');
+    if (error || !Array.isArray(data)) return [];
+    return data as unknown as GenaiCommentaryRow[];
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
   // 1. Race meta for the header + countdown.
   const { data: raceData, error: raceError } = await supabaseAdmin
@@ -1044,6 +1074,9 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
 
   // Full scored field (read-only) for the display-only Race Intelligence panel.
   card.runners = scores.map(toRunner);
+
+  // Approved shadow GenAI commentary (read-only, display-only; fail-open to []).
+  card.genaiCommentary = await fetchApprovedGenaiCommentary(raceId);
 
   return card;
 }

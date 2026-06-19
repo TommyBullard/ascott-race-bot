@@ -4,10 +4,10 @@
  * Purely presentational. For a settled/off race it shows the settlement status
  * (settled / pending / settle-ready / blocked), the winner + the model pick's
  * finishing position when settled, any stored Free-API result note, and a fixed
- * "backend settlement only; UI is read-only" disclaimer. It renders NOTHING for
- * an upcoming/unknown race. NO data fetching, NO API calls, NO write controls,
- * NO commit button — the website never settles; the backend `results:auto`
- * command does. Decision-support only; missing values render "—".
+ * "results settled separately; this page is read-only" disclaimer. It renders
+ * NOTHING for an upcoming/unknown race. NO data fetching, NO API calls, NO write
+ * controls, NO commit button — the website never settles; the backend
+ * `results:auto` command does. Decision-support only; missing values render "—".
  */
 
 import type { CSSProperties } from 'react';

@@ -31,6 +31,31 @@ export const FALLBACK_REQUIRED_MESSAGE =
 /** The source label reported for the official results endpoint. */
 export const RESULTS_SOURCE_LABEL = 'The Racing API /v1/results';
 
+/** The source label for the Basic-tier same-day endpoint. */
+export const TODAY_BASIC_RESULTS_SOURCE_LABEL = 'The Racing API /v1/results/today';
+
+/** The source label for the Free-tier same-day endpoint. */
+export const TODAY_FREE_RESULTS_SOURCE_LABEL = 'The Racing API /v1/results/today/free';
+
+/**
+ * Which official-results endpoint produced a settlement attempt, in preference
+ * order: the Standard `/v1/results` primary, then the Basic same-day
+ * `/v1/results/today`, then the Free same-day `/v1/results/today/free`.
+ */
+export type ResultSource = 'primary_standard' | 'today_basic' | 'today_free';
+
+/** Maps a {@link ResultSource} to its human-readable endpoint label. Pure. */
+export function resultSourceLabel(source: ResultSource): string {
+  switch (source) {
+    case 'primary_standard':
+      return RESULTS_SOURCE_LABEL;
+    case 'today_basic':
+      return TODAY_BASIC_RESULTS_SOURCE_LABEL;
+    case 'today_free':
+      return TODAY_FREE_RESULTS_SOURCE_LABEL;
+  }
+}
+
 /**
  * Maps a probe error category (from `categorizeResultsAccessError`) to a source
  * status. A "standard plan required" response is the known current blocker.

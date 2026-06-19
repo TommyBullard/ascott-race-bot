@@ -57,8 +57,10 @@ export function isEnvValuePresent(value: string | undefined | null): boolean {
 /**
  * The environment variables this app reads, grouped for the preflight report.
  * `required` marks the core racecards / results / model pipeline; Betfair is
- * optional (only the odds pipeline needs it) and `CRON_SECRET` is optional
- * (gates cron/ops endpoints when set, open locally when unset).
+ * optional (only the odds pipeline needs it), `CRON_SECRET` is optional (gates
+ * cron/ops endpoints when set, open locally when unset), and `OPENAI_API_KEY` is
+ * optional + shadow-only (read only when a GenAI command is explicitly run —
+ * never by the app, model, staking, or recommendations).
  */
 export const ENV_VAR_SPECS: readonly EnvVarSpec[] = [
   { name: 'SUPABASE_URL', group: 'Supabase', required: true },
@@ -76,6 +78,14 @@ export const ENV_VAR_SPECS: readonly EnvVarSpec[] = [
   { name: 'BETFAIR_PASSWORD', group: 'Betfair', required: false, note: 'odds pipeline only' },
   { name: 'BETFAIR_CERT_PEM', group: 'Betfair', required: false, note: 'odds pipeline only' },
   { name: 'BETFAIR_KEY_PEM', group: 'Betfair', required: false, note: 'odds pipeline only' },
+  {
+    // Optional + shadow-only: read ONLY when a GenAI command is explicitly run,
+    // never by the app/model/staking/recommendations. See src/lib/genaiEnvPreflight.ts.
+    name: 'OPENAI_API_KEY',
+    group: 'GenAI',
+    required: false,
+    note: 'optional, shadow-only commentary; read only when a GenAI command is explicitly run',
+  },
 ];
 
 /**

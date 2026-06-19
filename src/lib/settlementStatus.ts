@@ -23,7 +23,8 @@ export type SettlementStatus =
   | 'unknown';
 
 /** The fixed read-only disclaimer shown on every settlement panel. */
-export const SETTLEMENT_READONLY_NOTE = 'Backend settlement only; UI is read-only.';
+export const SETTLEMENT_READONLY_NOTE =
+  'Results are settled separately and may be entered manually during beta — this page is read-only.';
 
 /** The race-row status value that marks a settled / resulted race. */
 const SETTLED_STATUS = 'result';

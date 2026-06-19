@@ -19,6 +19,7 @@ import {
   summarizeEnvPresence,
   type EnvPresenceResult,
 } from '../src/lib/envPreflight';
+import { summarizeGenAiEnv } from '../src/lib/genaiEnvPreflight';
 
 /** Loads env from .env.local then .env (first found wins). */
 function loadEnv(): void {
@@ -58,6 +59,14 @@ function main(): void {
   console.log(
     `\n${summary.presentCount}/${summary.results.length} variable(s) set.`,
   );
+
+  // The grouped list above already reports OPENAI_API_KEY as present/missing.
+  // Add a focused, non-redundant reassurance that it is optional + shadow-only
+  // and is never read unless a GenAI command is explicitly run. Presence only —
+  // the value is never read out.
+  const genai = summarizeGenAiEnv(process.env);
+  console.log('\nGenAI (OpenAI) — optional, shadow-only:');
+  console.log(`  ${genai.note}`);
 
   if (summary.ok) {
     console.log('All REQUIRED variables are present.');

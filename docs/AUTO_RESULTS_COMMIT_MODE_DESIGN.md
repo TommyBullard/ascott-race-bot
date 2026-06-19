@@ -1,8 +1,14 @@
-# Safe Automated Result-Settlement Commit Mode (design only)
+# Safe Automated Result-Settlement Commit Mode
 
-> **Status: DESIGN / NOT IMPLEMENTED.** This describes a *future* safe commit mode
-> for `results:auto`. Today `results:auto` is **dry-run only** and never writes the
-> database; the manual CSV importer remains the sole settlement write path.
+> **Status: IMPLEMENTED (gated).** `results:auto` is **dry-run by default**; a
+> gated `--commit` writes official finishing positions for settle-ready races
+> from the same-day today endpoints (Basic `/v1/results/today`, then Free
+> `/v1/results/today/free`) through the strict safety gate below. It is
+> idempotent, blocks on any conflict, leaves pending races untouched, and **never
+> writes SP/BSP** (those tiers carry none, so they are left null and never
+> fabricated). The manual CSV importer remains the audited fallback for SP,
+> non-today dates, or when the today endpoints are unavailable. This document is
+> the implemented spec + policy.
 >
 > **Responsible use.** Decision-support only. Not betting advice, no guarantees,
 > never places bets. Help: [GamCare](https://www.gamcare.org.uk) ·
@@ -12,32 +18,38 @@
 
 ## 1. Purpose
 
-Design a *future* safe commit mode that lets `results:auto` settle races
-automatically from the Free-plan daily results endpoint — **while preserving the
-current dry-run-first safety standards**. This is a design only; it changes no
-current write behaviour and adds no auto-betting.
+A safe commit mode that lets `results:auto` settle races automatically from the
+same-day today endpoints — **while preserving the dry-run-first safety
+standards**. It changes no model maths and adds no auto-betting; it writes only
+finishing positions for races that pass every gate.
 
 ## 2. Current state
 
-- `/v1/results` is **Standard/Pro** and `plan_blocked` on the current plan.
-- `/v1/results/today/free` works on the **Free plan** (today's basic results).
+- `/v1/results` is **Standard/Pro** and `plan_blocked` on the current plan (it is
+  the only tier that carries Betfair SP/BSP).
+- `/v1/results/today` works on the **Basic plan** and `/v1/results/today/free` on
+  the **Free plan** (today's results; **today only**).
 - `RunnerFree.position` provides the finishing position; `position == "1"` is the
   **winner**.
-- The free endpoint provides **no SP/BSP** → `sp_decimal` / `bsp_decimal` stay **null**.
-- `results:auto` currently performs a **dry-run audit only** (no DB writes).
-- `import:results` (manual CSV) remains the **write path today**.
+- The today endpoints provide **no SP/BSP** → `sp_decimal` / `bsp_decimal` stay
+  **null** (never fabricated).
+- `results:auto` is **dry-run by default**; a gated **`--commit`** writes
+  finishing positions for settle-ready races (idempotent; conflict-blocked).
+- `import:results` (manual CSV) remains the audited fallback for SP, non-today
+  dates, or when the today endpoints are unavailable.
 
-## 3. Proposed future command (design, do not implement)
+## 3. Command (implemented)
 
 ```
-npm run results:auto -- --date YYYY-MM-DD --course COURSE --commit
+npm run results:auto -- --date YYYY-MM-DD --course COURSE            # dry-run (default)
+npm run results:auto -- --date YYYY-MM-DD --course COURSE --commit   # writes — only on a clean audit
 ```
 
-Optional **future-only** flags (none implemented; all locked):
+Flags (`--commit` is **implemented**; the rest are future-only, not implemented):
 
-| Flag | Effect (future) | Default |
+| Flag | Effect | Default |
 | --- | --- | --- |
-| `--commit` | persist settlement after a clean audit | off (dry-run) |
+| `--commit` | persist settlement after a clean audit — **implemented** | off (dry-run) |
 | `--race-time HH:MM` | scope to a single race off time | unset |
 | `--source free-daily` | force the Free daily source | auto |
 | `--allow-null-sp` | accept settlement with null SP (free endpoint) | off |
@@ -46,9 +58,13 @@ Optional **future-only** flags (none implemented; all locked):
 
 ## 4. Source priority
 
-1. `/v1/results` — if available (Standard/Pro).
-2. `/v1/results/today/free` — if the primary is `plan_blocked` / unavailable.
-3. **Manual CSV** — if the free endpoint is unavailable or incomplete.
+1. `/v1/results` — if available (Standard/Pro; carries SP/BSP).
+2. `/v1/results/today` — Basic plan, **today only**, if the primary is
+   `plan_blocked` / unavailable.
+3. `/v1/results/today/free` — Free plan, **today only**, if the Basic endpoint
+   fails / is unavailable.
+4. **Manual CSV** — if the today endpoints are unavailable or incomplete, the
+   date is not today, or SP/BSP are wanted.
 
 ## 5. Safe settlement flow
 
@@ -133,20 +149,16 @@ logic and add idempotency/overwrite tests on a **historic** race only.)
 
 ## 11. Operator workflow
 
-**Current:**
+Recommended order:
 
 ```
-npm run results:auto -- --date YYYY-MM-DD --course COURSE   # dry-run
-# then, if needed, manual CSV import:
-npm run import:results -- --file data/results-YYYY-MM-DD-course.csv --commit
-```
-
-**Future:**
-
-```
-npm run results:auto -- --date YYYY-MM-DD --course COURSE            # dry-run
-# review the per-race audit, then:
-npm run results:auto -- --date YYYY-MM-DD --course COURSE --commit   # only if clean
+# 1. Dry-run audit (default — writes nothing):
+npm run results:auto -- --date YYYY-MM-DD --course COURSE
+# 2. Commit ONLY if the per-race audit is clean (today only; finish positions, no SP/BSP):
+npm run results:auto -- --date YYYY-MM-DD --course COURSE --commit
+# 3. Manual CSV fallback — SP wanted, date not today, or today endpoints unavailable:
+npm run import:results -- --file data/results-YYYY-MM-DD-course.csv            # dry-run
+npm run import:results -- --file data/results-YYYY-MM-DD-course.csv --commit   # only if clean
 ```
 
 ## 12. Open questions

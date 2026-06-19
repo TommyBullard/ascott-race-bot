@@ -33,7 +33,7 @@ commands, with writes gated behind explicit flags + a clean safety audit.
 | --- | --- | --- |
 | `pipeline:day` | **DB write** (only with `--commit`) | runs the model + persists recommendations; manual approval only |
 | `capture:t-minus` | local report | pre-off snapshot at T-minus N |
-| `results:auto` | none (dry-run) | `/v1/results` → Free `/v1/results/today/free` fallback; never settles |
+| `results:auto` | **DB write** (only with `--commit`) | `/v1/results` → Basic `/v1/results/today` → Free `/v1/results/today/free`; dry-run by default, gated `--commit` settles finishing positions (today only; never SP/BSP) |
 | `import:results` (manual CSV fallback) | **DB write** (only with `--commit`) | the sanctioned settlement write path |
 | `report:day` | local report | end-of-day report |
 | `export:training-data` | local CSV | gitignored under `data/exports/` |
@@ -80,8 +80,10 @@ safety gates in §5.
 5. **Off-time lock** — at the off, **lock the race**: no further pre-off actions.
 6. **Post-off no-rerun guard** — never re-run the model for a locked race; a
    post-off run must never supersede the final pre-off run.
-7. **Results** — `results:auto` **dry-run** (Free fallback); produce a per-race
-   audit.
+7. **Results** — `results:auto` **dry-run** (Basic → Free today fallback);
+   produce a per-race audit. A gated `results:auto --commit` can settle finishing
+   positions on a clean audit (today only); SP / non-today still go via the
+   manual CSV.
 8. **Result commit** — only if `--allow-result-commit` **and** the audit is clean
    (single winner, all matched, not partial); otherwise manual CSV fallback.
 9. **End of day** — `report:day`, `export:training-data`, `tipsters:audit`,
@@ -104,15 +106,18 @@ These are **non-negotiable** and apply under every flag:
 
 ## 6. Result automation policy
 
-- `/v1/results` is **Standard/Pro** and is `plan_blocked` on the current plan.
-- `/v1/results/today/free` is **Free Plan** and provides today's basic daily
-  results including each runner's finishing `position` (`position == "1"` = winner).
-- The free endpoint provides **no SP/BSP** — `sp_decimal` / `bsp_decimal` must
-  stay **null**; never fabricate them.
-- The **manual CSV importer remains required** whenever the free endpoint is
-  incomplete, ambiguous, or unavailable (e.g. a race not yet returned).
-- Any future commit mode must be **dry-run first** and commit **only on a clean
-  audit** — matching the existing `results:auto` + `import:results` safety gate.
+- `/v1/results` is **Standard/Pro** and is `plan_blocked` on the current plan
+  (the only tier carrying Betfair SP/BSP).
+- On a plan-block for **today**, settlement falls back to the Basic
+  `/v1/results/today`, then the Free `/v1/results/today/free` (each runner's
+  finishing `position`; `position == "1"` = winner).
+- The today endpoints provide **no SP/BSP** — `sp_decimal` / `bsp_decimal` stay
+  **null**; never fabricated.
+- `results:auto` is **dry-run by default**; its gated **`--commit`** settles
+  finishing positions only on a clean audit (idempotent; conflicts block; pending
+  races untouched). `/api/cron/results` uses the same fallback + writer for today.
+- The **manual CSV importer remains the audited fallback** whenever SP is wanted,
+  the date is not today, or the today endpoints are incomplete/unavailable.
 
 ## 7. Race-day freeze policy
 

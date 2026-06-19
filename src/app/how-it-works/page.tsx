@@ -145,10 +145,10 @@ export default function HowItWorksPage() {
       </div>
 
       <p style={styles.intro}>
-        Our system combines market data, tipster insights, and data quality
-        checks to identify disciplined betting opportunities. It does not just
-        ask who is most likely to win — it also checks whether the data is
-        reliable enough to act on.
+        Racing Bot is a decision-support tool, not a bookmaker. It combines
+        market data, tipster insights, and data-quality checks to highlight
+        where the model sees value — and, just as importantly, where it does
+        not. It never places bets for you and never guarantees an outcome.
       </p>
 
       {SECTIONS.map((section) => (

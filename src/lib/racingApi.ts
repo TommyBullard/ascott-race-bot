@@ -253,6 +253,17 @@ export interface TodayFreeResultsQuery {
   skip?: number;
 }
 
+/**
+ * Query for `/results/today` (TODAY only — no date parameter). Same query shape
+ * as the free endpoint; available on the BASIC plan (a lower tier than `/results`).
+ */
+export interface TodayResultsQuery {
+  regionCodes?: string[];
+  /** The API default is 50. */
+  limit?: number;
+  skip?: number;
+}
+
 /** Query for `/racecards/standard`. */
 export interface RacecardsQuery {
   day?: 'today' | 'tomorrow';
@@ -314,6 +325,15 @@ export interface RacingApiClient {
   getBasicRacecards(params: RacecardsQuery): Promise<RacecardsStandardResponse>;
   /** `/results` — settled races incl. finishing position, SP and BSP (Standard plan). */
   getResults(params: ResultsQuery): Promise<ResultsResponse>;
+  /**
+   * `/results/today` — TODAY's settled races on the BASIC plan (a lower tier than
+   * `/results`). No date parameter (today only); paginated via limit / skip. The
+   * preferred SAME-DAY fallback when `/results` is plan-blocked, tried BEFORE the
+   * free endpoint. Typed against {@link ResultsFreeResponse} (finishing `position`
+   * only) so the shared settlement pipeline never reads or fabricates SP/BSP — any
+   * prices this tier might carry are intentionally ignored and left null.
+   */
+  getTodayResults(params: TodayResultsQuery): Promise<ResultsFreeResponse>;
   /**
    * `/results/today/free` — TODAY's settled races (basic data) on the FREE plan.
    * No date parameter (today only); paginated via limit (max 100) / skip. Carries
@@ -466,6 +486,16 @@ export function createRacingApiClient(
           limit,
           skip,
         },
+        fetchImpl,
+        minIntervalMs,
+      ),
+    getTodayResults: ({ regionCodes, limit, skip }) =>
+      // Basic-tier daily results. Typed as ResultsFreeResponse (position-only) on
+      // purpose: the settlement pipeline maps finishing positions and never reads
+      // SP/BSP, so prices are never partially captured or fabricated.
+      racingApiGet<ResultsFreeResponse>(
+        '/results/today',
+        { region: regionCodes, limit, skip },
         fetchImpl,
         minIntervalMs,
       ),

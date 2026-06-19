@@ -227,7 +227,10 @@ unset; bearer token required when set):
 
 - `GET /api/cron/racecards` — ingest racecards (`?day`).
 - `GET /api/cron/odds` — ingest Betfair odds (`?day` / `?date`).
-- `GET /api/cron/results` — settle results (blocked on the current plan — see §9).
+- `GET /api/cron/results` — settle results: prefers `/v1/results` (Standard), and
+  on a Standard-plan block **falls back today** to `/v1/results/today` then
+  `/v1/results/today/free` to settle finishing positions; SP/BSP need the Standard
+  plan (see §9).
 - `POST /api/run-model` — run the model for a race (`?race_id`).
 
 **Public, read-only:**
@@ -254,19 +257,30 @@ gated and never fabricate data (unmatched entities are skipped).
 
 ---
 
-## 9. Current blockers
+## 9. Results settlement & plan limits
 
-- **🚩 Automated results settlement is blocked.** The Racing API `/v1/results`
-  endpoint requires the **Standard plan**; the current plan returns
-  `standard_plan_required` (confirmed read-only by `npm run probe:results`).
-  There is **no free results fallback**, so `/api/cron/results` cannot settle
-  automatically.
-  - **Workaround in place:** the manual results CSV importer (see §13).
-  - **Fix:** upgrade the Racing API plan (then `/api/cron/results` automates
-    settlement with **no code changes** — it is already written and idempotent),
-    or wire a compliant alternative results source.
+- **`/v1/results` (full results incl. Betfair SP/BSP) requires the Standard
+  plan.** The current plan returns `standard_plan_required` (confirmed read-only
+  by `npm run probe:results`), so the SP/BSP-carrying primary source is
+  unavailable on this plan.
+- **Same-day finishing positions ARE settled automatically (no Standard plan
+  required).** When `/v1/results` is plan-blocked and the meeting is **today**,
+  both `results:auto` and `/api/cron/results` fall back to the Basic
+  `/v1/results/today` endpoint, then the Free `/v1/results/today/free` endpoint,
+  and settle finishing positions through the same idempotent, conflict-gated,
+  finish-position-only writer. Those tiers carry **no SP/BSP**, so SP/BSP are
+  left null and **never fabricated**.
+- **What still needs the Standard plan (or the manual CSV):** SP/BSP values, and
+  results for **non-today** dates (the today endpoints are today-only).
+  - **Operator order:** `results:auto` (dry-run by default) → `results:auto
+    --commit` only on a clean audit → manual CSV importer (`import:results`, see
+    §13) when SP is wanted, the date is not today, or both today endpoints are
+    unavailable.
+  - **Plan upgrade (optional):** upgrading to the Standard plan unblocks
+    `/v1/results` (SP/BSP + historic results) with **no code changes** —
+    `/api/cron/results` already prefers it.
 
-No other blocking issues; all gates are green.
+No blocking issues; all gates are green.
 
 ---
 
@@ -275,11 +289,15 @@ No other blocking issues; all gates are green.
 **Done:** foundational safety/auth, model-run versioning, append-only history,
 data-quality layer, risk / stake suppression, dashboard, performance & ROI
 tracking, tipster candidate foundation + bulk import + evidence scoring + status
-panel, manual results importer + docs, read-only results probe.
+panel, manual results importer + docs, read-only results probe, automated
+same-day results fallback (Basic `/v1/results/today` → Free) + gated
+`results:auto --commit`.
 
 **Next (in priority order):**
 
-1. Upgrade the Racing API plan → enable automated `/api/cron/results` settlement.
+1. (Optional) Upgrade the Racing API plan → unblock `/v1/results` for SP/BSP +
+   historic results (same-day finishing positions already settle via the today
+   fallback — see §9).
 2. (Strategic) Evaluate feature extraction / training-data export **only** if it
    provably beats the market-only baseline without leakage — production stays
    rules/market until then.

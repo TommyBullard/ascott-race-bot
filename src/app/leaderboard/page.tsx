@@ -324,13 +324,16 @@ export default function LeaderboardPage() {
       {status === 'loading' && <p style={styles.muted}>Loading leaderboard…</p>}
 
       {status === 'error' && (
-        <p style={{ color: NEGATIVE_COLOR }}>Error: {error}</p>
+        <p style={{ color: NEGATIVE_COLOR }}>
+          Couldn&apos;t load the leaderboard right now. Please refresh to try
+          again.{error ? ` (${error})` : ''}
+        </p>
       )}
 
       {status === 'ready' && rows.length === 0 && (
         <p style={styles.muted}>
-          No tracked tipsters yet — seed the pool with real proofed figures
-          (npm run seed:tipsters) to populate the leaderboard.
+          No tracked tipsters yet — the leaderboard will populate once tipster
+          performance data is available.
         </p>
       )}
 

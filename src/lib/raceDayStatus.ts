@@ -264,7 +264,7 @@ export interface RaceWarningInput {
 
 /**
  * Builds the at-a-glance warning chips shown on a race card / next-race header:
- * `LOW confidence`, `DEGRADED|STALE|INVALID data`, and `NO_TIPSTER_CONSENSUS`,
+ * `Low confidence`, a friendly data-quality chip, and `No tipster consensus`,
  * derived purely from already-stored read-only fields. Returns an empty array
  * when none apply. Decision-support only; never a bet instruction. Pure.
  */
@@ -272,16 +272,22 @@ export function buildRaceWarningChips(input: RaceWarningInput): StatusBadge[] {
   const chips: StatusBadge[] = [];
 
   if ((input.confidenceLabel ?? '').trim().toUpperCase() === 'LOW') {
-    chips.push({ label: 'LOW confidence', tone: 'warn' });
+    chips.push({ label: 'Low confidence', tone: 'warn' });
   }
 
   const rq = (input.runQuality ?? '').trim().toUpperCase();
-  if (rq === 'DEGRADED' || rq === 'STALE' || rq === 'INVALID') {
-    chips.push({ label: `${rq} data`, tone: 'warn' });
+  const dataQualityLabel: Record<string, string> = {
+    DEGRADED: 'Lower-quality data',
+    STALE: 'Stale data',
+    INVALID: 'Incomplete data',
+  };
+  const dq = dataQualityLabel[rq];
+  if (dq) {
+    chips.push({ label: dq, tone: 'warn' });
   }
 
   if ((input.alignmentLabel ?? '').trim().toUpperCase() === 'NO_TIPSTER_CONSENSUS') {
-    chips.push({ label: 'NO_TIPSTER_CONSENSUS', tone: 'neutral' });
+    chips.push({ label: 'No tipster consensus', tone: 'neutral' });
   }
 
   return chips;

@@ -5,10 +5,10 @@
  * It attempts a READ-ONLY official-results access for a date, classifies the
  * source status, and prints a clear operator summary with a strict settlement
  * safety gate. The primary source is The Racing API `/v1/results`; when that is
- * plan-blocked / unavailable it FALLS BACK to the Free-plan daily endpoint
- * `/v1/results/today/free` (today only) and builds a per-race dry-run audit by
- * matching the free payload to the stored races/runners. If neither yields a
- * safe, complete result it falls back to the existing manual CSV importer.
+ * plan-blocked / unavailable it FALLS BACK (today only) to the Basic same-day
+ * endpoint `/v1/results/today`, then the Free `/v1/results/today/free`, building a
+ * per-race dry-run audit by matching the payload to the stored races/runners. If
+ * neither yields a safe, complete result it falls back to the manual CSV importer.
  *
  * DRY-RUN BY DEFAULT. This phase NEVER writes to the database: it issues only
  * SELECT reads via Supabase (to match results to stored races/runners) and never
@@ -33,9 +33,7 @@
  * access attempt (absent -> a safe `missing_credentials` status, still no writes).
  */
 
-import { createRacingApiClient, type RacingApiClient, type ResultFreeRace } from '../src/lib/racingApi';
-import { supabaseAdmin } from '../src/lib/supabaseAdmin';
-import { normalizeCourse, normalizeHorseName } from '../src/lib/raceSync';
+import { createRacingApiClient, type RacingApiClient } from '../src/lib/racingApi';
 import {
   categorizeResultsAccessError,
   countResults,
@@ -55,17 +53,10 @@ import {
 import {
   shouldTryFreeFallback,
   isTodayUtc,
-  filterFreeRacesByCourse,
-  collectFreeSettlements,
-  commitOpsForSettlement,
   buildFreeResultsReport,
   renderFreeResultsSummary,
-  shouldFetchMoreFreeResults,
-  FREE_RESULTS_MAX_LIMIT,
-  type DbRaceLite,
-  type DbRunnerLite,
-  type FreeRaceSettlement,
 } from '../src/lib/freeResultsMatch';
+import { settleTodayResults } from '../src/lib/todayResultsSettlement';
 
 /** Default UK + Irish region codes for The Racing API (matches the live sync). */
 const DEFAULT_REGIONS = ['gb', 'ire'];
@@ -100,112 +91,19 @@ function blockedAudit(status: ResultSourceStatus): SettlementAudit {
   };
 }
 
-/** Pages through the free daily results (limit 100 / skip), with a hard cap. */
-async function pageAllFreeResults(
-  client: RacingApiClient,
-  regionCodes: string[],
-): Promise<ResultFreeRace[]> {
-  const all: ResultFreeRace[] = [];
-  const limit = FREE_RESULTS_MAX_LIMIT;
-  let skip = 0;
-  for (let guard = 0; guard < 100; guard++) {
-    const page = await client.getTodayFreeResults({ regionCodes, limit, skip });
-    const rows = page.results ?? [];
-    all.push(...rows);
-    const total = typeof page.total === 'number' ? page.total : all.length;
-    if (!shouldFetchMoreFreeResults({ total, skip, returned: rows.length, limit })) break;
-    skip += rows.length;
-  }
-  return all;
-}
-
-/** SELECT-only read of the stored races (+ their runners) for the meeting day. */
-async function fetchDbRacesAndRunners(
-  date: string,
-  course: string | undefined,
-): Promise<{ races: DbRaceLite[]; runnersByRace: Map<string, DbRunnerLite[]> }> {
-  const wantCourse = course ? normalizeCourse(course) : null;
-  const { data: raceData, error: raceError } = await supabaseAdmin
-    .from('races')
-    .select('id, course, off_time, race_name, status')
-    .eq('meeting_date', date);
-  if (raceError) throw new Error(`Failed to read races for ${date}: ${raceError.message}`);
-  let races = (raceData ?? []) as DbRaceLite[];
-  if (wantCourse) races = races.filter((r) => normalizeCourse(r.course ?? '') === wantCourse);
-
-  const runnersByRace = new Map<string, DbRunnerLite[]>();
-  if (races.length > 0) {
-    const ids = races.map((r) => r.id);
-    const { data: runnerData, error: runnerError } = await supabaseAdmin
-      .from('runners')
-      .select('id, race_id, horse_name, finish_pos')
-      .in('race_id', ids);
-    if (runnerError) throw new Error(`Failed to read runners: ${runnerError.message}`);
-    for (const row of (runnerData ?? []) as Array<{
-      id: string;
-      race_id: string;
-      horse_name: string | null;
-      finish_pos: number | null;
-    }>) {
-      const list = runnersByRace.get(row.race_id) ?? [];
-      list.push({ id: row.id, horse_name: row.horse_name, finish_pos: row.finish_pos });
-      runnersByRace.set(row.race_id, list);
-    }
-  }
-  return { races, runnersByRace };
-}
-
-/** Reports a no-op commit when the free endpoint produced nothing to settle. */
+/** Reports a no-op commit when the today endpoints produced nothing to settle. */
 function reportNothingCommitted(commit: boolean): void {
   if (commit) {
-    console.error('\nNothing committed \u2014 the free endpoint was not available/applicable; use the manual importer.');
+    console.error('\nNothing committed \u2014 the same-day endpoints were not available/applicable; use the manual importer.');
     process.exitCode = 1;
   }
 }
 
 /**
- * Writes ONLY settle-ready races to the DB: for each, applies the idempotent
- * runner finish_pos updates (existing-null -> set; NEVER SP/BSP) and marks the
- * race settled (`status='result'`, `official_result_time`) using the same schema
- * convention as the manual importer. Idempotent: a re-run finds no `update` ops
- * and (if the race is already `result`) writes nothing. Pending / blocked races
- * are NEVER touched. Returns the actual committed counts.
+ * Runs the same-day today-results fallback (Basic `/v1/results/today` preferred,
+ * then Free `/v1/results/today/free`) and prints the dry-run audit. Today-only.
  */
-async function applyFreeSettlements(
-  settlements: readonly FreeRaceSettlement[],
-  statusById: ReadonlyMap<string, string | null>,
-): Promise<{ races: number; runners: number }> {
-  let races = 0;
-  let runners = 0;
-  const nowIso = new Date().toISOString();
-  for (const s of settlements) {
-    if (!s.safety.canCommit || !s.matched_db_race_id) continue; // settle-ready + matched only
-    const ops = commitOpsForSettlement(s);
-    for (const u of ops.updates) {
-      const { error } = await supabaseAdmin
-        .from('runners')
-        .update({ finish_pos: u.finish_pos })
-        .eq('id', u.runner_id);
-      if (error) throw new Error(`runner result update failed: ${error.message}`);
-      runners += 1;
-    }
-    // Mark settled only when something changed or the race is not already 'result'
-    // (keeps a re-run a true no-op).
-    const alreadyResult = (statusById.get(s.matched_db_race_id) ?? null) === 'result';
-    if (ops.updates.length > 0 || !alreadyResult) {
-      const { error } = await supabaseAdmin
-        .from('races')
-        .update({ status: 'result', official_result_time: nowIso })
-        .eq('id', s.matched_db_race_id);
-      if (error) throw new Error(`race status update failed: ${error.message}`);
-      races += 1;
-    }
-  }
-  return { races, runners };
-}
-
-/** Runs the free daily-results fallback (today only) and prints the dry-run audit. */
-async function runFreeFallback(opts: {
+async function runTodayFallback(opts: {
   date: string;
   course: string | undefined;
   commit: boolean;
@@ -224,12 +122,12 @@ async function runFreeFallback(opts: {
     manualImportCommand,
   };
 
-  // The free endpoint is TODAY-only; for any other date it cannot help.
+  // The today endpoints are TODAY-only; for any other date they cannot help.
   if (!isTodayUtc(date)) {
     const report = buildFreeResultsReport({
       ...base,
       freeAttempted: false,
-      freeNotApplicableReason: `the free endpoint only covers today (${new Date().toISOString().slice(0, 10)}); ${date} is not today`,
+      freeNotApplicableReason: `the same-day endpoints only cover today (${new Date().toISOString().slice(0, 10)}); ${date} is not today`,
       freeResultsFound: 0,
       settlements: [],
       pendingDbRaces: [],
@@ -239,16 +137,17 @@ async function runFreeFallback(opts: {
     return;
   }
 
-  const client: RacingApiClient = createRacingApiClient();
-  let freeRaces: ResultFreeRace[];
+  // Try Basic `/v1/results/today` first, then Free `/v1/results/today/free`; the
+  // shared settler writes ONLY when `commit` is true (idempotent finish_pos +
+  // race status; never SP/BSP). It throws only when BOTH today endpoints fail.
+  let settled;
   try {
-    const all = await pageAllFreeResults(client, DEFAULT_REGIONS);
-    freeRaces = all.filter((r) => (r.date ?? '') === date); // defensive (endpoint is today-only)
+    settled = await settleTodayResults({ date, course, commit });
   } catch (error) {
     const report = buildFreeResultsReport({
       ...base,
       freeAttempted: false,
-      freeNotApplicableReason: `free results unavailable (${error instanceof Error ? error.message : String(error)})`,
+      freeNotApplicableReason: `today results unavailable (${error instanceof Error ? error.message : String(error)})`,
       freeResultsFound: 0,
       settlements: [],
       pendingDbRaces: [],
@@ -256,34 +155,19 @@ async function runFreeFallback(opts: {
     console.log(renderFreeResultsSummary(report));
     reportNothingCommitted(commit);
     return;
-  }
-
-  const byCourse = filterFreeRacesByCourse(freeRaces, course, normalizeCourse);
-  const { races: dbRaces, runnersByRace } = await fetchDbRacesAndRunners(date, course);
-  const { settlements, pending } = collectFreeSettlements({
-    freeRaces: byCourse,
-    dbRaces,
-    runnersByRace,
-    normalizeCourse,
-    normalizeHorseName,
-  });
-
-  // Commit mode: write ONLY settle-ready races (idempotent; finish_pos only, never SP/BSP).
-  let committed = { races: 0, runners: 0 };
-  if (commit) {
-    const statusById = new Map(dbRaces.map((r) => [r.id, r.status ?? null]));
-    committed = await applyFreeSettlements(settlements, statusById);
   }
 
   const report = buildFreeResultsReport({
     ...base,
     freeAttempted: true,
     freeNotApplicableReason: null,
-    freeResultsFound: byCourse.length,
-    settlements,
-    pendingDbRaces: pending,
-    committedRaces: commit ? committed.races : undefined,
-    committedRunners: commit ? committed.runners : undefined,
+    freeSource: settled.label,
+    resultSource: settled.source,
+    freeResultsFound: settled.freeResultsFound,
+    settlements: settled.settlements,
+    pendingDbRaces: settled.pending,
+    committedRaces: commit ? settled.committed.races : undefined,
+    committedRunners: commit ? settled.committed.runners : undefined,
   });
   console.log(renderFreeResultsSummary(report));
 
@@ -348,10 +232,11 @@ async function main(): Promise<void> {
     }
   }
 
-  // Fall back to the FREE daily endpoint when the primary source is plan-blocked
-  // / unavailable (and we have credentials to call it).
+  // Fall back to the same-day today endpoints (Basic `/v1/results/today` first,
+  // then Free `/v1/results/today/free`) when the primary source is plan-blocked /
+  // unavailable (and we have credentials to call them).
   if (hasUser && hasKey && shouldTryFreeFallback(status)) {
-    await runFreeFallback({
+    await runTodayFallback({
       date,
       course: args.course,
       commit: args.commit,

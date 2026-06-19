@@ -15,9 +15,13 @@ _Last updated: 2026-06-17._
   workflow; the tooling does the read-only/heavy lifting.
 - **Automated / read-only:** racecards, odds, model runs, T-minus captures,
   reports, audits, and the training export.
-- **Result detection** now uses The Racing API `/v1/results/today/free` fallback
-  in **dry-run** (when `/v1/results` is `plan_blocked`).
-- **DB settlement** still uses **manual CSV import**.
+- **Result detection + same-day settlement** use the today endpoints when
+  `/v1/results` is `plan_blocked`: `results:auto` (and `/api/cron/results`) try
+  the Basic `/v1/results/today`, then the Free `/v1/results/today/free`.
+  `results:auto` is **dry-run by default**; a gated **`--commit`** writes
+  finishing positions for settle-ready races (idempotent; never SP/BSP).
+- **Manual CSV import** remains the audited fallback for SP/BSP, non-today dates,
+  or when the today endpoints are unavailable.
 - **No auto-betting exists** anywhere in the codebase.
 
 ## 2. Completed automation phases
@@ -43,7 +47,8 @@ _Last updated: 2026-06-17._
 ```
 npm run pipeline:day -- --date YYYY-MM-DD --course COURSE --commit          # writes DB (manual approval)
 npm run capture:t-minus -- --date YYYY-MM-DD --course COURSE --minutes-before 5
-npm run results:auto -- --date YYYY-MM-DD --course COURSE                    # dry-run (Free fallback)
+npm run results:auto -- --date YYYY-MM-DD --course COURSE                    # dry-run (Basic -> Free today fallback)
+npm run results:auto -- --date YYYY-MM-DD --course COURSE --commit           # writes finishing positions (today only; if clean)
 npm run import:results -- --file data/results-YYYY-MM-DD-course.csv          # dry-run
 npm run import:results -- --file data/results-YYYY-MM-DD-course.csv --commit # writes DB (only if clean)
 npm run report:day -- --date YYYY-MM-DD --course COURSE
@@ -54,8 +59,9 @@ npm run gates:audit -- --date YYYY-MM-DD --course COURSE
 npm run ml:evaluate -- --input path/to/export.csv
 ```
 
-Only the two `--commit` commands write the database; everything else is
-read-only or writes a local report/CSV.
+Only the three `--commit` commands (`pipeline:day`, `results:auto`,
+`import:results`) write the database; everything else is read-only or writes a
+local report/CSV.
 
 ## 4. Live race-day freeze policy
 
@@ -66,9 +72,9 @@ read-only or writes a local report/CSV.
 
 ## 5. What is still manual
 
-- Full result CSV entry when the free endpoint lags or **SP values** are needed.
-- `import:results --commit` (the settlement write).
-- Final **operator judgement**.
+- **SP/BSP values** and **non-today** result dates (the today endpoints are
+  today-only and carry no SP/BSP) — entered via the manual results CSV.
+- Final **operator judgement** (review the dry-run audit before `--commit`).
 - Any **tipster approval**.
 - Any **GenAI extraction review**.
 
@@ -76,8 +82,9 @@ read-only or writes a local report/CSV.
 
 Ranked:
 
-1. `results:auto --commit` mode with **strict safety gates**
-   (see [AUTO_RESULTS_COMMIT_MODE_DESIGN.md](AUTO_RESULTS_COMMIT_MODE_DESIGN.md)).
+1. ~~`results:auto --commit` mode with **strict safety gates**~~ — **DONE**
+   (Basic → Free today fallback + gated `--commit`; see
+   [AUTO_RESULTS_COMMIT_MODE_DESIGN.md](AUTO_RESULTS_COMMIT_MODE_DESIGN.md)).
 2. `race-day:operate` controlled mode
    (see [CONTROLLED_LIVE_OPERATOR_MODE.md](CONTROLLED_LIVE_OPERATOR_MODE.md)).
 3. Result enrichment / SP policy.
@@ -98,7 +105,8 @@ Ranked:
 
 ## 8. Open questions
 
-- Should `results:auto` be allowed to **commit** finish positions from the free endpoint?
+- ~~Should `results:auto` be allowed to **commit** finish positions from the free endpoint?~~
+  **Resolved: yes — gated `--commit`, today only, finishing positions only, never SP/BSP.**
 - Should **SP remain manual** until a paid endpoint provides it?
 - Should generated daily reports be **tracked or ignored** in git?
 - Should `race-day:operate` run **only after all races**, or **during racing**?

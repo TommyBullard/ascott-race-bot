@@ -23,8 +23,14 @@ import {
   resolveRacecardsTier,
   type RacingApiClient,
   type RacecardsTier,
+  type ResultRace,
   type StandardRacecard,
 } from './racingApi';
+import {
+  settleTodayResults,
+  shouldUseTodayFallback,
+} from './todayResultsSettlement';
+import type { ResultSource } from './autoResults';
 import {
   createBetfairExchangeClient,
   extractBackPrice,
@@ -350,6 +356,12 @@ export interface ResultsSyncSummary {
   runnersUpdated: number;
   unmatchedRaces: number;
   modelRerun: number;
+  /**
+   * Which results source produced this settlement: the Standard `/v1/results`
+   * primary, or a same-day today fallback (`today_basic` / `today_free`) used when
+   * the primary is plan-blocked for today. Optional/additive.
+   */
+  resultSource?: ResultSource;
 }
 
 /**
@@ -357,6 +369,13 @@ export interface ResultsSyncSummary {
  * the matching runners, marks each matched race status='result', then re-runs
  * the model for ALL remaining unsettled races today so the next-race pick
  * refreshes. Idempotent: re-running rewrites the same result values.
+ *
+ * SAME-DAY FALLBACK: if the Standard `/v1/results` endpoint is plan-blocked AND
+ * the meeting is today, it falls back to the Basic `/v1/results/today` endpoint,
+ * then the Free `/v1/results/today/free`, settling via the shared idempotent,
+ * conflict-gated, finish_pos-only writer (those tiers carry NO SP/BSP, so prices
+ * are left null and never fabricated). Any other error is rethrown unchanged, so
+ * the Standard-plan behaviour and real failures are preserved.
  */
 export async function syncResults(
   now: Date = new Date(),
@@ -371,12 +390,34 @@ export async function syncResults(
   };
   const meetingDate = todayUtc(now);
 
-  const res = await client.getResults({
-    startDate: meetingDate,
-    endDate: meetingDate,
-    regionCodes: DEFAULT_REGIONS,
-  });
-  const results = res.results ?? [];
+  let results: ResultRace[];
+  try {
+    const res = await client.getResults({
+      startDate: meetingDate,
+      endDate: meetingDate,
+      regionCodes: DEFAULT_REGIONS,
+    });
+    results = res.results ?? [];
+  } catch (err) {
+    // Only fall back when `/v1/results` is plan-blocked AND the meeting is today
+    // (the today endpoints are today-only). Any other error is a real failure and
+    // is rethrown so existing Standard-plan behaviour is preserved.
+    if (!shouldUseTodayFallback(err, meetingDate, now)) throw err;
+    // Settle from the same-day today endpoints (Basic `/v1/results/today` first,
+    // then Free `/v1/results/today/free`) via the shared idempotent, conflict-
+    // gated, finish_pos-only writer (never SP/BSP). Throws when BOTH are
+    // unavailable, so the cron route surfaces a clear diagnostic.
+    const settled = await settleTodayResults({ date: meetingDate, commit: true, client });
+    summary.resultSource = settled.source;
+    summary.resultsFetched = settled.freeResultsFound;
+    summary.racesSettled = settled.committed.races;
+    summary.runnersUpdated = settled.committed.runners;
+    summary.unmatchedRaces = settled.pending.length;
+    const refreshFallback = await refreshModelForMeeting(meetingDate);
+    summary.modelRerun += refreshFallback.modelReran;
+    return summary;
+  }
+  summary.resultSource = 'primary_standard';
   summary.resultsFetched = results.length;
 
   for (const race of results) {

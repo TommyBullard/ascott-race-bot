@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { normalizeCourse, normalizeHorseName } from '../src/lib/raceSync';
-import { mapResultsAccessCategory } from '../src/lib/autoResults';
+import { mapResultsAccessCategory, TODAY_BASIC_RESULTS_SOURCE_LABEL } from '../src/lib/autoResults';
 import type { ResultFreeRace, ResultFreeRunner } from '../src/lib/racingApi';
 import {
   shouldTryFreeFallback,
@@ -304,6 +304,55 @@ test('renderFreeResultsSummary: deterministic; shows winner, SP/BSP null, settle
   assert.ok(out.includes(FREE_RESULTS_SOURCE_LABEL));
 });
 
+test('buildFreeResultsReport + render: today_basic source label/kind render correctly', () => {
+  const free = freeRace({ race_name: 'Basic Race', runners: [freeRunner('Alpha', '1'), freeRunner('Bravo', '2')] });
+  const { settlements, pending } = collectFreeSettlements({
+    freeRaces: [free],
+    dbRaces: [dbRace()],
+    runnersByRace: new Map([['db1', [dbRunner({ id: 'r1', horse_name: 'Alpha' }), dbRunner({ id: 'r2', horse_name: 'Bravo' })]]]),
+    normalizeCourse,
+    normalizeHorseName,
+  });
+  const report = buildFreeResultsReport({
+    date: '2026-06-17',
+    course: 'Ascot',
+    commitRequested: false,
+    primarySource: 'The Racing API /v1/results',
+    primaryStatus: 'plan_blocked',
+    primaryDetail: null,
+    freeAttempted: true,
+    freeNotApplicableReason: null,
+    freeSource: TODAY_BASIC_RESULTS_SOURCE_LABEL,
+    resultSource: 'today_basic',
+    freeResultsFound: 1,
+    settlements,
+    pendingDbRaces: pending,
+    manualImportCommand: 'npm run import:results -- --file data/results-2026-06-17-ascot.csv',
+  });
+  assert.equal(report.result_source, 'today_basic');
+  const out = renderFreeResultsSummary(report);
+  assert.match(out, /source used: The Racing API \/v1\/results\/today \(today_basic\)/);
+});
+
+test('buildFreeResultsReport: defaults to the free source/kind when none specified', () => {
+  const report = buildFreeResultsReport({
+    date: '2026-06-17',
+    course: null,
+    commitRequested: false,
+    primarySource: 'The Racing API /v1/results',
+    primaryStatus: 'plan_blocked',
+    primaryDetail: null,
+    freeAttempted: true,
+    freeNotApplicableReason: null,
+    freeResultsFound: 0,
+    settlements: [],
+    pendingDbRaces: [],
+    manualImportCommand: 'npm run import:results -- --file data/results-2026-06-17.csv',
+  });
+  assert.equal(report.result_source, 'today_free');
+  assert.equal(report.free_source, FREE_RESULTS_SOURCE_LABEL);
+});
+
 /* ------------------- commit ops, conflicts, idempotency ------------------- */
 
 test('buildFreeRaceSettlement: commit_op classifies update / noop / conflict per runner', () => {
@@ -452,16 +501,21 @@ test('the free-match module is pure (no DB/fs/net) and never fabricates SP/BSP',
   assert.equal(/bsp_decimal:\s*null/.test(src), true);
 });
 
-test('the CLI write layer is commit-gated and writes only finish_pos + race status (never SP/BSP)', () => {
-  const cli = readFileSync('scripts/autoResults.ts', 'utf8');
+test('the today-settlement write layer is commit-gated and writes only finish_pos + race status (never SP/BSP)', () => {
+  const lib = readFileSync('src/lib/todayResultsSettlement.ts', 'utf8');
   // The only writes are commit-gated runner finish_pos + race status updates.
-  assert.match(cli, /if \(commit\)/);
-  assert.match(cli, /\.update\(\{ finish_pos: u\.finish_pos \}\)/);
-  assert.match(cli, /\.update\(\{ status: 'result', official_result_time: nowIso \}\)/);
+  assert.match(lib, /if \(params\.commit\)/);
+  assert.match(lib, /\.update\(\{ finish_pos: u\.finish_pos \}\)/);
+  assert.match(lib, /\.update\(\{ status: 'result', official_result_time: nowIso \}\)/);
   // never writes / overwrites SP or BSP.
-  assert.equal(/sp_decimal|bsp_decimal/.test(cli), false);
+  assert.equal(/sp_decimal|bsp_decimal/.test(lib), false);
   // no insert / upsert / delete / rpc anywhere.
-  assert.equal(/\.(insert|upsert|delete|rpc)\s*\(/.test(cli), false);
+  assert.equal(/\.(insert|upsert|delete|rpc)\s*\(/.test(lib), false);
+
+  // The CLI now orchestrates + renders only: no direct DB writes, no SP/BSP, and
   // no model / staking / ranking / recommendation / bet-placement imports.
+  const cli = readFileSync('scripts/autoResults.ts', 'utf8');
+  assert.equal(/\.(insert|update|upsert|delete|rpc)\s*\(/.test(cli), false);
+  assert.equal(/sp_decimal|bsp_decimal/.test(cli), false);
   assert.equal(/bettingEngine|modelProbabilities|kellyStake|scoreRaceRunners|BetfairClient|placeOrder|placeBet/.test(cli), false);
 });

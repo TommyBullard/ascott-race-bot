@@ -18,6 +18,9 @@ import RaceIntelligencePanel from '@/components/RaceIntelligencePanel';
 import RaceTimelinePanel from '@/components/RaceTimelinePanel';
 import SettlementStatusPanel from '@/components/SettlementStatusPanel';
 import PlaceAuditPanel from '@/components/PlaceAuditPanel';
+import ProofOfUpdatePanel from '@/components/ProofOfUpdatePanel';
+import GenaiCommentaryPanel from '@/components/GenaiCommentaryPanel';
+import type { GenaiCommentaryRow } from '@/lib/genaiCommentaryView';
 import {
   buildTipsterStatusLines,
   type TipsterStatusSummary,
@@ -50,6 +53,7 @@ import { buildRaceIntelligence } from '@/lib/raceIntelligence';
 import { buildRaceDayTimeline } from '@/lib/raceDayTimeline';
 import { buildSettlementView } from '@/lib/settlementStatus';
 import { buildPlaceAuditView } from '@/lib/placeAuditView';
+import { buildProofPanelView } from '@/lib/proofPanel';
 import {
   deriveNextAction,
   type NextAction,
@@ -124,6 +128,12 @@ interface RaceCard {
    * renders its empty state.
    */
   observability?: RaceObservabilityLike | null;
+  /**
+   * Read-only, human-approved shadow GenAI commentary for this race (display
+   * only). Absent/empty unless a reviewer approved a candidate. Never
+   * model-active; not a decision input.
+   */
+  genaiCommentary?: GenaiCommentaryRow[] | null;
 }
 
 /** Live model accuracy snapshot (mirrors the server `ModelAccuracy`). */
@@ -1091,7 +1101,8 @@ function RaceCardView({ card, nowMs }: { card: RaceCard; nowMs: number }) {
           </>
         ) : card.hasModelRun ? (
           <span style={styles.muted}>
-            No bet — the model ran but found no qualifying recommendation.
+            No bet — the model ran but found no qualifying pick for this race
+            (this is normal, not an error).
           </span>
         ) : (
           <span style={styles.muted}>No model pick for this race yet.</span>
@@ -1143,6 +1154,10 @@ function RaceCardView({ card, nowMs }: { card: RaceCard; nowMs: number }) {
       {/* Model explanation: read-only observability from the current run. Renders
           its own empty state when this race has no usable observability. */}
       <RaceExplanationPanel {...explain} style={styles.explanationPanel} />
+
+      {/* AI shadow commentary: read-only, human-approved notes only. Renders
+          nothing unless a reviewer approved a candidate. Not betting advice. */}
+      <GenaiCommentaryPanel rows={card.genaiCommentary} style={styles.explanationPanel} />
     </article>
   );
 }
@@ -1457,7 +1472,7 @@ function LiveModeBar({
       <span style={{ color: '#656d76' }}>
         {scoped
           ? `Auto-refreshing read-only data every ${refreshSecs}s`
-          : 'Open a day/course link (?date=…&course=…) for live auto-refresh'}
+          : 'Open a specific race day to see live, auto-refreshing data.'}
       </span>
       {scoped && view.refreshedMs != null && (
         <span
@@ -1521,10 +1536,10 @@ function liveDotStyle(scoped: boolean): CSSProperties {
 function SafetyBanner() {
   return (
     <div style={safetyBannerStyle}>
-      <strong>Decision-support only.</strong> No auto-betting and no bet
-      placement. This page is read-only — it never writes to the database.
-      Result settlement runs as a separate, audited backend command, never from
-      this UI.
+      <strong>Decision-support only — not betting advice.</strong> No
+      auto-betting and no bet placement, and this page is read-only.
+      Recommendations are model outputs, not guarantees. During beta, results may
+      be settled manually and can lag behind the live race.
     </div>
   );
 }
@@ -1912,6 +1927,36 @@ export default function RecommendationsPage() {
   // available (authoritative); fall back to the client-derived one.
   const effectiveNextAction = statusData?.nextAction ?? nextAction;
 
+  // Read-only "Proof of Update" view derived from the already-loaded cards (no
+  // new fetch / API route, no DB writes). Audit-only signals not known to the UI
+  // (results source, training capture) render as "unknown" / "not available" and
+  // never imply success; GenAI live generation is off by default (shadow-only).
+  const proofScope = readScopeFromUrl();
+  const proofPanelView =
+    status === 'ready'
+      ? buildProofPanelView({
+          date: proofScope.date,
+          course: proofScope.course,
+          now: nowMs,
+          races: cards.map((c) => {
+            const runners = c.runners ?? [];
+            return {
+              offTime: c.off_time,
+              fieldSize: runners.length,
+              latestOddsSnapshotTime: c.latestOddsSnapshotTime ?? null,
+              latestModelRunTime: c.latestModelRunTime ?? null,
+              hasModelRun: c.hasModelRun ?? false,
+              status: c.status ?? null,
+              finishPosAvailable: runners.some(
+                (r) => typeof r.finish_pos === 'number' && Number.isFinite(r.finish_pos),
+              ),
+            };
+          }),
+          runnersCount: cards.reduce((n, c) => n + (c.runners ?? []).length, 0),
+          genai: { status: 'not_configured' },
+        })
+      : null;
+
   return (
     <main style={styles.page}>
       <div
@@ -1923,7 +1968,24 @@ export default function RecommendationsPage() {
           flexWrap: 'wrap',
         }}
       >
-        <h1>Bet Recommendations</h1>
+        <h1 style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: 0 }}>
+          Race-Day Recommendations
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              letterSpacing: 0.5,
+              color: '#0550ae',
+              background: '#ddf4ff',
+              border: '1px solid #b6e3ff',
+              borderRadius: 999,
+              padding: '2px 8px',
+              textTransform: 'uppercase',
+            }}
+          >
+            Beta
+          </span>
+        </h1>
         <span style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <a href="/how-it-works" style={{ fontSize: 14, color: '#0969da', textDecoration: 'none' }}>
             How it works
@@ -1933,6 +1995,18 @@ export default function RecommendationsPage() {
           </a>
         </span>
       </div>
+      <p
+        style={{
+          margin: '4px 0 0',
+          fontSize: 14,
+          color: '#57606a',
+          overflowWrap: 'anywhere',
+        }}
+      >
+        Model and tipster analysis for UK &amp; Irish racing — decision-support
+        only, not betting advice. Recommendations are model outputs, not
+        guarantees.
+      </p>
 
       <LiveModeBar
         scoped={scoped}
@@ -1957,16 +2031,23 @@ export default function RecommendationsPage() {
 
       <InFormPanel tipsters={inForm} />
 
+      {status === 'ready' && proofPanelView && (
+        <ProofOfUpdatePanel view={proofPanelView} />
+      )}
+
       {status === 'loading' && (
         <p style={styles.muted}>Loading recommendations…</p>
       )}
 
       {status === 'error' && (
-        <p style={{ color: EV_NEGATIVE_COLOR }}>Error: {error}</p>
+        <p style={{ color: EV_NEGATIVE_COLOR }}>
+          Couldn&apos;t load recommendations right now. Please refresh to try
+          again.{error ? ` (${error})` : ''}
+        </p>
       )}
 
       {status === 'ready' && cards.length === 0 && (
-        <p style={styles.muted}>No races available.</p>
+        <p style={styles.muted}>No races available for this day yet.</p>
       )}
 
       {status === 'ready' && cards.length > 0 && (
