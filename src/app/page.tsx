@@ -1554,8 +1554,8 @@ function SafetyBanner() {
 /**
  * Homepage race-day navigation: a prominent link to today's Ascot dashboard and
  * a secondary link to yesterday's results. NAVIGATION ONLY — plain in-app anchors
- * (`/?date=…&course=…`); no API/cron call, no DB write, no bet, no --commit. When
- * unscoped it shows a short "choose a view" prompt.
+ * (`/?date=…&course=…`); no backend-route call, no DB write, no wager, no
+ * write-mode flag. When unscoped it shows a short "choose a view" prompt.
  */
 function RaceDayNav({ scoped }: { scoped: boolean }) {
   return (

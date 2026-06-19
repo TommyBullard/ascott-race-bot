@@ -104,3 +104,4 @@ import './raceDayWatch.test';
 import './railwayCronPlan.test';
 import './openAiShadowGenerator.test';
 import './genaiCommentaryView.test';
+import './raceDayNav.test';

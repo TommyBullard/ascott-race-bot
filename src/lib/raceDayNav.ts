@@ -2,9 +2,9 @@
  * Pure constants + href builder for the homepage race-day navigation links.
  *
  * These are NAVIGATION ONLY: they produce in-app dashboard deep links
- * (`/?date=…&course=…`). They call no API/cron route, write nothing, place no
- * bets, and carry no `--commit`. The dashboard they link to is read-only and
- * auto-refreshes once a date/course is in the URL. Pure; no I/O; unit-testable.
+ * (`/?date=…&course=…`). They call no backend route, write nothing, trigger no
+ * wagering actions, and carry no write-mode flag. The dashboard they link to is
+ * read-only and auto-refreshes once a date/course is in the URL. Pure; no I/O.
  */
 
 export interface RaceDayView {
