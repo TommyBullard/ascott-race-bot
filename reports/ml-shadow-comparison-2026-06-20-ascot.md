@@ -15,12 +15,12 @@
 
 | Off | Race | Regular model pick | ML shadow pick (prob) | Market favourite | Agreement |
 | --- | ---- | ------------------ | --------------------- | ---------------- | --------- |
-| 2026-06-20T13:30:00+00:00 | Norfolk Stakes (Group 2) | Carry The Flag | Carry The Flag (23.4%) | Carry The Flag | All three agree (ML, model, market) |
-| 2026-06-20T14:05:00+00:00 | Hardwicke Stakes (Group 2) | Kalpana | Kalpana (32.5%) | Kalpana | All three agree (ML, model, market) |
-| 2026-06-20T14:40:00+00:00 | Queen Elizabeth II Jubilee Stakes (Group 1) | Joliestar | Joliestar (52.2%) | Joliestar | All three agree (ML, model, market) |
-| 2026-06-20T15:20:00+00:00 | Jersey Stakes (Group 3) | Saber Strike | Saber Strike (51.6%) | Saber Strike | All three agree (ML, model, market) |
-| 2026-06-20T16:00:00+00:00 | Wokingham Stakes (Heritage Handicap) | Binhareer | Binhareer (21.9%) | Binhareer | All three agree (ML, model, market) |
-| 2026-06-20T16:35:00+00:00 | Golden Gates Stakes (Handicap) | Lost Boys | Lost Boys (31.9%) | Lost Boys | All three agree (ML, model, market) |
+| 2026-06-20T13:30:00+00:00 | Norfolk Stakes (Group 2) | Carry The Flag | Carry The Flag (23.9%) | Carry The Flag | All three agree (ML, model, market) |
+| 2026-06-20T14:05:00+00:00 | Hardwicke Stakes (Group 2) | Kalpana | Kalpana (30.2%) | Kalpana | All three agree (ML, model, market) |
+| 2026-06-20T14:40:00+00:00 | Queen Elizabeth II Jubilee Stakes (Group 1) | Joliestar | Joliestar (52.7%) | Joliestar | All three agree (ML, model, market) |
+| 2026-06-20T15:20:00+00:00 | Jersey Stakes (Group 3) | Saber Strike | Saber Strike (51.4%) | Saber Strike | All three agree (ML, model, market) |
+| 2026-06-20T16:00:00+00:00 | Wokingham Stakes (Heritage Handicap) | Binhareer | Binhareer (21.1%) | Binhareer | All three agree (ML, model, market) |
+| 2026-06-20T16:35:00+00:00 | Golden Gates Stakes (Handicap) | Lost Boys | Lost Boys (32.6%) | Lost Boys | All three agree (ML, model, market) |
 | 2026-06-20T17:10:00+00:00 | Queen Alexandra Stakes (Conditions Race) (GBBPlus Race) | Illinois | Illinois (42.6%) | Illinois | All three agree (ML, model, market) |
 
 ## Warnings
