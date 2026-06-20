@@ -2,7 +2,7 @@
 
 > RESEARCH ONLY. Research-only: public-source mentions are NOT model-active and do not change model probability, EV, staking, ranking, or recommendations. No bets are placed.
 
-Generated: 2026-06-20T11:09:14.799Z
+Generated: 2026-06-20T11:10:44.909Z
 
 Races: 7 · Source rows: 133
 
@@ -12,7 +12,7 @@ Model pick: Carry The Flag · Market favourite: Carry The Flag
 
 | Runner | Public mentions | Sources | Model pick | Market fav | Agreement |
 | --- | --- | --- | --- | --- | --- |
-| Carry The Flag (⚠ syndicated) | 9 | OLBG Royal Ascot public tips; Freetips Newspaper Roundup; GG Racing Day 5; Paddy Power Cheat Sheet; William Hill Day 5; Telegraph ITV Racing Tips | yes | yes | = model pick & = market favourite |
+| Carry The Flag (⚠ syndicated) | 9 | OLBG Royal Ascot public tips; Freetips Newspaper Roundup; GG Racing Day 5; Paddy Power Cheat Sheet; William Hill Day 5; Telegraph ITV Racing Tips | yes | yes | = model pick & market favourite |
 | Ez Tina (⚠ syndicated) | 2 | Freetips Day 5; RacingInsider Day 5; Freetips Newspaper Roundup; Paddy Power Cheat Sheet | no | no | — |
 | Force Noir | 2 | Freetips Newspaper Roundup | no | no | — |
 | Orthodox | 2 | Freetips Newspaper Roundup; SaturdayRacingTips | no | no | — |
@@ -94,7 +94,7 @@ Model pick: Lost Boys · Market favourite: Lost Boys
 | --- | --- | --- | --- | --- | --- |
 | Sahara King | 5 | OLBG Royal Ascot public tips; Freetips Newspaper Roundup; GG Racing Day 5 | no | no | — |
 | Spyce | 3 | Freetips Newspaper Roundup | no | no | — |
-| Lost Boys | 2 | Freetips Newspaper Roundup; Thatsagoal Day 5 | yes | yes | = model pick & = market favourite |
+| Lost Boys | 2 | Freetips Newspaper Roundup; Thatsagoal Day 5 | yes | yes | = model pick & market favourite |
 | Princling (⚠ syndicated) | 2 | Freetips Day 5; RacingInsider Day 5; Freetips Newspaper Roundup | no | no | — |
 | Balzac | 1 | GG Racing Day 5 | no | no | — |
 | Evanesco | 1 | Freetips Newspaper Roundup | no | no | — |

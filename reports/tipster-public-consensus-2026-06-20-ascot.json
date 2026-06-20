@@ -1,7 +1,7 @@
 {
   "date": "2026-06-20",
   "course": "Ascot",
-  "generated_at": "2026-06-20T11:09:14.799Z",
+  "generated_at": "2026-06-20T11:10:44.909Z",
   "research_only": true,
   "total_rows": 133,
   "race_count": 7,
@@ -114,7 +114,7 @@
           ],
           "matches_model_pick": true,
           "matches_market_favourite": true,
-          "agreement": "= model pick & = market favourite"
+          "agreement": "= model pick & market favourite"
         },
         {
           "runner_name": "Ez Tina",
@@ -1610,7 +1610,7 @@
           ],
           "matches_model_pick": true,
           "matches_market_favourite": true,
-          "agreement": "= model pick & = market favourite"
+          "agreement": "= model pick & market favourite"
         },
         {
           "runner_name": "Princling",
