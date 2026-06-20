@@ -113,3 +113,5 @@ import './confidenceLadder.test';
 import './tipsterOpinions.test';
 import './tipsterSourceRegistry.test';
 import './tipsterWebDiscovery.test';
+import './tipsterManualReview.test';
+import './tipsterPublicConsensus.test';

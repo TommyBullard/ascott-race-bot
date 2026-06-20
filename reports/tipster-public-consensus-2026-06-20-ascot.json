@@ -1,0 +1,1980 @@
+{
+  "date": "2026-06-20",
+  "course": "Ascot",
+  "generated_at": "2026-06-20T11:09:14.799Z",
+  "research_only": true,
+  "total_rows": 133,
+  "race_count": 7,
+  "races": [
+    {
+      "race_key": "14:30|norfolk stakes",
+      "race_time": "14:30",
+      "race_name": "Norfolk Stakes",
+      "model_pick_horse": "Carry The Flag",
+      "market_favourite_horse": "Carry The Flag",
+      "runners": [
+        {
+          "runner_name": "Carry The Flag",
+          "public_mention_count": 9,
+          "raw_row_count": 12,
+          "sources": [
+            "OLBG Royal Ascot public tips",
+            "Freetips Newspaper Roundup",
+            "GG Racing Day 5",
+            "Paddy Power Cheat Sheet",
+            "William Hill Day 5",
+            "Telegraph ITV Racing Tips"
+          ],
+          "tipsters": [
+            "OLBG public consensus",
+            "Timeform",
+            "Matt Chapman",
+            "Ruby Walsh",
+            "Rory Delargy",
+            "Matty Sutcliffe",
+            "Paddy Power",
+            "Steve Mullington",
+            "Ron Wood"
+          ],
+          "syndication_duplicate": true,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "OLBG Royal Ascot public tips",
+              "tipster_name": "OLBG public consensus",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Timeform",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Matt Chapman",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Ruby Walsh",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Rory Delargy",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "GG Racing Day 5",
+              "tipster_name": "Matty Sutcliffe",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Paddy Power Cheat Sheet",
+              "tipster_name": "Rory Delargy",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Paddy Power Cheat Sheet",
+              "tipster_name": "Paddy Power",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Paddy Power Cheat Sheet",
+              "tipster_name": "Ruby Walsh",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Paddy Power Cheat Sheet",
+              "tipster_name": "Matt Chapman",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "William Hill Day 5",
+              "tipster_name": "Steve Mullington",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Telegraph ITV Racing Tips",
+              "tipster_name": "Ron Wood",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": true,
+          "matches_market_favourite": true,
+          "agreement": "= model pick & = market favourite"
+        },
+        {
+          "runner_name": "Ez Tina",
+          "public_mention_count": 2,
+          "raw_row_count": 4,
+          "sources": [
+            "Freetips Day 5",
+            "RacingInsider Day 5",
+            "Freetips Newspaper Roundup",
+            "Paddy Power Cheat Sheet"
+          ],
+          "tipsters": [
+            "Jon Vine",
+            "Jason Weaver"
+          ],
+          "syndication_duplicate": true,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Day 5",
+              "tipster_name": "Jon Vine",
+              "opinion_type": "each_way_interest",
+              "pr_family": false
+            },
+            {
+              "source_label": "RacingInsider Day 5",
+              "tipster_name": "Jon Vine",
+              "opinion_type": "each_way_interest",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Jason Weaver",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Paddy Power Cheat Sheet",
+              "tipster_name": "Jason Weaver",
+              "opinion_type": "each_way_interest",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Force Noir",
+          "public_mention_count": 2,
+          "raw_row_count": 2,
+          "sources": [
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Paul Kealy",
+            "Hugh Taylor"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Paul Kealy",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Hugh Taylor",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Orthodox",
+          "public_mention_count": 2,
+          "raw_row_count": 2,
+          "sources": [
+            "Freetips Newspaper Roundup",
+            "SaturdayRacingTips"
+          ],
+          "tipsters": [
+            "Tom Segal / Pricewise",
+            "SaturdayRacingTips"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Tom Segal / Pricewise",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "SaturdayRacingTips",
+              "tipster_name": "SaturdayRacingTips",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Where Love Lives",
+          "public_mention_count": 2,
+          "raw_row_count": 2,
+          "sources": [
+            "Freetips Newspaper Roundup",
+            "Thatsagoal Day 5"
+          ],
+          "tipsters": [
+            "Harry Wilson",
+            "Andy Clark / Henry"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Harry Wilson",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Thatsagoal Day 5",
+              "tipster_name": "Andy Clark / Henry",
+              "opinion_type": "each_way_interest",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Fanshell Beach",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "Paddy Power Cheat Sheet"
+          ],
+          "tipsters": [
+            "Rory Delargy"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Paddy Power Cheat Sheet",
+              "tipster_name": "Rory Delargy",
+              "opinion_type": "each_way_interest",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Mr Macartney",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "GG Racing Day 5"
+          ],
+          "tipsters": [
+            "Matty Sutcliffe"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "GG Racing Day 5",
+              "tipster_name": "Matty Sutcliffe",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Star Prospect",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Paul Kealy"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Paul Kealy",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        }
+      ],
+      "top_public_runner": "Carry The Flag",
+      "top_public_mention_count": 9,
+      "warnings": [
+        "Syndicated duplicate detected: a tipster appears under more than one source label (e.g. Jon Vine via Freetips and RacingInsider). Counted once."
+      ]
+    },
+    {
+      "race_key": "15:05|hardwicke stakes",
+      "race_time": "15:05",
+      "race_name": "Hardwicke Stakes",
+      "model_pick_horse": "Best Secret",
+      "market_favourite_horse": "Kalpana",
+      "runners": [
+        {
+          "runner_name": "Goliath",
+          "public_mention_count": 5,
+          "raw_row_count": 6,
+          "sources": [
+            "Freetips Day 5",
+            "RacingInsider Day 5",
+            "Freetips Newspaper Roundup",
+            "Thatsagoal Day 5",
+            "GG News Day 5"
+          ],
+          "tipsters": [
+            "Jon Vine",
+            "Matt Chapman",
+            "Rory Delargy",
+            "Andy Clark / Henry",
+            "Joe Napier"
+          ],
+          "syndication_duplicate": true,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Day 5",
+              "tipster_name": "Jon Vine",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "RacingInsider Day 5",
+              "tipster_name": "Jon Vine",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Matt Chapman",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Rory Delargy",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Thatsagoal Day 5",
+              "tipster_name": "Andy Clark / Henry",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "GG News Day 5",
+              "tipster_name": "Joe Napier",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Kalpana",
+          "public_mention_count": 4,
+          "raw_row_count": 4,
+          "sources": [
+            "OLBG Royal Ascot public tips",
+            "Freetips Newspaper Roundup",
+            "SaturdayRacingTips"
+          ],
+          "tipsters": [
+            "OLBG public consensus",
+            "Timeform",
+            "Dave Nevison",
+            "SaturdayRacingTips"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "OLBG Royal Ascot public tips",
+              "tipster_name": "OLBG public consensus",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Timeform",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Dave Nevison",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "SaturdayRacingTips",
+              "tipster_name": "SaturdayRacingTips",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": true,
+          "agreement": "= market favourite"
+        },
+        {
+          "runner_name": "Best Secret",
+          "public_mention_count": 2,
+          "raw_row_count": 2,
+          "sources": [
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Tom Segal / Pricewise",
+            "Harry Wilson"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Tom Segal / Pricewise",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Harry Wilson",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": true,
+          "matches_market_favourite": false,
+          "agreement": "= model pick"
+        },
+        {
+          "runner_name": "Ethical Diamond",
+          "public_mention_count": 2,
+          "raw_row_count": 2,
+          "sources": [
+            "Freetips Newspaper Roundup",
+            "GG Racing Day 5"
+          ],
+          "tipsters": [
+            "Ruby Walsh",
+            "Matty Sutcliffe"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Ruby Walsh",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "GG Racing Day 5",
+              "tipster_name": "Matty Sutcliffe",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Giavellotto",
+          "public_mention_count": 2,
+          "raw_row_count": 2,
+          "sources": [
+            "Freetips Newspaper Roundup",
+            "Telegraph ITV Racing Tips"
+          ],
+          "tipsters": [
+            "Jason Weaver",
+            "Ron Wood"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Jason Weaver",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Telegraph ITV Racing Tips",
+              "tipster_name": "Ron Wood",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Jan Brueghal",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "William Hill Day 5"
+          ],
+          "tipsters": [
+            "Steve Mullington"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "William Hill Day 5",
+              "tipster_name": "Steve Mullington",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        }
+      ],
+      "top_public_runner": "Goliath",
+      "top_public_mention_count": 5,
+      "warnings": [
+        "Syndicated duplicate detected: a tipster appears under more than one source label (e.g. Jon Vine via Freetips and RacingInsider). Counted once."
+      ]
+    },
+    {
+      "race_key": "15:40|queen elizabeth ii jubilee stakes",
+      "race_time": "15:40",
+      "race_name": "Queen Elizabeth II Jubilee Stakes",
+      "model_pick_horse": "Lake Forest",
+      "market_favourite_horse": "Joliestar",
+      "runners": [
+        {
+          "runner_name": "Satono Reve",
+          "public_mention_count": 8,
+          "raw_row_count": 8,
+          "sources": [
+            "OLBG Royal Ascot public tips",
+            "Freetips Newspaper Roundup",
+            "GG News Day 5",
+            "SaturdayRacingTips"
+          ],
+          "tipsters": [
+            "OLBG public consensus",
+            "Kevin Blake",
+            "Adam Mills",
+            "Timeform",
+            "Matt Chapman",
+            "Jason Weaver",
+            "Joe Napier",
+            "SaturdayRacingTips"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "OLBG Royal Ascot public tips",
+              "tipster_name": "OLBG public consensus",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Kevin Blake",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Adam Mills",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Timeform",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Matt Chapman",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Jason Weaver",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "GG News Day 5",
+              "tipster_name": "Joe Napier",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "SaturdayRacingTips",
+              "tipster_name": "SaturdayRacingTips",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Joliestar",
+          "public_mention_count": 5,
+          "raw_row_count": 5,
+          "sources": [
+            "Freetips Newspaper Roundup",
+            "Thatsagoal Day 5",
+            "Betfair Blog",
+            "William Hill Day 5"
+          ],
+          "tipsters": [
+            "Dave Nevison",
+            "Ruby Walsh",
+            "Andy Clark / Henry",
+            "Alan Dudman",
+            "Steve Mullington"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Dave Nevison",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Ruby Walsh",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Thatsagoal Day 5",
+              "tipster_name": "Andy Clark / Henry",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Betfair Blog",
+              "tipster_name": "Alan Dudman",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "William Hill Day 5",
+              "tipster_name": "Steve Mullington",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": true,
+          "agreement": "= market favourite"
+        },
+        {
+          "runner_name": "Almeraq",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "Bet365 / Racing Post"
+          ],
+          "tipsters": [
+            "Graeme Rodway"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Bet365 / Racing Post",
+              "tipster_name": "Graeme Rodway",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Flora Of Bermuda",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Rory Delargy"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Rory Delargy",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Khaadem",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "GG Racing Day 5"
+          ],
+          "tipsters": [
+            "Matty Sutcliffe"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "GG Racing Day 5",
+              "tipster_name": "Matty Sutcliffe",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Lake Forest",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Paul Kealy"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Paul Kealy",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": true,
+          "matches_market_favourite": false,
+          "agreement": "= model pick"
+        },
+        {
+          "runner_name": "Regional",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "Betfair Blog"
+          ],
+          "tipsters": [
+            "Katie Midwinter"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Betfair Blog",
+              "tipster_name": "Katie Midwinter",
+              "opinion_type": "each_way_interest",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Stolen Kiss",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Harry Wilson"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Harry Wilson",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        }
+      ],
+      "top_public_runner": "Satono Reve",
+      "top_public_mention_count": 8,
+      "warnings": []
+    },
+    {
+      "race_key": "16:20|jersey stakes",
+      "race_time": "16:20",
+      "race_name": "Jersey Stakes",
+      "model_pick_horse": "Catullus",
+      "market_favourite_horse": "Saber Strike",
+      "runners": [
+        {
+          "runner_name": "Saber Strike",
+          "public_mention_count": 9,
+          "raw_row_count": 10,
+          "sources": [
+            "OLBG Royal Ascot public tips",
+            "Freetips Newspaper Roundup",
+            "Betfair Blog",
+            "William Hill Day 5",
+            "Bet365 / Racing Post",
+            "Telegraph ITV Racing Tips"
+          ],
+          "tipsters": [
+            "OLBG public consensus",
+            "Timeform",
+            "Dave Nevison",
+            "Matt Chapman",
+            "Jason Weaver",
+            "Mark Milligan",
+            "Steve Mullington",
+            "Graeme Rodway",
+            "Ron Wood"
+          ],
+          "syndication_duplicate": true,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "OLBG Royal Ascot public tips",
+              "tipster_name": "OLBG public consensus",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Timeform",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Dave Nevison",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Matt Chapman",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Jason Weaver",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Betfair Blog",
+              "tipster_name": "Mark Milligan",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Betfair Blog",
+              "tipster_name": "Timeform",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "William Hill Day 5",
+              "tipster_name": "Steve Mullington",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Bet365 / Racing Post",
+              "tipster_name": "Graeme Rodway",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Telegraph ITV Racing Tips",
+              "tipster_name": "Ron Wood",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": true,
+          "agreement": "= market favourite"
+        },
+        {
+          "runner_name": "Catullus",
+          "public_mention_count": 4,
+          "raw_row_count": 4,
+          "sources": [
+            "Freetips Newspaper Roundup",
+            "GG Racing Day 5",
+            "SaturdayRacingTips"
+          ],
+          "tipsters": [
+            "Tom Segal / Pricewise",
+            "Paul Kealy",
+            "Matty Sutcliffe",
+            "SaturdayRacingTips"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Tom Segal / Pricewise",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Paul Kealy",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "GG Racing Day 5",
+              "tipster_name": "Matty Sutcliffe",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "SaturdayRacingTips",
+              "tipster_name": "SaturdayRacingTips",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": true,
+          "matches_market_favourite": false,
+          "agreement": "= model pick"
+        },
+        {
+          "runner_name": "Colori Forever",
+          "public_mention_count": 4,
+          "raw_row_count": 5,
+          "sources": [
+            "Freetips Day 5",
+            "RacingInsider Day 5",
+            "Freetips Newspaper Roundup",
+            "GG News Day 5"
+          ],
+          "tipsters": [
+            "Jon Vine",
+            "Kevin Blake",
+            "Hugh Taylor",
+            "Joe Napier"
+          ],
+          "syndication_duplicate": true,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Day 5",
+              "tipster_name": "Jon Vine",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "RacingInsider Day 5",
+              "tipster_name": "Jon Vine",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Kevin Blake",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Hugh Taylor",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "GG News Day 5",
+              "tipster_name": "Joe Napier",
+              "opinion_type": "each_way_interest",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Into The Sky",
+          "public_mention_count": 3,
+          "raw_row_count": 3,
+          "sources": [
+            "Freetips Newspaper Roundup",
+            "Thatsagoal Day 5",
+            "GG Racing Day 5"
+          ],
+          "tipsters": [
+            "Rory Delargy",
+            "Andy Clark / Henry",
+            "Andrew Mount"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Rory Delargy",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Thatsagoal Day 5",
+              "tipster_name": "Andy Clark / Henry",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "GG Racing Day 5",
+              "tipster_name": "Andrew Mount",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "The Prettiest Star",
+          "public_mention_count": 2,
+          "raw_row_count": 2,
+          "sources": [
+            "Freetips Newspaper Roundup",
+            "GG Racing Day 5"
+          ],
+          "tipsters": [
+            "Harry Wilson",
+            "Andrew Mount"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Harry Wilson",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "GG Racing Day 5",
+              "tipster_name": "Andrew Mount",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Thesecretadversary",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Ruby Walsh"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Ruby Walsh",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        }
+      ],
+      "top_public_runner": "Saber Strike",
+      "top_public_mention_count": 9,
+      "warnings": [
+        "Syndicated duplicate detected: a tipster appears under more than one source label (e.g. Jon Vine via Freetips and RacingInsider). Counted once."
+      ]
+    },
+    {
+      "race_key": "17:00|wokingham stakes",
+      "race_time": "17:00",
+      "race_name": "Wokingham Stakes",
+      "model_pick_horse": "Spy Chief",
+      "market_favourite_horse": "Binhareer",
+      "runners": [
+        {
+          "runner_name": "Binhareer",
+          "public_mention_count": 3,
+          "raw_row_count": 3,
+          "sources": [
+            "OLBG Royal Ascot public tips",
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "OLBG public consensus",
+            "Kevin Blake",
+            "Jason Weaver"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "OLBG Royal Ascot public tips",
+              "tipster_name": "OLBG public consensus",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Kevin Blake",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Jason Weaver",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": true,
+          "agreement": "= market favourite"
+        },
+        {
+          "runner_name": "Double Rush",
+          "public_mention_count": 3,
+          "raw_row_count": 3,
+          "sources": [
+            "Freetips Newspaper Roundup",
+            "Bet365 / Racing Post"
+          ],
+          "tipsters": [
+            "Matt Chapman",
+            "Ruby Walsh",
+            "Graeme Rodway"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Matt Chapman",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Ruby Walsh",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Bet365 / Racing Post",
+              "tipster_name": "Graeme Rodway",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Ten Pounds",
+          "public_mention_count": 2,
+          "raw_row_count": 2,
+          "sources": [
+            "Thatsagoal Day 5",
+            "GG Racing Day 5"
+          ],
+          "tipsters": [
+            "Andy Clark / Henry",
+            "Andrew Mount"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Thatsagoal Day 5",
+              "tipster_name": "Andy Clark / Henry",
+              "opinion_type": "each_way_interest",
+              "pr_family": false
+            },
+            {
+              "source_label": "GG Racing Day 5",
+              "tipster_name": "Andrew Mount",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Apollo One",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Paul Kealy"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Paul Kealy",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Completely Random",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "GG Racing Day 5"
+          ],
+          "tipsters": [
+            "Andrew Mount"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "GG Racing Day 5",
+              "tipster_name": "Andrew Mount",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Evening Saigon",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Harry Wilson"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Harry Wilson",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Far Above Dream",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Rory Delargy"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Rory Delargy",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Realign",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Timeform"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Timeform",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Royal Zabeel",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Paul Kealy"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Paul Kealy",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Sondad",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "SaturdayRacingTips"
+          ],
+          "tipsters": [
+            "SaturdayRacingTips"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "SaturdayRacingTips",
+              "tipster_name": "SaturdayRacingTips",
+              "opinion_type": "each_way_interest",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Spy Chief",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "William Hill Day 5"
+          ],
+          "tipsters": [
+            "Steve Mullington"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "William Hill Day 5",
+              "tipster_name": "Steve Mullington",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": true,
+          "matches_market_favourite": false,
+          "agreement": "= model pick"
+        }
+      ],
+      "top_public_runner": "Binhareer",
+      "top_public_mention_count": 3,
+      "warnings": []
+    },
+    {
+      "race_key": "17:35|golden gates stakes",
+      "race_time": "17:35",
+      "race_name": "Golden Gates Stakes",
+      "model_pick_horse": "Lost Boys",
+      "market_favourite_horse": "Lost Boys",
+      "runners": [
+        {
+          "runner_name": "Sahara King",
+          "public_mention_count": 5,
+          "raw_row_count": 5,
+          "sources": [
+            "OLBG Royal Ascot public tips",
+            "Freetips Newspaper Roundup",
+            "GG Racing Day 5"
+          ],
+          "tipsters": [
+            "OLBG public consensus",
+            "Harry Wilson",
+            "Timeform",
+            "Rory Delargy",
+            "Andrew Mount"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "OLBG Royal Ascot public tips",
+              "tipster_name": "OLBG public consensus",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Harry Wilson",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Timeform",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Rory Delargy",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "GG Racing Day 5",
+              "tipster_name": "Andrew Mount",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Spyce",
+          "public_mention_count": 3,
+          "raw_row_count": 3,
+          "sources": [
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Paul Kealy",
+            "Matt Chapman",
+            "Jason Weaver"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Paul Kealy",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Matt Chapman",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Jason Weaver",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Lost Boys",
+          "public_mention_count": 2,
+          "raw_row_count": 2,
+          "sources": [
+            "Freetips Newspaper Roundup",
+            "Thatsagoal Day 5"
+          ],
+          "tipsters": [
+            "Adam Mills",
+            "Andy Clark / Henry"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Adam Mills",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Thatsagoal Day 5",
+              "tipster_name": "Andy Clark / Henry",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": true,
+          "matches_market_favourite": true,
+          "agreement": "= model pick & = market favourite"
+        },
+        {
+          "runner_name": "Princling",
+          "public_mention_count": 2,
+          "raw_row_count": 3,
+          "sources": [
+            "Freetips Day 5",
+            "RacingInsider Day 5",
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Jon Vine",
+            "Paul Kealy"
+          ],
+          "syndication_duplicate": true,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Day 5",
+              "tipster_name": "Jon Vine",
+              "opinion_type": "each_way_interest",
+              "pr_family": false
+            },
+            {
+              "source_label": "RacingInsider Day 5",
+              "tipster_name": "Jon Vine",
+              "opinion_type": "each_way_interest",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Paul Kealy",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Balzac",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "GG Racing Day 5"
+          ],
+          "tipsters": [
+            "Matty Sutcliffe"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "GG Racing Day 5",
+              "tipster_name": "Matty Sutcliffe",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Evanesco",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Tom Segal / Pricewise"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Tom Segal / Pricewise",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Harmonics",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "SaturdayRacingTips"
+          ],
+          "tipsters": [
+            "SaturdayRacingTips"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "SaturdayRacingTips",
+              "tipster_name": "SaturdayRacingTips",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Nil Bua Gan Dua",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Ruby Walsh"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Ruby Walsh",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Perisher",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Tom Segal / Pricewise"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Tom Segal / Pricewise",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": false,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        }
+      ],
+      "top_public_runner": "Sahara King",
+      "top_public_mention_count": 5,
+      "warnings": [
+        "Syndicated duplicate detected: a tipster appears under more than one source label (e.g. Jon Vine via Freetips and RacingInsider). Counted once."
+      ]
+    },
+    {
+      "race_key": "18:10|queen alexandra stakes",
+      "race_time": "18:10",
+      "race_name": "Queen Alexandra Stakes",
+      "model_pick_horse": null,
+      "market_favourite_horse": "Illinois",
+      "runners": [
+        {
+          "runner_name": "Le Destrier",
+          "public_mention_count": 5,
+          "raw_row_count": 6,
+          "sources": [
+            "Freetips Day 5",
+            "RacingInsider Day 5",
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Jon Vine",
+            "Timeform",
+            "Jason Weaver",
+            "Ruby Walsh",
+            "Rory Delargy"
+          ],
+          "syndication_duplicate": true,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Day 5",
+              "tipster_name": "Jon Vine",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "RacingInsider Day 5",
+              "tipster_name": "Jon Vine",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Timeform",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Jason Weaver",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Ruby Walsh",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Rory Delargy",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": null,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "A Piece Of Heaven",
+          "public_mention_count": 3,
+          "raw_row_count": 3,
+          "sources": [
+            "Freetips Newspaper Roundup",
+            "Thatsagoal Day 5"
+          ],
+          "tipsters": [
+            "Harry Wilson",
+            "Matt Chapman",
+            "Andy Clark / Henry"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Harry Wilson",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Matt Chapman",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "Thatsagoal Day 5",
+              "tipster_name": "Andy Clark / Henry",
+              "opinion_type": "each_way_interest",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": null,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "Illinois",
+          "public_mention_count": 2,
+          "raw_row_count": 2,
+          "sources": [
+            "OLBG Royal Ascot public tips",
+            "SaturdayRacingTips"
+          ],
+          "tipsters": [
+            "OLBG public consensus",
+            "SaturdayRacingTips"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "OLBG Royal Ascot public tips",
+              "tipster_name": "OLBG public consensus",
+              "opinion_type": "selection",
+              "pr_family": false
+            },
+            {
+              "source_label": "SaturdayRacingTips",
+              "tipster_name": "SaturdayRacingTips",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": null,
+          "matches_market_favourite": true,
+          "agreement": "= market favourite"
+        },
+        {
+          "runner_name": "Berkshire Sundance",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "Freetips Newspaper Roundup"
+          ],
+          "tipsters": [
+            "Hugh Taylor"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Freetips Newspaper Roundup",
+              "tipster_name": "Hugh Taylor",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": null,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        },
+        {
+          "runner_name": "French Master",
+          "public_mention_count": 1,
+          "raw_row_count": 1,
+          "sources": [
+            "Betfair Blog"
+          ],
+          "tipsters": [
+            "Sam Turner"
+          ],
+          "syndication_duplicate": false,
+          "pr_family": false,
+          "mentions": [
+            {
+              "source_label": "Betfair Blog",
+              "tipster_name": "Sam Turner",
+              "opinion_type": "selection",
+              "pr_family": false
+            }
+          ],
+          "matches_model_pick": null,
+          "matches_market_favourite": false,
+          "agreement": "—"
+        }
+      ],
+      "top_public_runner": "Le Destrier",
+      "top_public_mention_count": 5,
+      "warnings": [
+        "Syndicated duplicate detected: a tipster appears under more than one source label (e.g. Jon Vine via Freetips and RacingInsider). Counted once."
+      ]
+    }
+  ],
+  "notes": [
+    "Research-only: public-source mentions are NOT model-active and do not change model probability, EV, staking, ranking, or recommendations. No bets are placed.",
+    "Syndicated duplicate detected: a tipster appears under more than one source label (e.g. Jon Vine via Freetips and RacingInsider). Counted once.",
+    "PR-family duplicate protection: correlated PR-network rows are flagged so one network cannot inflate apparent consensus."
+  ]
+}
