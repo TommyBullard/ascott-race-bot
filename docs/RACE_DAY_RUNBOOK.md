@@ -260,6 +260,23 @@ Keep live operation consistent with that rule.
   record; a differing "current" run is a later (often post-off) recompute, not the
   race-day decision.
 
+### 7a. T-minus-5 locked decisions (`lock:t-minus` — Newmarket rebuild)
+
+`npm run lock:t-minus -- --date YYYY-MM-DD [--course <name>] [--commit]` persists
+each race's official T-minus-5 decision into the append-only
+`locked_race_decisions` table (once the Phase 1 migration is applied).
+
+- **Dry-run by default** — without `--commit` it only reports what would be
+  locked; nothing is written.
+- **`--commit` is required to write**, and a race is persisted only inside its
+  lock window (`off_time - 5 min <= now <= off_time`). Too-early races report
+  `too_early_not_locked`; post-off / resulted races report `skipped_post_off`;
+  neither is ever persisted.
+- **Locked rows are immutable** (insert-only; reruns report `already_locked`).
+  It never runs the model, never fetches live odds, never settles results.
+- **The dashboard remains read-only** and does not yet read this table; there is
+  no auto-betting and no bet placement anywhere in this workflow.
+
 ### Safe commands
 
 ```powershell

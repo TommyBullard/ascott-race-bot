@@ -85,6 +85,7 @@ import './proofDay.test';
 import './proofPanel.test';
 import './trainingExport.test';
 import './tMinusCapture.test';
+import './lockTMinus.test';
 import './autoResults.test';
 import './freeResultsMatch.test';
 import './todayResultsSettlement.test';

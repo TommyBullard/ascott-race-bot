@@ -195,13 +195,31 @@ as the official source of truth, supporting multi-day, multi-course operations.
 - Access: RLS enabled with no policies; anon/authenticated revoked;
   service-role only. Runtime-unused until Phase 2+.
 
-### Phase 2: Add `lock:t-minus` CLI script
+### Phase 2: Add `lock:t-minus` CLI script (IMPLEMENTED — scripts/lockTMinus.ts)
 
-- Reuse existing `capture:t-minus` logic to generate T-minus-5 snapshot.
-- At T-minus-5: insert snapshot into `locked_race_decisions`, setting `status = 'locked'`.
-- Idempotent (INSERT ... ON CONFLICT DO NOTHING on race_id).
-- Output: summary report of locked races, count locked vs pending.
-- Gated: runs dry-run by default; `--commit` persists locks.
+- `npm run lock:t-minus -- --date YYYY-MM-DD [--course X] [--minutes-before 5] [--commit]`.
+- Reuses the `capture:t-minus` builder verbatim (shared
+  `scripts/tMinusCaptureData.ts`) so the lock can never diverge from the
+  capture report. Never runs the model, never fetches live odds, never
+  settles results, never places bets.
+- Dry-run by default; only `--commit` persists. Insert-only — never
+  update/upsert/delete; an existing `(race_id, minutes_before)` row is
+  reported `already_locked` and left untouched (reruns are safe; a concurrent
+  insert's unique violation is also classified `already_locked`).
+- Commit window: one `scriptNow` captured at startup is used for BOTH the
+  window check and the inserted `lock_time`; a race persists only when
+  `capture_target_time <= scriptNow <= off_time` (inclusive). Too early ->
+  `too_early_not_locked`; post-off or `status = result` ->
+  `skipped_post_off`; neither is persisted. In-window states are final by
+  construction (no later run can precede the capture target).
+- Decision mapping: run + rank-1 rec -> `locked_pick` (promoted pick columns);
+  run without rec -> `locked_no_bet` (reason derived from stored facts only);
+  no run in a valid window -> `no_run_available` (`model_run_id` null).
+- `locked_state` preserves the full capture JSON with nulls intact +
+  `schema_version`; `locked_state_schema_version = 1`.
+- Summary counters: races considered, locked_pick, locked_no_bet,
+  no_run_available, too_early_not_locked, skipped_post_off, already_locked,
+  errors — with an explicit DRY RUN banner. Per-race failures are isolated.
 
 ### Phase 3: Expose `lockedDecision` from `/api/recommendations`
 

@@ -196,6 +196,12 @@ export interface TMinusRunner {
 
 /** The model's rank-1 pick for the selected run (a superset of a runner). */
 export interface TMinusPick extends TMinusRunner {
+  /**
+   * The picked runner's DB id, or null when not recorded. Optional (additive)
+   * so existing capture consumers/fixtures are unaffected; the lock workflow
+   * uses it for `locked_race_decisions.pick_runner_id`.
+   */
+  runner_id?: string | null;
   /** Stored stake (points/units), or null. */
   stake: number | null;
   /** Confidence label (e.g. "Low"), or null. */

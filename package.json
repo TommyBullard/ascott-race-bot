@@ -55,6 +55,7 @@
     "proof:day": "tsx scripts/proofDay.ts",
     "export:training-data": "tsx scripts/exportTrainingData.ts",
     "capture:t-minus": "tsx scripts/captureTMinus.ts",
+    "lock:t-minus": "tsx scripts/lockTMinus.ts",
     "results:auto": "tsx scripts/autoResults.ts",
     "extract:notes": "tsx scripts/extractNotes.ts",
     "intelligence:prepare": "tsx scripts/prepareRaceIntelligence.ts",
