@@ -143,3 +143,23 @@ test('spec sanity: required tables + history columns + dedupe index are declared
   // Dedupe index declared.
   assert.ok(REQUIRED_INDEXES.some((i) => i.name === 'tipster_selections_dedupe_idx'));
 });
+
+test('spec sanity: locked_race_decisions (Newmarket Phase 1) is declared', () => {
+  const spec = REQUIRED_TABLES.find((s) => s.name === 'locked_race_decisions');
+  assert.ok(spec, 'locked_race_decisions missing from REQUIRED_TABLES');
+  // The columns every future consumer relies on (official lookup, decision
+  // state, promoted pick/observability columns, canonical snapshot).
+  for (const c of [
+    'race_id', 'model_run_id', 'lock_time', 'minutes_before',
+    'off_time_at_lock', 'capture_target_time', 'decision_status',
+    'no_bet_reason', 'pick_runner_id', 'pick_odds', 'pick_ev',
+    'pick_model_prob', 'pick_market_prob', 'pick_stake', 'run_quality',
+    'data_quality_flags', 'tipster_alignment_label', 'locked_state',
+    'locked_state_schema_version',
+  ]) {
+    assert.ok(spec.columns.includes(c), `locked_race_decisions spec missing column: ${c}`);
+  }
+  // Both indexes: the unique official lookup + the day/proof window index.
+  assert.ok(REQUIRED_INDEXES.some((i) => i.name === 'locked_race_decisions_one_per_horizon'));
+  assert.ok(REQUIRED_INDEXES.some((i) => i.name === 'idx_locked_race_decisions_lock_time'));
+});

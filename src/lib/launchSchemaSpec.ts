@@ -94,7 +94,16 @@ export const RLS_REQUIRED_TABLES = [
   'cron_runs',
   'ml_training_examples',
   'model_run_locks',
+  'locked_race_decisions',
 ] as const;
+
+/**
+ * Tables whose RLS enable/grant lock-down lives in their OWN migration rather
+ * than the shared RLS-hardening one. An RLS gap on these maps to that file.
+ */
+export const RLS_MIGRATION_BY_TABLE: Readonly<Record<string, string>> = {
+  locked_race_decisions: '20260708000000_locked_race_decisions.sql',
+};
 
 /**
  * Which migration file creates each table that HAS one in the repo. Base tables
@@ -113,7 +122,21 @@ export const MIGRATION_BY_TABLE: Readonly<Record<string, string>> = {
   cron_runs: '20260618030000_cron_runs.sql',
   ml_training_examples: '20260618040000_ml_training_examples.sql',
   model_run_locks: '20260618050000_model_run_locks.sql',
+  locked_race_decisions: '20260708000000_locked_race_decisions.sql',
 };
+
+/**
+ * The append-only guard on `locked_race_decisions` (Newmarket Phase 1). It is
+ * a TRIGGER function (`returns trigger`), so PostgREST cannot RPC-probe it —
+ * putting it in {@link EXPECTED_FUNCTIONS} would false-FAIL the check. It is
+ * verified MANUALLY via the SQL this module prints (pg_proc / pg_trigger).
+ */
+export const LOCKED_DECISIONS_GUARD = {
+  functionName: 'locked_race_decisions_guard',
+  triggerName: 'locked_race_decisions_no_mutate',
+  table: 'locked_race_decisions',
+  migration: '20260708000000_locked_race_decisions.sql',
+} as const;
 
 /** An object named for launch that the repo neither migrates nor references. */
 export interface UnresolvedObject {
@@ -233,7 +256,9 @@ export function migrationsForGaps(input: {
     const spec = EXPECTED_FUNCTIONS.find((x) => x.name === f);
     if (spec) set.add(spec.migration);
   }
-  if (input.rlsGaps.length > 0) set.add(RLS_HARDEN_MIGRATION);
+  for (const t of input.rlsGaps) {
+    set.add(RLS_MIGRATION_BY_TABLE[t] ?? RLS_HARDEN_MIGRATION);
+  }
   // Timestamp-prefixed filenames sort lexicographically into apply order.
   return [...set].sort();
 }
@@ -329,6 +354,14 @@ export function buildLaunchVerificationSql(): string[] {
     "select 'try_acquire_model_lock' as fn,",
     "  has_function_privilege('service_role', 'public.try_acquire_model_lock(uuid, text, integer)', 'EXECUTE') as service_role,",
     "  has_function_privilege('anon', 'public.try_acquire_model_lock(uuid, text, integer)', 'EXECUTE') as anon;",
+    '',
+    '-- 6. Append-only guard on locked_race_decisions (trigger functions are not',
+    '--    RPC-probeable, so this is the only way to verify them). Expect one row each:',
+    'select t.tgname, c.relname as table',
+    'from pg_trigger t join pg_class c on c.oid = t.tgrelid',
+    `where t.tgname = '${LOCKED_DECISIONS_GUARD.triggerName}' and c.relname = '${LOCKED_DECISIONS_GUARD.table}';`,
+    'select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace',
+    `where n.nspname = 'public' and p.proname = '${LOCKED_DECISIONS_GUARD.functionName}';`,
   ];
 }
 

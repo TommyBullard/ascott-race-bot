@@ -144,10 +144,10 @@ See **`API.md` §8 (worked example)** for the Ascot Day 1 incident and fix.
 **Once implemented, `locked_race_decisions` replaces the pre-off fallback as the official source of truth:**
 
 ```
-official_decision = SELECT * FROM locked_race_decisions 
-                    WHERE race_id = ? AND lock_time >= (off_time - '5 minutes')
-                    ORDER BY lock_time DESC
-                    LIMIT 1
+official_decision = SELECT * FROM locked_race_decisions
+                    WHERE race_id = ? AND minutes_before = 5
+-- unique (race_id, minutes_before) guarantees at most one official row;
+-- decision_status is locked_pick / locked_no_bet / no_run_available.
 ```
 
 - **Captured at T-minus-5:** immutable snapshot of the model's final pre-off state.
@@ -167,13 +167,33 @@ locked-decision architecture starting with Newmarket.
 Replace the temporary pre-off fallback with immutable T-minus-5 `locked_race_decisions`
 as the official source of truth, supporting multi-day, multi-course operations.
 
-### Phase 1: Add `locked_race_decisions` migration
+### Phase 1: Add `locked_race_decisions` migration (IMPLEMENTED — 20260708000000_locked_race_decisions.sql)
 
-- Create append-only table: `locked_race_decisions(race_id, lock_time, model_run_id, locked_state JSON)`.
-- Add indexes: `(race_id, lock_time)`, `(lock_time, status)`.
-- Immutable by design (no UPDATE allowed; new lock records only).
-- Stores snapshot of model state at T-minus-5: recommendation, rank, EV, confidence, data quality, tipster consensus.
-- Add CHECK constraint: `lock_time >= (off_time - '5 minutes')` to enforce T-minus boundary.
+- Append-only table `locked_race_decisions`, one row per race PER capture
+  horizon: `unique (race_id, minutes_before)`; `minutes_before = 5` is the
+  official decision (other horizons are research captures).
+- `decision_status in ('locked_pick', 'locked_no_bet', 'no_run_available')`;
+  `model_run_id` is nullable (null iff `no_run_available`); `no_bet_reason` is
+  required iff `locked_no_bet`. `no_run_available` is never collapsed into
+  no-bet and is never a loss.
+- Promoted display/evaluation columns (pick runner/odds/EV/model+market
+  prob/stake/confidence, run quality, data-quality flags/summaries, tipster
+  summary/alignment) plus the canonical `locked_state` jsonb snapshot and
+  `locked_state_schema_version`. Nulls mean "not recorded" — never fabricated.
+- Timing: `off_time_at_lock` snapshots the off as known at lock time;
+  `capture_target_time` is CHECK-pinned to `off_time_at_lock - minutes_before`;
+  CHECK `lock_time <= off_time_at_lock` (a lock can never be created post-off).
+  The T-minus-5 "not too early" boundary is enforced by the Phase 2 lock
+  script's commit window, not by SQL (a plain CHECK cannot reference `races`).
+- Immutability: `locked_race_decisions_no_mutate` trigger — UPDATE always
+  blocked (all roles, incl. service_role); DELETE only via the operator-only
+  `set local app.locked_decisions_admin = 'on'` escape hatch (test cleanup /
+  documented pre-off recovery; the app never sets it).
+- Indexes: the unique constraint covers the official `(race_id,
+  minutes_before)` lookup; `idx_locked_race_decisions_lock_time` on
+  `(lock_time, decision_status)` serves day/proof queries.
+- Access: RLS enabled with no policies; anon/authenticated revoked;
+  service-role only. Runtime-unused until Phase 2+.
 
 ### Phase 2: Add `lock:t-minus` CLI script
 

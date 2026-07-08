@@ -35,7 +35,8 @@ This probes (read-only, no writes):
 
 - all required **base tables** + their columns,
 - all new **operational tables** (`cron_runs`, `ml_training_examples`,
-  `model_run_locks`, `genai_commentary`, the tipster discovery/weight tables),
+  `model_run_locks`, `genai_commentary`, `locked_race_decisions`, the tipster
+  discovery/weight tables),
 - the **RPC functions** (`try_acquire_model_lock`, `release_model_lock`) via an
   empty-arg existence probe that never executes them,
 
@@ -106,12 +107,40 @@ Full additive set (apply any that the check reported missing, in this order):
 | 9 | `20260618030000_cron_runs.sql` | `cron_runs` |
 | 10 | `20260618040000_ml_training_examples.sql` | `ml_training_examples` |
 | 11 | `20260618050000_model_run_locks.sql` | `model_run_locks` + `try_acquire_model_lock` + `release_model_lock` |
-| 12 | `20260618060000_rls_harden_recent_tables.sql` | **RLS enable + grant lock-down** — apply **LAST** |
+| 12 | `20260618060000_rls_harden_recent_tables.sql` | **RLS enable + grant lock-down** — apply **LAST** of the pre-Newmarket set |
+| 13 | `20260708000000_locked_race_decisions.sql` | `locked_race_decisions` (Newmarket Phase 1) + append-only guard trigger + its own RLS/grant lock-down |
 
-**Why #12 is last:** it enables RLS and revokes the public-API grants on the
-internal tables and locks the lock-function grants to `service_role`. It is guarded
-(`to_regclass` / `to_regprocedure`), so it safely skips any object that does not yet
-exist — but applying it last guarantees every internal table/function is hardened.
+**Why #12 is last (of the pre-Newmarket set):** it enables RLS and revokes the
+public-API grants on the internal tables and locks the lock-function grants to
+`service_role`. It is guarded (`to_regclass` / `to_regprocedure`), so it safely
+skips any object that does not yet exist — but applying it last guarantees every
+internal table/function is hardened.
+
+**#13 (`locked_race_decisions`) hardens itself** — it revokes anon/authenticated
+and enables RLS inline, so it can be applied after #12 without re-running the
+harden migration. Phase 1 note: **no runtime code reads or writes this table yet**;
+it is inert until the `lock:t-minus` workflow (Phase 2) ships.
+
+### `locked_race_decisions` immutability & the operator escape hatch
+
+Rows in `locked_race_decisions` are **append-only**, enforced by the
+`locked_race_decisions_no_mutate` trigger (binds every role, including
+`service_role`):
+
+- **UPDATE is never allowed.** No exceptions — an official locked decision is
+  immutable. Corrections are flagged in evaluation, never edited into history.
+- **DELETE requires an explicit, transaction-local opt-in**, for test cleanup or
+  a documented pre-off recovery only:
+
+  ```sql
+  begin;
+  set local app.locked_decisions_admin = 'on';
+  -- remove ONLY the specific test/recovery row(s), by id
+  -- (never a live race-day lock after the off)
+  commit;
+  ```
+
+  The application never sets this GUC. Never use it to rewrite a settled day.
 
 ### Minimal gap-closing set (for the reported live gaps)
 

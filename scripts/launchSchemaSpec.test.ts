@@ -16,6 +16,7 @@ import {
   REQUIRED_TABLES,
   EXPECTED_FUNCTIONS,
   RLS_REQUIRED_TABLES,
+  LOCKED_DECISIONS_GUARD,
   classifyFunctionProbe,
   detectRlsGaps,
   migrationsForGaps,
@@ -145,6 +146,47 @@ test('detectRlsGaps + summarizeLaunchCheck: RLS OFF on a required table is a gap
 
 test('detectRlsGaps: a table absent from the map is UNKNOWN, not a gap', () => {
   assert.deepEqual(detectRlsGaps({}), []);
+});
+
+/* ------------------- locked_race_decisions (Newmarket Phase 1) ------------ */
+
+test('missing locked_race_decisions -> FAIL + names its own migration', () => {
+  const tables = healthyTables().map((t) =>
+    t.table === 'locked_race_decisions'
+      ? { ...t, status: 'missing' as const, rowCount: null }
+      : t,
+  );
+  const s = summarizeLaunchCheck({ tableHealth: tables, functionHealth: healthyFunctions() });
+  assert.equal(s.pass, false);
+  assert.deepEqual(s.missingTables, ['locked_race_decisions']);
+  assert.ok(s.migrationsNeeded.includes('20260708000000_locked_race_decisions.sql'));
+});
+
+test('RLS gap on locked_race_decisions maps to ITS migration, not the shared harden file', () => {
+  const rls: Record<string, boolean> = {};
+  for (const t of RLS_REQUIRED_TABLES) rls[t] = true;
+  rls['locked_race_decisions'] = false;
+  const m = migrationsForGaps({
+    missingTables: [],
+    missingFunctions: [],
+    rlsGaps: detectRlsGaps(rls),
+  });
+  assert.deepEqual(m, ['20260708000000_locked_race_decisions.sql']);
+});
+
+test('the append-only guard is verified via the MANUAL SQL (not RPC-probed)', () => {
+  // A trigger function cannot be probed through PostgREST RPC, so it must NOT
+  // be in EXPECTED_FUNCTIONS (that would false-FAIL a healthy schema)...
+  assert.equal(
+    EXPECTED_FUNCTIONS.some((f) => f.name === LOCKED_DECISIONS_GUARD.functionName),
+    false,
+  );
+  // ...and instead the verification SQL names both the trigger and the function.
+  const sql = buildLaunchVerificationSql().join('\n');
+  assert.ok(sql.includes(LOCKED_DECISIONS_GUARD.triggerName));
+  assert.ok(sql.includes(LOCKED_DECISIONS_GUARD.functionName));
+  // locked_race_decisions is in the RLS deny-all set.
+  assert.ok((RLS_REQUIRED_TABLES as readonly string[]).includes('locked_race_decisions'));
 });
 
 /* ----------------------- migration mapping + determinism ------------------ */

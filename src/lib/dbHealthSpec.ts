@@ -196,6 +196,19 @@ export const REQUIRED_TABLES: readonly TableSpec[] = [
     name: 'model_run_locks',
     columns: ['race_id', 'owner', 'acquired_at', 'expires_at'],
   },
+  {
+    name: 'locked_race_decisions',
+    columns: [
+      'id', 'race_id', 'model_run_id', 'lock_time', 'minutes_before',
+      'off_time_at_lock', 'capture_target_time', 'decision_status',
+      'no_bet_reason', 'pick_runner_id', 'pick_horse_name', 'pick_odds',
+      'pick_ev', 'pick_model_prob', 'pick_market_prob', 'pick_stake',
+      'pick_confidence_label', 'run_quality', 'data_quality_flags',
+      'data_quality_short_summary', 'tipster_short_summary',
+      'tipster_alignment_label', 'locked_state', 'locked_state_schema_version',
+      'created_at',
+    ],
+  },
 ];
 
 /** Indexes the migrations create (verified MANUALLY — see header). */
@@ -220,6 +233,10 @@ export const REQUIRED_INDEXES: readonly IndexSpec[] = [
   { name: 'cron_runs_finished_idx', table: 'cron_runs', columns: 'finished_at desc' },
   { name: 'ml_training_examples_race_runner_uidx', table: 'ml_training_examples', columns: 'race_id, runner_id' },
   { name: 'ml_training_examples_meeting_idx', table: 'ml_training_examples', columns: 'meeting_date' },
+  // The unique constraint's backing index (official per-race lookup) + the
+  // day/proof window index, per 20260708000000_locked_race_decisions.sql.
+  { name: 'locked_race_decisions_one_per_horizon', table: 'locked_race_decisions', columns: 'race_id, minutes_before' },
+  { name: 'idx_locked_race_decisions_lock_time', table: 'locked_race_decisions', columns: 'lock_time, decision_status' },
 ];
 
 /** Tables whose `is_current` / `superseded_at` history columns are required. */
