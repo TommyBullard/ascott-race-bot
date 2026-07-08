@@ -1,5 +1,8 @@
 # Migration Apply Plan — 2026-06-19
 
+> ARCHIVE NOTE: This document is a historical 2026-06-19 migration apply plan.
+> Use `docs/LAUNCH_SCHEMA_SYNC_RUNBOOK.md` for current schema migration guidance.
+
 > **Scope & safety.** This is a *plan only*. It applies nothing, runs no SQL, and
 > mutates no database. Every migration referenced is **additive and idempotent**
 > (`create … if not exists` / `create or replace` / guarded `do $$ … $$`) — none

@@ -1,5 +1,7 @@
 # Ascot Day 1 — Pre-Race Model Predictions
 
+> ARCHIVE NOTE: This document is historical and specific to Royal Ascot Day 1 (2026-06-16). Use `docs/RACE_DAY_RUNBOOK.md` for the current workflow and `CLAUDE.md` for authoritative AI assistant instructions.
+
 Date: 2026-06-16  
 Course: Ascot  
 Purpose: Record final pre-race model state before each race.

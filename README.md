@@ -18,7 +18,13 @@ dashboard and JSON APIs read that persisted output.
 > support if gambling stops being fun (e.g. GamCare / BeGambleAware). See
 > [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) and
 > [docs/RACE_DAY_RUNBOOK.md](docs/RACE_DAY_RUNBOOK.md) to run it locally.
+This project is intentionally a **decision-support system** and does not place
+bets or support auto-betting. Control-plane writes are gated through explicit
+operator commands, dry-run defaults, and `--commit` authorization.
 
+For AI assistant guidance, use `CLAUDE.md` as the authoritative prompt and
+workflow briefing document. See `docs/RACE_DAY_AUTOMATION_STATUS.md` for the
+current safety posture and automation roadmap.
 ## Tech stack
 
 - [Next.js 16](https://nextjs.org/) (App Router) + [React 19](https://react.dev/)

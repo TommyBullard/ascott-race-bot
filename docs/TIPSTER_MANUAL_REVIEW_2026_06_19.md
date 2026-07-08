@@ -1,5 +1,7 @@
 # Tipster manual review — 2026-06-19 Royal Ascot
-
+> ARCHIVE NOTE: This document is historical and specific to 2026-06-19 Ascot.
+> Use `docs/RACE_DAY_RUNBOOK.md` for the current workflow and
+> `CLAUDE.md` for authoritative AI assistant instructions.
 A compliant, human-in-the-loop workflow to turn **public, manually verified**
 tipster opinions into approved current selections, so the model can use real
 consensus where it genuinely exists — and `NO_TIPSTER_CONSENSUS` clears only

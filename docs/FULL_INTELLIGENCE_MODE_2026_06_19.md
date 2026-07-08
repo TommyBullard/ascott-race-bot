@@ -1,5 +1,9 @@
 # Full intelligence mode — 2026-06-19 Ascot (operator runbook)
 
+> ARCHIVE NOTE: This document is historical and specific to 2026-06-19 Ascot.
+> Use `docs/RACE_DAY_RUNBOOK.md` for the current race-day workflow and
+> `CLAUDE.md` for authoritative AI assistant guidance.
+
 **Safest possible "full intelligence" Racing Bot mode.** Every intelligence
 layer is wired, but only the layers proven safe are live. This runbook is the
 single source of operator commands for the day.

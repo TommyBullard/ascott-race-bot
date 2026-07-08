@@ -1,5 +1,9 @@
 # Handover — Ascot Day 1 pre-off evaluation & post-off guard fixes
 
+> ARCHIVE NOTE: This document is historical and specific to Royal Ascot Day 1
+> (2026-06-16). It is a closed-incident handover note, not the current
+> operating runbook.
+
 Date: 2026-06-16
 Scope: explains the post-off superseding bug found on Royal Ascot Day 1, the fix
 that shipped, why it is safe, and how to verify it. **Documentation only** — it
