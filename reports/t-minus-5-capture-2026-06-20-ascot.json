@@ -1,0 +1,412 @@
+{
+  "date": "2026-06-20",
+  "course": "Ascot",
+  "minutes_before": 5,
+  "generatedAt": "2026-06-20T17:21:21.175Z",
+  "races": [
+    {
+      "race_id": "31336d90-9ec4-425d-8381-154c2333b9d8",
+      "race_name": "Norfolk Stakes (Group 2)",
+      "course": "Ascot",
+      "off_time": "2026-06-20T13:30:00+00:00",
+      "capture_target_time": "2026-06-20T13:25:00.000Z",
+      "selected_run_id": "7c46e7ad-dedf-4a0b-b494-968272c86be6",
+      "selected_run_time": "2026-06-20T13:24:43.604+00:00",
+      "selected_run_is_current": false,
+      "later_pre_off_run_exists": true,
+      "post_off_run_count": 0,
+      "pick": {
+        "horse_name": "Carry The Flag",
+        "odds": 4.4,
+        "ev": 0.056877625310233215,
+        "model_prob": 0.24019946029778025,
+        "market_prob": 0.222921939288489,
+        "stake": 1,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Carry The Flag",
+        "odds": 4.4,
+        "ev": 0.056877625310233215,
+        "model_prob": 0.24019946029778025,
+        "market_prob": 0.222921939288489
+      },
+      "alternatives": [
+        {
+          "horse_name": "Orthodox",
+          "odds": 9.4,
+          "ev": 0.056877625310233215,
+          "model_prob": 0.11243378992662055,
+          "market_prob": 0.1043464396669523
+        },
+        {
+          "horse_name": "Fanshell Beach",
+          "odds": 8.8,
+          "ev": 0.056877625310233215,
+          "model_prob": 0.12009973014889012,
+          "market_prob": 0.1114609696442445
+        }
+      ],
+      "run_quality": "DEGRADED",
+      "data_quality_flags": [
+        "MISSING_RUNNER_ODDS",
+        "NO_TIPSTER_SELECTIONS"
+      ],
+      "data_quality_short_summary": "DEGRADED — Missing runner odds (20/21 priced), No tipster selections",
+      "tipster_short_summary": "No tipster consensus",
+      "tipster_alignment_label": "NO_TIPSTER_CONSENSUS",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": false,
+        "laterPreOffRunExists": true,
+        "postOffRunsIgnored": false
+      }
+    },
+    {
+      "race_id": "45d3928a-163d-4b2f-a54d-348acfcc3930",
+      "race_name": "Hardwicke Stakes (Group 2)",
+      "course": "Ascot",
+      "off_time": "2026-06-20T14:05:00+00:00",
+      "capture_target_time": "2026-06-20T14:00:00.000Z",
+      "selected_run_id": "55c4f48c-06df-46e6-a749-cd4eba958b8e",
+      "selected_run_time": "2026-06-20T13:56:23.904+00:00",
+      "selected_run_is_current": false,
+      "later_pre_off_run_exists": true,
+      "post_off_run_count": 0,
+      "pick": {
+        "horse_name": "Best Secret",
+        "odds": 10.5,
+        "ev": 0.030247592312397265,
+        "model_prob": 0.0981188183154664,
+        "market_prob": 0.09368511887916442,
+        "stake": 1,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Kalpana",
+        "odds": 3.7,
+        "ev": 0.030247592312397042,
+        "model_prob": 0.27844529521956674,
+        "market_prob": 0.2658631751976287
+      },
+      "alternatives": [
+        {
+          "horse_name": "Goliath",
+          "odds": 5.8,
+          "ev": 0.030247592312397265,
+          "model_prob": 0.1776288952262754,
+          "market_prob": 0.16960237038469422
+        },
+        {
+          "horse_name": "Jan Brueghel",
+          "odds": 5.8,
+          "ev": 0.030247592312397265,
+          "model_prob": 0.1776288952262754,
+          "market_prob": 0.16960237038469422
+        }
+      ],
+      "run_quality": "OK",
+      "data_quality_flags": [
+        "NO_TIPSTER_SELECTIONS"
+      ],
+      "data_quality_short_summary": "OK — No tipster selections",
+      "tipster_short_summary": "No tipster consensus",
+      "tipster_alignment_label": "NO_TIPSTER_CONSENSUS",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": false,
+        "laterPreOffRunExists": true,
+        "postOffRunsIgnored": false
+      }
+    },
+    {
+      "race_id": "2fb76fae-1199-4ae9-8043-3607dde44757",
+      "race_name": "Queen Elizabeth II Jubilee Stakes (Group 1)",
+      "course": "Ascot",
+      "off_time": "2026-06-20T14:40:00+00:00",
+      "capture_target_time": "2026-06-20T14:35:00.000Z",
+      "selected_run_id": "65910ead-7540-478a-bebc-fac47d860d67",
+      "selected_run_time": "2026-06-20T14:33:05.786+00:00",
+      "selected_run_is_current": false,
+      "later_pre_off_run_exists": true,
+      "post_off_run_count": 0,
+      "pick": {
+        "horse_name": "Satono Reve",
+        "odds": 3.25,
+        "ev": 0.03284132031580733,
+        "model_prob": 0.3177973293279407,
+        "market_prob": 0.30287785390796884,
+        "stake": 1,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Satono Reve",
+        "odds": 3.25,
+        "ev": 0.03284132031580733,
+        "model_prob": 0.3177973293279407,
+        "market_prob": 0.30287785390796884
+      },
+      "alternatives": [
+        {
+          "horse_name": "Lake Forest",
+          "odds": 8.6,
+          "ev": 0.03284132031580711,
+          "model_prob": 0.1200978279436985,
+          "market_prob": 0.11445965409312775
+        },
+        {
+          "horse_name": "Joliestar",
+          "odds": 3.65,
+          "ev": 0.03284132031580689,
+          "model_prob": 0.2829702247440567,
+          "market_prob": 0.2696857603290133
+        }
+      ],
+      "run_quality": "DEGRADED",
+      "data_quality_flags": [
+        "MISSING_RUNNER_ODDS",
+        "NO_TIPSTER_SELECTIONS"
+      ],
+      "data_quality_short_summary": "DEGRADED — Missing runner odds (18/19 priced), No tipster selections",
+      "tipster_short_summary": "No tipster consensus",
+      "tipster_alignment_label": "NO_TIPSTER_CONSENSUS",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": false,
+        "laterPreOffRunExists": true,
+        "postOffRunsIgnored": false
+      }
+    },
+    {
+      "race_id": "4f5a41b6-89ad-4f99-b9ad-f8682975f56c",
+      "race_name": "Jersey Stakes (Group 3)",
+      "course": "Ascot",
+      "off_time": "2026-06-20T15:20:00+00:00",
+      "capture_target_time": "2026-06-20T15:15:00.000Z",
+      "selected_run_id": "908c1919-51cb-4202-b25e-350ee3f59d8a",
+      "selected_run_time": "2026-06-20T15:14:56.803+00:00",
+      "selected_run_is_current": true,
+      "later_pre_off_run_exists": false,
+      "post_off_run_count": 0,
+      "pick": {
+        "horse_name": "Catullus",
+        "odds": 10.5,
+        "ev": 0.028477181278866448,
+        "model_prob": 0.09795020774084442,
+        "market_prob": 0.09351572308607728,
+        "stake": 1,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Saber Strike",
+        "odds": 2.58,
+        "ev": 0.028477181278866448,
+        "model_prob": 0.3986345663871575,
+        "market_prob": 0.3805872451177563
+      },
+      "alternatives": [
+        {
+          "horse_name": "Into The Sky",
+          "odds": 7.8,
+          "ev": 0.028477181278866448,
+          "model_prob": 0.13185604888190597,
+          "market_prob": 0.12588655030818097
+        },
+        {
+          "horse_name": "Saber Strike",
+          "odds": 2.58,
+          "ev": 0.028477181278866448,
+          "model_prob": 0.3986345663871575,
+          "market_prob": 0.3805872451177563
+        }
+      ],
+      "run_quality": "DEGRADED",
+      "data_quality_flags": [
+        "MISSING_RUNNER_ODDS",
+        "NO_TIPSTER_SELECTIONS"
+      ],
+      "data_quality_short_summary": "DEGRADED — Missing runner odds (16/17 priced), No tipster selections",
+      "tipster_short_summary": "No tipster consensus",
+      "tipster_alignment_label": "NO_TIPSTER_CONSENSUS",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": false,
+        "laterPreOffRunExists": false,
+        "postOffRunsIgnored": false
+      }
+    },
+    {
+      "race_id": "ea3f50c8-cc02-4118-a749-de187f0b33ef",
+      "race_name": "Wokingham Stakes (Heritage Handicap)",
+      "course": "Ascot",
+      "off_time": "2026-06-20T16:00:00+00:00",
+      "capture_target_time": "2026-06-20T15:55:00.000Z",
+      "selected_run_id": "c895b30f-bcf5-4852-8c5a-d667bcbc0183",
+      "selected_run_time": "2026-06-20T15:51:27.118+00:00",
+      "selected_run_is_current": false,
+      "later_pre_off_run_exists": true,
+      "post_off_run_count": 0,
+      "pick": {
+        "horse_name": "Spy Chief",
+        "odds": 7,
+        "ev": 0.12118157034602706,
+        "model_prob": 0.16016879576371815,
+        "market_prob": 0.1487528811767997,
+        "stake": 1.110952016801771,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Spy Chief",
+        "odds": 7,
+        "ev": 0.12118157034602706,
+        "model_prob": 0.16016879576371815,
+        "market_prob": 0.1487528811767997
+      },
+      "alternatives": [
+        {
+          "horse_name": "Ten Pounds",
+          "odds": 11,
+          "ev": 0.12118157034602706,
+          "model_prob": 0.10192559730418428,
+          "market_prob": 0.09466092438523617
+        },
+        {
+          "horse_name": "Double Rush",
+          "odds": 7.4,
+          "ev": 0.12118157034602683,
+          "model_prob": 0.15151102301973335,
+          "market_prob": 0.14071218489697265
+        }
+      ],
+      "run_quality": "DEGRADED",
+      "data_quality_flags": [
+        "MISSING_RUNNER_ODDS",
+        "NO_TIPSTER_SELECTIONS"
+      ],
+      "data_quality_short_summary": "DEGRADED — Missing runner odds (26/28 priced), No tipster selections",
+      "tipster_short_summary": "No tipster consensus",
+      "tipster_alignment_label": "NO_TIPSTER_CONSENSUS",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": false,
+        "laterPreOffRunExists": true,
+        "postOffRunsIgnored": false
+      }
+    },
+    {
+      "race_id": "13c7aa6c-6714-41f3-adc5-8e4928b2dd77",
+      "race_name": "Golden Gates Stakes (Handicap)",
+      "course": "Ascot",
+      "off_time": "2026-06-20T16:35:00+00:00",
+      "capture_target_time": "2026-06-20T16:30:00.000Z",
+      "selected_run_id": "52f9b4d0-a03a-4e96-86f1-00172966de1f",
+      "selected_run_time": "2026-06-20T16:27:46.376+00:00",
+      "selected_run_is_current": false,
+      "later_pre_off_run_exists": true,
+      "post_off_run_count": 0,
+      "pick": {
+        "horse_name": "Sahara King",
+        "odds": 7.4,
+        "ev": 0.04218796224148491,
+        "model_prob": 0.14083621111371417,
+        "market_prob": 0.13172315065751938,
+        "stake": 1,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Lost Boys",
+        "odds": 3.65,
+        "ev": 0.04218796224148469,
+        "model_prob": 0.2855309485593109,
+        "market_prob": 0.2670551547577105
+      },
+      "alternatives": [
+        {
+          "horse_name": "Perisher",
+          "odds": 11,
+          "ev": 0.04218796224148491,
+          "model_prob": 0.09474436020377136,
+          "market_prob": 0.08861375589687669
+        },
+        {
+          "horse_name": "Princling",
+          "odds": 12,
+          "ev": 0.04218796224148491,
+          "model_prob": 0.08684899685345707,
+          "market_prob": 0.08122927623880362
+        }
+      ],
+      "run_quality": "DEGRADED",
+      "data_quality_flags": [
+        "MISSING_RUNNER_ODDS",
+        "NO_TIPSTER_SELECTIONS"
+      ],
+      "data_quality_short_summary": "DEGRADED — Missing runner odds (16/17 priced), No tipster selections",
+      "tipster_short_summary": "No tipster consensus",
+      "tipster_alignment_label": "NO_TIPSTER_CONSENSUS",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": false,
+        "laterPreOffRunExists": true,
+        "postOffRunsIgnored": false
+      }
+    },
+    {
+      "race_id": "f700445e-8059-47e2-880a-7bfd6f0e64fa",
+      "race_name": "Queen Alexandra Stakes (Conditions Race) (GBBPlus Race)",
+      "course": "Ascot",
+      "off_time": "2026-06-20T17:10:00+00:00",
+      "capture_target_time": "2026-06-20T17:05:00.000Z",
+      "selected_run_id": "1f415830-2d27-483b-922b-542845791879",
+      "selected_run_time": "2026-06-20T17:03:58.111+00:00",
+      "selected_run_is_current": false,
+      "later_pre_off_run_exists": true,
+      "post_off_run_count": 0,
+      "pick": {
+        "horse_name": "A Piece Of Heaven",
+        "odds": 6.2,
+        "ev": 0.02169229415433427,
+        "model_prob": 0.16478907970231196,
+        "market_prob": 0.15850768390141073,
+        "stake": 1,
+        "confidence_label": "low"
+      },
+      "favourite": {
+        "horse_name": "Illinois",
+        "odds": 3.2,
+        "ev": 0.02169229415433427,
+        "model_prob": 0.3192788419232294,
+        "market_prob": 0.3071086375589833
+      },
+      "alternatives": [
+        {
+          "horse_name": "French Master",
+          "odds": 10,
+          "ev": 0.02169229415433427,
+          "model_prob": 0.10216922941543342,
+          "market_prob": 0.09827476401887467
+        },
+        {
+          "horse_name": "Illinois",
+          "odds": 3.2,
+          "ev": 0.02169229415433427,
+          "model_prob": 0.3192788419232294,
+          "market_prob": 0.3071086375589833
+        }
+      ],
+      "run_quality": "OK",
+      "data_quality_flags": [
+        "NO_TIPSTER_SELECTIONS"
+      ],
+      "data_quality_short_summary": "OK — No tipster selections",
+      "tipster_short_summary": "No tipster consensus",
+      "tipster_alignment_label": "NO_TIPSTER_CONSENSUS",
+      "warnings": {
+        "noCaptureRun": false,
+        "farBeforeCapture": false,
+        "laterPreOffRunExists": true,
+        "postOffRunsIgnored": false
+      }
+    }
+  ]
+}
