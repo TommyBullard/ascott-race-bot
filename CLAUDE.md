@@ -221,12 +221,22 @@ as the official source of truth, supporting multi-day, multi-course operations.
   no_run_available, too_early_not_locked, skipped_post_off, already_locked,
   errors — with an explicit DRY RUN banner. Per-race failures are isolated.
 
-### Phase 3: Expose `lockedDecision` from `/api/recommendations`
+### Phase 3: Expose `lockedDecision` from `/api/recommendations` (IMPLEMENTED — src/lib/lockedDecisionRead.ts)
 
-- Fetch `locked_race_decisions` for each race; include in response as `lockedDecision: { recommendation, rank, ev, confidence, ... }`.
-- Fallback: if no locked decision exists, use final pre-off run and mark as `isLocked: false`.
-- Backwards-compatible: existing consumers see new field; legacy code ignores it.
-- Document breaking change: `lockedDecision` is canonical; `recommendation` field deprecated-but-present.
+- Each `RaceCard` from `/api/recommendations` now carries
+  `lockedDecision: LockedDecision | null` — the official `minutes_before = 5`
+  row from `locked_race_decisions`, projected via the read-only, FAIL-OPEN
+  `fetchLockedDecisionForRace(raceId, minutesBefore = 5)`.
+- Fail-open: no row, a missing table (pre-migration), or any read error yields
+  null and never breaks the API; missing-table errors are silent, other errors
+  are logged.
+- The projection includes the promoted decision/pick/observability columns,
+  `no_bet_reason`, and `locked_state_schema_version`; the `locked_state` jsonb
+  itself is EXCLUDED from the select/response (promoted columns exist so
+  consumers don't unpack it; a future audit view can fetch it per race).
+- ADDITIONAL data only in Phase 3: `modelPick` behaviour, dashboard display,
+  and performance evaluation are unchanged until Phases 4-5. `lockedDecision`
+  becomes the canonical display/evaluation source in those phases.
 
 ### Phase 4: Redesign dashboard around locked decision
 

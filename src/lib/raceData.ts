@@ -45,6 +45,10 @@ import { normalizeCourse } from './raceSync';
 import { classifyTableProbe } from './dbHealthSpec';
 import type { TipsterStatusSummary } from './tipsterStatus';
 import type { GenaiCommentaryRow } from './genaiCommentaryView';
+import {
+  fetchLockedDecisionForRace,
+  type LockedDecision,
+} from './lockedDecisionRead';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { TipsterSelection } from './modelProbabilities';
 
@@ -789,6 +793,15 @@ export interface RaceCard {
    * model-active; not a decision input. Fail-open: any read error yields [].
    */
   genaiCommentary?: GenaiCommentaryRow[];
+  /**
+   * The OFFICIAL T-minus-5 locked decision for this race
+   * (`locked_race_decisions`, Newmarket rebuild Phase 3), or null when the
+   * race is not locked / the table is not migrated yet (fail-open). Phase 3
+   * exposes this as ADDITIONAL data only: `modelPick` and display precedence
+   * are unchanged until the Phase 4 dashboard redesign. Read-only; never a
+   * betting instruction.
+   */
+  lockedDecision: LockedDecision | null;
 }
 
 interface ScoreRankRow {
@@ -904,6 +917,7 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
     // Empty/null-safe default; populated from the current run's config_json below
     // (stays empty when the race has no current model run).
     observability: getModelObservabilityFromConfig(null),
+    lockedDecision: null,
   };
 
   // Finish positions for the settled-race result display (read-only). Only
@@ -1100,6 +1114,11 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
 
   // Approved shadow GenAI commentary (read-only, display-only; fail-open to []).
   card.genaiCommentary = await fetchApprovedGenaiCommentary(raceId);
+
+  // Official T-minus-5 locked decision (read-only; fail-open to null — a
+  // missing table / read error never breaks the card). Additional data only
+  // in Phase 3; modelPick behaviour is unchanged.
+  card.lockedDecision = await fetchLockedDecisionForRace(raceId);
 
   return card;
 }
