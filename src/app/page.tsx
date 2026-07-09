@@ -95,6 +95,25 @@ interface RaceCardPick extends RaceCardRunner {
   isFavourite: boolean;
 }
 
+/**
+ * The official T-minus-5 locked decision for a race (mirrors the fields of the
+ * server `LockedDecision` this page displays). Read-only display data from
+ * `locked_race_decisions` — never a betting instruction. Nulls mean "not
+ * recorded"; nothing is ever fabricated client-side.
+ */
+interface RaceCardLockedDecision {
+  decision_status: 'locked_pick' | 'locked_no_bet' | 'no_run_available';
+  lock_time: string;
+  no_bet_reason: string | null;
+  pick_horse_name: string | null;
+  pick_odds: number | null;
+  pick_ev: number | null;
+  pick_stake: number | null;
+  pick_confidence_label: string | null;
+  run_quality: string | null;
+  data_quality_short_summary: string | null;
+}
+
 /** One race card (mirrors the server `RaceCard`). */
 interface RaceCard {
   race_id: string;
@@ -143,6 +162,12 @@ interface RaceCard {
    * model-active; not a decision input.
    */
   genaiCommentary?: GenaiCommentaryRow[] | null;
+  /**
+   * Official T-minus-5 locked decision (Phase 3, additive). Optional for
+   * back-compat with older responses; null/absent when the race has no lock
+   * yet, in which case the live model display stands alone as diagnostic.
+   */
+  lockedDecision?: RaceCardLockedDecision | null;
 }
 
 /**
@@ -979,8 +1004,28 @@ function NextRacePanel({ card, nowMs }: { card: RaceCard | null; nowMs: number }
           {[card.course, card.race_name].filter(Boolean).join(' \u2014 ')}
         </div>
       )}
+      {/* Official locked decision, compact (display-only; the pick below is a
+          live diagnostic and never overrides the lock). */}
+      {card.lockedDecision && (
+        <div style={{ marginTop: 6 }}>
+          {card.lockedDecision.decision_status === 'locked_no_bet' && (
+            <span style={statusBadgeStyle('neg')}>OFFICIAL LOCKED NO BET</span>
+          )}
+          {card.lockedDecision.decision_status === 'locked_pick' && (
+            <span style={statusBadgeStyle('pos')}>
+              {`OFFICIAL LOCKED PICK: ${card.lockedDecision.pick_horse_name ?? '\u2014'}`}
+            </span>
+          )}
+          {card.lockedDecision.decision_status === 'no_run_available' && (
+            <span style={statusBadgeStyle('warn')}>
+              OFFICIAL LOCK: NO MODEL RUN AVAILABLE
+            </span>
+          )}
+        </div>
+      )}
       {pick ? (
         <div style={styles.nextRacePick}>
+          {isStakeSuppressed(pick) && <StakeSuppressedBadge />}
           <span style={styles.nextRacePickName}>{pick.horse_name}</span>
           <span>
             <span style={styles.statLabel}>Odds</span>
@@ -1011,6 +1056,102 @@ function NextRacePanel({ card, nowMs }: { card: RaceCard | null; nowMs: number }
           </span>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * True when a model pick's stake is suppressed (0, null, or missing) — the pick
+ * is then diagnostic only and must never read as actionable. Display-only.
+ */
+function isStakeSuppressed(pick: RaceCardPick): boolean {
+  return !(typeof pick.stake_amount === 'number' && pick.stake_amount > 0);
+}
+
+/** Warn badge shown next to a stake-suppressed model pick. Display-only. */
+function StakeSuppressedBadge() {
+  return (
+    <span style={statusBadgeStyle('neg')}>
+      NO BET — stake suppressed / diagnostic only
+    </span>
+  );
+}
+
+/**
+ * Official T-minus-5 locked decision panel (display-only, pre-Phase-4 interim).
+ * Shows the immutable `locked_race_decisions` state ABOVE the live model pick so
+ * the official decision takes visual precedence. Read-only: renders stored
+ * fields verbatim, fabricates nothing, and is never a betting instruction.
+ */
+function LockedDecisionPanel({ ld }: { ld: RaceCardLockedDecision }) {
+  const quality = (ld.run_quality ?? '').toUpperCase();
+  const qualityDegraded = quality !== '' && quality !== 'OK' && quality !== 'GOOD';
+  return (
+    <div style={styles.favouriteRow}>
+      <div style={styles.sectionLabel}>Official locked decision (T−5)</div>
+      {ld.decision_status === 'locked_no_bet' && (
+        <div>
+          <span style={statusBadgeStyle('neg')}>OFFICIAL LOCKED NO BET</span>
+          {ld.no_bet_reason && (
+            <span style={{ ...styles.muted, marginLeft: 8 }}>{ld.no_bet_reason}</span>
+          )}
+        </div>
+      )}
+      {ld.decision_status === 'locked_pick' && (
+        <div>
+          <span style={statusBadgeStyle('pos')}>OFFICIAL LOCKED PICK</span>
+          <div style={styles.pickStats}>
+            <span style={styles.nextRacePickName}>
+              {ld.pick_horse_name ?? '—'}
+            </span>
+            <span>
+              <span style={styles.statLabel}>Odds</span>
+              {formatOdds(ld.pick_odds)}
+            </span>
+            <span style={evColorStyle(ld.pick_ev)}>
+              <span style={styles.statLabel}>EV</span>
+              {formatEv(ld.pick_ev)}
+            </span>
+            <span>
+              <span style={styles.statLabel}>Confidence</span>
+              {ld.pick_confidence_label
+                ? displayConfidence(ld.pick_confidence_label)
+                : '—'}
+            </span>
+          </div>
+          {!(typeof ld.pick_stake === 'number' && ld.pick_stake > 0) && (
+            <div style={{ marginTop: 6 }}>
+              <StakeSuppressedBadge />
+            </div>
+          )}
+        </div>
+      )}
+      {ld.decision_status === 'no_run_available' && (
+        <div>
+          <span style={statusBadgeStyle('warn')}>
+            OFFICIAL LOCK: NO MODEL RUN AVAILABLE
+          </span>
+          <span style={{ ...styles.muted, marginLeft: 8 }}>
+            No model run existed at the capture target — unknown, not a no-bet.
+          </span>
+        </div>
+      )}
+      {(qualityDegraded || ld.data_quality_short_summary) && (
+        <div style={{ marginTop: 6 }}>
+          <span style={statusBadgeStyle('warn')}>
+            {`Data quality at lock: ${qualityDegraded ? quality : 'see note'}`}
+          </span>
+          {ld.data_quality_short_summary && (
+            <span style={{ ...styles.muted, marginLeft: 8 }}>
+              {ld.data_quality_short_summary}
+            </span>
+          )}
+        </div>
+      )}
+      <div style={{ fontSize: 11, color: '#656d76', marginTop: 4 }}>
+        Immutable decision locked at T−5 — results never change it. The live
+        model below is diagnostic only.
+      </div>
     </div>
   );
 }
@@ -1086,11 +1227,30 @@ function RaceCardView({ card, nowMs, mlShadow }: { card: RaceCard; nowMs: number
         )}
       </div>
 
+      {/* Official T-minus-5 locked decision (display-only; precedence over the
+          live model pick below, which is diagnostic only). Interim pre-Phase-4
+          display — no redesign, no write path, no buttons. */}
+      {card.lockedDecision && <LockedDecisionPanel ld={card.lockedDecision} />}
+
       {/* Model pick */}
       <div>
-        <div style={styles.sectionLabel}>Model pick</div>
+        <div style={styles.sectionLabel}>
+          {card.lockedDecision
+            ? 'Model pick — live diagnostic (official decision above)'
+            : 'Model pick'}
+        </div>
+        {!card.lockedDecision && (
+          <div style={{ fontSize: 11, color: '#656d76', marginBottom: 4 }}>
+            Live/pre-off model diagnostic — not official locked decision.
+          </div>
+        )}
         {pick ? (
           <>
+            {isStakeSuppressed(pick) && (
+              <div style={{ marginBottom: 4 }}>
+                <StakeSuppressedBadge />
+              </div>
+            )}
             <div style={styles.pickName}>
               {pick.horse_name}
               {pick.isFavourite && (
