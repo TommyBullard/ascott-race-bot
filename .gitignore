@@ -60,3 +60,4 @@ data/exports/*.csv
 .idea/
 .vscode/*
 !.vscode/extensions.json
+run-newmarket-locks.bat
