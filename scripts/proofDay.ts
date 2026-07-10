@@ -63,6 +63,57 @@ function numericCounts(counts: unknown): Record<string, number> | null {
   return Object.keys(out).length > 0 ? out : null;
 }
 
+/** One stored runner row (finish source), coerced for the winner lookup. */
+interface StoredRunnerRow {
+  runner_id: string;
+  horse_name: string;
+  finish_pos: number | null;
+}
+
+/**
+ * SELECT-only read of ALL stored runners (name + finish_pos) for the given
+ * races. The winner must come from the FULL stored field, not the model run's
+ * scored subset (`card.runners`): a winner the model never scored — e.g. an
+ * unpriced runner — is otherwise invisible and renders as "—" even though
+ * `runners.finish_pos = 1` exists (Newmarket 2026-07-09, Princess Of Wales's
+ * Stakes). Mirrors reportDay's direct read. Returns null on failure so the
+ * caller can fall back to the scored-field logic instead of breaking.
+ */
+async function readStoredRunners(
+  ids: readonly string[],
+): Promise<Map<string, StoredRunnerRow[]> | null> {
+  if (ids.length === 0) return new Map();
+  const { data, error } = await supabaseAdmin
+    .from('runners')
+    .select('id, race_id, horse_name, finish_pos')
+    .in('race_id', ids as string[]);
+  if (error || !data) {
+    console.error(
+      `Note: runners finish-pos read failed (${error?.message ?? 'no data'}); ` +
+        'winners will fall back to the scored field only.',
+    );
+    return null;
+  }
+  const map = new Map<string, StoredRunnerRow[]>();
+  for (const raw of data as {
+    id: string | number;
+    race_id: string | number;
+    horse_name: string | null;
+    finish_pos: number | string | null;
+  }[]) {
+    const raceId = String(raw.race_id);
+    const rows = map.get(raceId) ?? [];
+    const n = raw.finish_pos === null || raw.finish_pos === undefined ? null : Number(raw.finish_pos);
+    rows.push({
+      runner_id: String(raw.id),
+      horse_name: raw.horse_name ?? '(unknown)',
+      finish_pos: Number.isFinite(n as number) ? (n as number) : null,
+    });
+    map.set(raceId, rows);
+  }
+  return map;
+}
+
 /** SELECT-only count of stored runners for the given race ids (null on failure). */
 async function countRunners(ids: readonly string[]): Promise<number> {
   if (ids.length === 0) return 0;
@@ -147,9 +198,18 @@ function toRaceInput(
   card: RaceCard,
   runs: { total: number; postOff: number } | null,
   runsQueried: boolean,
+  stored: StoredRunnerRow[] | null,
 ): ProofRaceInput {
-  const finishPosAvailable = card.runners.some((r) => isFiniteNum(r.finish_pos));
-  const winner = card.runners.find((r) => r.finish_pos === 1) ?? null;
+  // Winner + finish availability come from the FULL stored field when readable
+  // (the scored field can miss the winner); scored-field values are the
+  // fallback. "—" still means exactly "no finish_pos = 1 recorded anywhere".
+  const finishPosAvailable =
+    (stored?.some((r) => isFiniteNum(r.finish_pos)) ?? false) ||
+    card.runners.some((r) => isFiniteNum(r.finish_pos));
+  const winner =
+    stored?.find((r) => r.finish_pos === 1) ??
+    card.runners.find((r) => r.finish_pos === 1) ??
+    null;
   return {
     raceId: card.race_id,
     offTime: card.off_time,
@@ -210,13 +270,19 @@ async function main(): Promise<void> {
 
   // 2. Read-only counts + audit probes (graceful on missing tables).
   const runnersFound = await countRunners(ids);
+  const storedRunners = await readStoredRunners(ids);
   const modelRuns = await readModelRuns(ids, offByRace);
   const cron = await readCron();
   const mlTraining = await countAuditTable('ml_training_examples', ids);
   const genaiTable = await countAuditTable('genai_commentary', ids);
 
   const races: ProofRaceInput[] = cards.map((card) =>
-    toRaceInput(card, modelRuns?.get(card.race_id) ?? null, modelRuns !== null),
+    toRaceInput(
+      card,
+      modelRuns?.get(card.race_id) ?? null,
+      modelRuns !== null,
+      storedRunners?.get(card.race_id) ?? null,
+    ),
   );
 
   const commentaryFilePath = buildCommentaryPath(date, args.course ?? null);

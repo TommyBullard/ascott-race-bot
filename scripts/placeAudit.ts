@@ -8,7 +8,8 @@
  * SIMULATED top-N place marker. It then writes a deterministic Markdown report.
  *
  * STRICTLY READ-ONLY + RESEARCH ONLY. It issues only `select` queries (through
- * `fetchRaceCard` / `fetchRaceIdsForMeeting`); it NEVER runs the model, fetches
+ * `fetchRaceCard` / `fetchRaceIdsForMeeting`, plus a direct `runners` finish-pos
+ * read so the winner comes from the FULL stored field); it NEVER runs the model, fetches
  * live odds, calls an external API, imports results, mutates the database, or
  * computes any real each-way payout / P&L. The only write is the Markdown file.
  * It loads credentials from `.env.local` / `.env` and never prints them.
@@ -23,6 +24,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
+import { supabaseAdmin } from '../src/lib/supabaseAdmin';
 import { fetchRaceIdsForMeeting, fetchRaceCard } from '../src/lib/raceData';
 import { normalizeCourse } from '../src/lib/raceSync';
 import {
@@ -59,6 +61,51 @@ function toAuditRunner(r: {
   };
 }
 
+/**
+ * SELECT-only read of ALL stored runners (name + finish_pos) for the given
+ * races. The audit's "full field" (the winner source) must be the STORED
+ * field, not just the model run's scored subset (`card.runners`): a winner
+ * the model never scored — e.g. an unpriced runner — is otherwise missing and
+ * the winner renders as "—" even though `runners.finish_pos = 1` exists
+ * (Newmarket 2026-07-09, Princess Of Wales's Stakes). Mirrors reportDay's
+ * direct read. Returns null on failure so the caller keeps the previous
+ * scored-field behaviour instead of breaking.
+ */
+async function readStoredRunners(
+  ids: readonly string[],
+): Promise<Map<string, AuditRunner[]> | null> {
+  if (ids.length === 0) return new Map();
+  const { data, error } = await supabaseAdmin
+    .from('runners')
+    .select('id, race_id, horse_name, finish_pos')
+    .in('race_id', ids as string[]);
+  if (error || !data) {
+    console.error(
+      `Note: runners finish-pos read failed (${error?.message ?? 'no data'}); ` +
+        'the audit will use the scored field only.',
+    );
+    return null;
+  }
+  const map = new Map<string, AuditRunner[]>();
+  for (const raw of data as {
+    id: string | number;
+    race_id: string | number;
+    horse_name: string | null;
+    finish_pos: number | string | null;
+  }[]) {
+    const raceId = String(raw.race_id);
+    const rows = map.get(raceId) ?? [];
+    const n = raw.finish_pos === null || raw.finish_pos === undefined ? null : Number(raw.finish_pos);
+    rows.push({
+      runner_id: String(raw.id),
+      horse_name: raw.horse_name ?? '(unknown)',
+      finish_pos: Number.isFinite(n as number) ? (n as number) : null,
+    });
+    map.set(raceId, rows);
+  }
+  return map;
+}
+
 async function main(): Promise<void> {
   const args = parsePlaceAuditArgs(process.argv.slice(2));
   if (!args.date) {
@@ -89,6 +136,9 @@ async function main(): Promise<void> {
   // Build each race card concurrently; isolate per-race failures.
   const settled = await Promise.allSettled(raceIds.map((id) => fetchRaceCard(id)));
 
+  // Full stored field per race (winner source; read-only; null => fall back).
+  const storedByRace = await readStoredRunners(raceIds);
+
   const inputs: PlaceAuditRaceInput[] = [];
   for (const result of settled) {
     if (result.status !== 'fulfilled') {
@@ -97,15 +147,36 @@ async function main(): Promise<void> {
     }
     const card = result.value;
     if (wantCourse && normalizeCourse(card.course) !== wantCourse) continue;
+
+    // Stored finish positions win over the card's (same source, but the card
+    // only attaches them for scored runners on resulted races); an unknown
+    // finish stays null — never invented.
+    const stored = storedByRace?.get(card.race_id) ?? null;
+    const finishById = new Map(
+      (stored ?? []).map((r) => [r.runner_id, r.finish_pos] as const),
+    );
+    const overlay = (r: AuditRunner): AuditRunner => ({
+      ...r,
+      finish_pos: finishById.get(r.runner_id) ?? r.finish_pos,
+    });
+
+    // Full field = the scored runners (overlaid) plus any stored runners the
+    // model never scored — so the winner is always present when recorded.
+    const scoredField = card.runners.map((r) => overlay(toAuditRunner(r)));
+    const scoredIds = new Set(scoredField.map((r) => r.runner_id));
+    const fullField = scoredField.concat(
+      (stored ?? []).filter((r) => !scoredIds.has(r.runner_id)),
+    );
+
     inputs.push({
       race_id: card.race_id,
       off_time: card.off_time,
       race_name: card.race_name,
       course: card.course,
-      modelPick: card.modelPick ? toAuditRunner(card.modelPick) : null,
-      favourite: card.favourite ? toAuditRunner(card.favourite) : null,
-      alternatives: card.alternatives.map(toAuditRunner),
-      runners: card.runners.map(toAuditRunner),
+      modelPick: card.modelPick ? overlay(toAuditRunner(card.modelPick)) : null,
+      favourite: card.favourite ? overlay(toAuditRunner(card.favourite)) : null,
+      alternatives: card.alternatives.map((r) => overlay(toAuditRunner(r))),
+      runners: fullField,
       confidenceLabel: card.modelPick?.confidence_label ?? null,
       runQuality: card.observability?.runQuality ?? null,
       status: card.status ?? null,
