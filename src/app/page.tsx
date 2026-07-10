@@ -1634,6 +1634,9 @@ function PerformancePanel({ performance }: { performance: ModelPerformance | nul
             : null;
   const cov = performance.lockCoverage;
   const fallback = performance.fallbackPerformance;
+  // Read-only deep link to the Prediction Audit page, preserving ?date/?course.
+  const auditHref =
+    '/results-audit' + (typeof window !== 'undefined' ? window.location.search : '');
 
   if (performance.settled_count === 0) {
     return (
@@ -1641,6 +1644,9 @@ function PerformancePanel({ performance }: { performance: ModelPerformance | nul
         <div style={styles.perfHeading}>
           <span style={styles.perfTitle}>Recommendation performance</span>
           <span style={styles.perfScope}>{scope}</span>
+          <a href={auditHref} style={{ fontSize: 12, color: '#0969da', textDecoration: 'none' }}>
+            Prediction Audit →
+          </a>
         </div>
         {modeNote && <div style={styles.perfNote}>{modeNote}</div>}
         <span style={styles.muted}>
@@ -1669,6 +1675,9 @@ function PerformancePanel({ performance }: { performance: ModelPerformance | nul
         <span style={{ ...styles.accuracyUpdated }}>
           updated {formatUpdated(performance.computedAt)}
         </span>
+        <a href={auditHref} style={{ fontSize: 12, color: '#0969da', textDecoration: 'none' }}>
+          Prediction Audit →
+        </a>
       </div>
       {modeNote && <div style={styles.perfNote}>{modeNote}</div>}
       <div style={styles.perfRow}>
