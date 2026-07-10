@@ -16,7 +16,9 @@ import { readFileSync } from 'node:fs';
 
 import {
   buildConfidenceInputsFromCard,
+  buildConfidenceInputsFromCardAsOf,
   cardConfidenceDiagnostic,
+  cardConfidenceDiagnosticAsOf,
   type ConfidenceCardInput,
 } from '../src/lib/confidenceCardDiagnostics';
 
@@ -157,6 +159,57 @@ test('Newmarket 2026-07-10 audit fixture: OK data, mid market completeness, no t
   assert.equal(diag.data.level, 'high');
   assert.equal(diag.overall.level, 'medium'); // weakest KNOWN component (market), tipster excluded
   assert.match(diag.overall.reason, /market/);
+});
+
+/* -------------------- audit rule: staleness AS OF race time ---------------- */
+
+test('as-of rule: odds fresh AT the run time stay fresh no matter when the audit is read', () => {
+  // Snapshot 1 minute before the (historical) run — comfortably fresh THEN.
+  const asOfMs = Date.parse('2026-07-10T14:20:00.000Z');
+  const inputs = buildConfidenceInputsFromCardAsOf(
+    card({ latestOddsSnapshotTime: '2026-07-10T14:19:00.000Z' }),
+    asOfMs,
+  );
+  assert.equal(inputs.odds_stale, false); // no viewing clock involved at all
+
+  const diag = cardConfidenceDiagnosticAsOf(
+    card({ latestOddsSnapshotTime: '2026-07-10T14:19:00.000Z' }),
+    asOfMs,
+  );
+  assert.ok(diag);
+  assert.equal(diag.execution.level, 'high'); // never "limited by execution" post-day
+});
+
+test('as-of rule: odds genuinely stale AT the run time are still flagged (honest)', () => {
+  const asOfMs = Date.parse('2026-07-10T14:20:00.000Z');
+  const inputs = buildConfidenceInputsFromCardAsOf(
+    card({ latestOddsSnapshotTime: '2026-07-10T13:00:00.000Z' }), // 80 min old at the run
+    asOfMs,
+  );
+  assert.equal(inputs.odds_stale, true);
+});
+
+test('as-of rule: unknown reference or unknown snapshot -> staleness UNKNOWN, never wrongly low', () => {
+  const noRef = buildConfidenceInputsFromCardAsOf(card(), null);
+  assert.equal(noRef.odds_stale, null);
+
+  const noSnap = buildConfidenceInputsFromCardAsOf(
+    card({ latestOddsSnapshotTime: null }),
+    Date.parse('2026-07-10T14:20:00.000Z'),
+  );
+  assert.equal(noSnap.odds_stale, null);
+
+  // With odds present + staleness unknown, execution is MEDIUM ("staleness
+  // unknown"), never LOW — the shared deriver is reused unchanged.
+  const diag = cardConfidenceDiagnosticAsOf(card(), null);
+  assert.ok(diag);
+  assert.equal(diag.execution.level, 'medium');
+  assert.match(diag.execution.reason, /staleness unknown/);
+});
+
+test('live rule unchanged: unknown snapshot still counts as stale on the dashboard', () => {
+  const inputs = buildConfidenceInputsFromCard(card({ latestOddsSnapshotTime: null }), NOW_MS);
+  assert.equal(inputs.odds_stale, true);
 });
 
 /* --------------------------- safety source scans --------------------------- */

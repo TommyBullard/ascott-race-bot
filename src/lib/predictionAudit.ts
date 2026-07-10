@@ -252,6 +252,41 @@ export function buildPredictionAuditRow(
 }
 
 /* -------------------------------------------------------------------------- */
+/* Audit-safe confidence "as of" instant (pure)                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The reference instant for judging a historical race's confidence signals
+ * (odds staleness) on the audit page — the moment the decision was live, NOT
+ * the viewing clock:
+ *
+ *   1. the displayed diagnostic model run's time (the run priced the snapshot),
+ *   2. else the official lock time,
+ *   3. else the scheduled off time,
+ *   4. else null — staleness is then UNKNOWN, never accused.
+ *
+ * Prevents "limited by execution" appearing on settled races merely because
+ * the audit is read hours later. Pure; display-only.
+ */
+export function auditConfidenceAsOfMs(card: {
+  latestModelRunTime?: string | null;
+  off_time?: string | null;
+  lockedDecision?: { lock_time?: string | null } | null;
+}): number | null {
+  for (const iso of [
+    card.latestModelRunTime,
+    card.lockedDecision?.lock_time,
+    card.off_time,
+  ]) {
+    if (typeof iso === 'string' && iso !== '') {
+      const ms = Date.parse(iso);
+      if (Number.isFinite(ms)) return ms;
+    }
+  }
+  return null;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Day summary (pure)                                                         */
 /* -------------------------------------------------------------------------- */
 

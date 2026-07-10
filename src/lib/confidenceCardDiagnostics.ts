@@ -62,14 +62,33 @@ function alignmentLabel(card: ConfidenceCardInput): string | null {
 }
 
 /**
- * Maps a card + the client's current time (for odds staleness) into the
- * diagnostic's `ConfidenceInputs`. Raw data-quality flags aren't currently
- * surfaced on the card, so `data_quality_flags` is `[]` — `deriveDataConfidence`
- * then falls back to `run_quality` alone (documented, conservative). Pure.
+ * Odds staleness judged AS OF a reference instant.
+ *
+ *   - LIVE rule (`unknownIsStale: true`, the dashboard): an unknown snapshot
+ *     time is treated as stale — never accuse "fresh" without evidence.
+ *   - AUDIT rule (`unknownIsStale: false`, historical display): an unknown
+ *     snapshot OR an unknown reference yields null (staleness UNKNOWN) — a
+ *     settled race is never accused of stale odds merely because the page is
+ *     viewed hours later or the reference instant is unrecorded.
+ *
+ * Pure.
  */
-export function buildConfidenceInputsFromCard(
+function computeOddsStaleAsOf(
+  snapshotTime: string | null | undefined,
+  asOfMs: number | null,
+  unknownIsStale: boolean,
+): boolean | null {
+  const snapMs = snapshotTime ? Date.parse(snapshotTime) : NaN;
+  if (!Number.isFinite(snapMs) || asOfMs === null || !Number.isFinite(asOfMs)) {
+    return unknownIsStale ? true : null;
+  }
+  return asOfMs - snapMs > STALE_ODDS_THRESHOLD_MS;
+}
+
+/** The shared card -> `ConfidenceInputs` mapping; staleness supplied by caller. Pure. */
+function buildInputsCore(
   card: ConfidenceCardInput,
-  nowMs: number,
+  oddsStale: boolean | null,
 ): ConfidenceInputs {
   const pick = card.modelPick ?? null;
   const runners = card.runners ?? [];
@@ -78,9 +97,6 @@ export function buildConfidenceInputsFromCard(
     pick && isFiniteNum(pick.model_prob) && isFiniteNum(pick.market_prob)
       ? Math.abs(pick.model_prob - pick.market_prob)
       : null;
-
-  const snapMs = card.latestOddsSnapshotTime ? Date.parse(card.latestOddsSnapshotTime) : NaN;
-  const oddsStale = Number.isFinite(snapMs) ? nowMs - snapMs > STALE_ODDS_THRESHOLD_MS : true;
 
   return {
     run_quality: card.observability?.runQuality ?? null,
@@ -98,14 +114,45 @@ export function buildConfidenceInputsFromCard(
 }
 
 /**
- * Convenience: card + now -> the full per-race diagnostic, or `null` when
- * there is no pick to explain. Pure; reuses `buildRaceDiagnostic` verbatim so
- * the weakest-link `overall` + component reasons match the offline audit
- * exactly. Display-only; never a betting instruction.
+ * Maps a card + the client's current time (for odds staleness) into the
+ * diagnostic's `ConfidenceInputs` — the LIVE rule (unknown snapshot -> stale;
+ * never accuse "fresh" without evidence). Raw data-quality flags aren't
+ * currently surfaced on the card, so `data_quality_flags` is `[]` —
+ * `deriveDataConfidence` then falls back to `run_quality` alone (documented,
+ * conservative). Pure.
  */
-export function cardConfidenceDiagnostic(
+export function buildConfidenceInputsFromCard(
   card: ConfidenceCardInput,
   nowMs: number,
+): ConfidenceInputs {
+  return buildInputsCore(
+    card,
+    computeOddsStaleAsOf(card.latestOddsSnapshotTime, nowMs, true),
+  );
+}
+
+/**
+ * AUDIT variant: identical mapping, but odds staleness is judged AS OF a
+ * historical reference instant (the diagnostic run time / lock time / off
+ * time) instead of the viewing clock — so a settled race is never "limited by
+ * execution" merely because the audit page is opened hours later. An unknown
+ * reference or snapshot yields staleness UNKNOWN (null), never wrongly stale.
+ * Display-only; changes no pick, stake, or probability. Pure.
+ */
+export function buildConfidenceInputsFromCardAsOf(
+  card: ConfidenceCardInput,
+  asOfMs: number | null,
+): ConfidenceInputs {
+  return buildInputsCore(
+    card,
+    computeOddsStaleAsOf(card.latestOddsSnapshotTime, asOfMs, false),
+  );
+}
+
+/** Shared diagnostic assembly for both time rules. Pure. */
+function toDiagnostic(
+  card: ConfidenceCardInput,
+  inputs: ConfidenceInputs,
 ): RaceConfidenceDiagnostic | null {
   const pick = card.modelPick;
   if (!pick) return null;
@@ -115,6 +162,31 @@ export function cardConfidenceDiagnostic(
     race_name: card.race_name ?? null,
     model_pick_name: pick.horse_name ?? null,
     original_confidence_label: pick.confidence_label,
-    inputs: buildConfidenceInputsFromCard(card, nowMs),
+    inputs,
   });
+}
+
+/**
+ * Convenience: card + now -> the full per-race diagnostic (LIVE rule), or
+ * `null` when there is no pick to explain. Pure; reuses `buildRaceDiagnostic`
+ * verbatim so the weakest-link `overall` + component reasons match the offline
+ * audit exactly. Display-only; never a betting instruction.
+ */
+export function cardConfidenceDiagnostic(
+  card: ConfidenceCardInput,
+  nowMs: number,
+): RaceConfidenceDiagnostic | null {
+  return toDiagnostic(card, buildConfidenceInputsFromCard(card, nowMs));
+}
+
+/**
+ * Convenience: card + historical reference instant -> the diagnostic under the
+ * AUDIT rule (see {@link buildConfidenceInputsFromCardAsOf}), or `null` when
+ * there is no pick. Pure; display-only — changes no pick/stake/probability.
+ */
+export function cardConfidenceDiagnosticAsOf(
+  card: ConfidenceCardInput,
+  asOfMs: number | null,
+): RaceConfidenceDiagnostic | null {
+  return toDiagnostic(card, buildConfidenceInputsFromCardAsOf(card, asOfMs));
 }

@@ -17,6 +17,7 @@
 
 import { useEffect, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import {
+  auditConfidenceAsOfMs,
   buildPredictionAuditRow,
   summarizePredictionAudit,
   type AuditCardInput,
@@ -24,7 +25,7 @@ import {
   type PredictionAuditSummary,
   type BadgeTone,
 } from '@/lib/predictionAudit';
-import { cardConfidenceDiagnostic } from '@/lib/confidenceCardDiagnostics';
+import { cardConfidenceDiagnosticAsOf } from '@/lib/confidenceCardDiagnostics';
 
 /**
  * The fetched card shape: the audit fields plus the extra read-only fields the
@@ -36,6 +37,8 @@ interface PageCard extends AuditCardInput {
   status?: string | null;
   isHandicap?: boolean | null;
   latestOddsSnapshotTime?: string | null;
+  /** Displayed model run's time (ISO) — the audit-safe confidence reference. */
+  latestModelRunTime?: string | null;
   observability?: {
     runQuality?: string | null;
     tipsterModelAlignment?: Record<string, unknown> | null;
@@ -306,10 +309,13 @@ function DiagnosticBlock({ row }: { row: PredictionAuditRow }) {
 }
 
 /** One-line confidence summary reusing the existing card diagnostic. */
-function ConfidenceLine({ card, nowMs }: { card: PageCard; nowMs: number }) {
+function ConfidenceLine({ card }: { card: PageCard }) {
   const pick = card.modelPick;
   if (!pick) return null;
-  const diag = cardConfidenceDiagnostic(
+  // Judged AS OF the race's own decision instant (run time / lock time / off
+  // time) — never the viewing clock — so a settled race is not "limited by
+  // execution" merely because the audit is read hours later. Display-only.
+  const diag = cardConfidenceDiagnosticAsOf(
     {
       race_id: card.race_id,
       off_time: card.off_time,
@@ -327,12 +333,13 @@ function ConfidenceLine({ card, nowMs }: { card: PageCard; nowMs: number }) {
       runners: (card.runners ?? []).map((r) => ({ ev: r.ev ?? null })),
       observability: card.observability,
     },
-    nowMs,
+    auditConfidenceAsOfMs(card),
   );
   if (!diag) return null;
   return (
     <div style={styles.small}>
-      Confidence: original <strong>{orDash(diag.original_confidence_label)}</strong> ·
+      Confidence (as of race time): original{' '}
+      <strong>{orDash(diag.original_confidence_label)}</strong> ·
       diagnostic view{' '}
       <strong>{diag.overall.level === 'unknown' ? DASH : diag.overall.level.toUpperCase()}</strong>{' '}
       ({diag.overall.reason})
@@ -340,7 +347,7 @@ function ConfidenceLine({ card, nowMs }: { card: PageCard; nowMs: number }) {
   );
 }
 
-function RaceAuditCard({ card, row, nowMs }: { card: PageCard; row: PredictionAuditRow; nowMs: number }) {
+function RaceAuditCard({ card, row }: { card: PageCard; row: PredictionAuditRow }) {
   return (
     <article style={styles.card}>
       <header style={styles.cardHeader}>
@@ -370,7 +377,7 @@ function RaceAuditCard({ card, row, nowMs }: { card: PageCard; row: PredictionAu
       <div style={styles.sectionLabel}>Final pre-off diagnostic pick (comparison only — not official)</div>
       <DiagnosticBlock row={row} />
       <div style={{ marginTop: 8 }}>
-        <ConfidenceLine card={card} nowMs={nowMs} />
+        <ConfidenceLine card={card} />
       </div>
     </article>
   );
@@ -463,7 +470,7 @@ export default function ResultsAuditPage() {
         <>
           <SummaryStrip summary={summary} />
           {rows.map((row, i) => (
-            <RaceAuditCard key={row.race_id} card={cards[i]} row={row} nowMs={nowMs} />
+            <RaceAuditCard key={row.race_id} card={cards[i]} row={row} />
           ))}
         </>
       )}

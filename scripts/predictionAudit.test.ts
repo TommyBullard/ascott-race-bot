@@ -17,6 +17,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
+  auditConfidenceAsOfMs,
   cardToAuditInput,
   buildPredictionAuditRow,
   divergenceBadge,
@@ -419,6 +420,42 @@ test('Newmarket 2026-07-10: coverage 7/7, picks 6, official W4/L2, no-bet 1, dia
   assert.equal(s.diagnostic_won_official_lost, 1);
   assert.equal(s.settled, 7);
   assert.equal(s.official_pending, 0);
+});
+
+/* ------------------- audit-safe confidence "as of" instant ----------------- */
+
+test('auditConfidenceAsOfMs: run time preferred, then lock time, then off time, else null', () => {
+  const run = '2026-07-10T14:21:00.000Z';
+  const lock = '2026-07-10T14:20:00.000Z';
+  const off = '2026-07-10T14:25:00.000Z';
+
+  assert.equal(
+    auditConfidenceAsOfMs({
+      latestModelRunTime: run,
+      lockedDecision: { lock_time: lock },
+      off_time: off,
+    }),
+    Date.parse(run),
+  );
+  assert.equal(
+    auditConfidenceAsOfMs({ lockedDecision: { lock_time: lock }, off_time: off }),
+    Date.parse(lock),
+  );
+  assert.equal(auditConfidenceAsOfMs({ off_time: off }), Date.parse(off));
+  // Nothing usable -> null (staleness then renders UNKNOWN, never wrongly low).
+  assert.equal(auditConfidenceAsOfMs({}), null);
+  assert.equal(
+    auditConfidenceAsOfMs({ latestModelRunTime: 'junk', off_time: '' }),
+    null,
+  );
+});
+
+test('auditConfidenceAsOfMs: an unparseable run time falls through to the next source', () => {
+  const off = '2026-07-10T14:25:00.000Z';
+  assert.equal(
+    auditConfidenceAsOfMs({ latestModelRunTime: 'not-a-date', off_time: off }),
+    Date.parse(off),
+  );
 });
 
 /* --------------------------- safety source scans --------------------------- */
