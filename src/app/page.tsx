@@ -63,6 +63,7 @@ import { buildRaceDayTimeline } from '@/lib/raceDayTimeline';
 import { buildSettlementView } from '@/lib/settlementStatus';
 import { buildPlaceAuditView } from '@/lib/placeAuditView';
 import { buildProofPanelView } from '@/lib/proofPanel';
+import { deriveRaceLockStatus } from '@/lib/lockCoverage';
 import {
   deriveNextAction,
   type NextAction,
@@ -2192,6 +2193,7 @@ export default function RecommendationsPage() {
             status: c.status ?? null,
             resultTime: c.result_time ?? null,
             runQuality: c.observability?.runQuality ?? null,
+            lockedDecisionStatus: c.lockedDecision?.decision_status ?? null,
           })),
           nowMs,
         )
@@ -2273,6 +2275,12 @@ export default function RecommendationsPage() {
               status: c.status ?? null,
               finishPosAvailable: runners.some(
                 (r) => typeof r.finish_pos === 'number' && Number.isFinite(r.finish_pos),
+              ),
+              // Live official T-minus lock status (Phase 6A; read-only).
+              lockStatus: deriveRaceLockStatus(
+                c.lockedDecision?.decision_status ?? null,
+                c.off_time,
+                nowMs,
               ),
             };
           }),

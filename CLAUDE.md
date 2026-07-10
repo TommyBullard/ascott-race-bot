@@ -271,6 +271,16 @@ no commit flag exists.
 
 ### Phase 6: Update proof panel to show locked decision coverage
 
+**Phase 6A (IMPLEMENTED — src/lib/lockCoverage.ts):** live, read-only lock
+coverage on the dashboard, derived entirely from `/api/recommendations`
+(`lockedDecision.decision_status` + `off_time` + the page clock; no new API,
+no writes). Proof-of-Update panel gains an "Official T-minus-5 locks" row
+(locked/races, coverage %, per-status counts; warn when any MISSING/no-run);
+the race-day timeline shows a per-race lock badge. Null lock -> "Not locked
+yet" while `now <= off` (absence is expected, incl. mid-window and unknown
+offs); "LOCK MISSING" only once the off has passed (post-off locks are
+impossible, so missing is then a fact). Remaining Phase 6B items below.
+
 - Report: % races locked at T-minus-5 (target ≥ 95%).
 - Races missing locked decision: flag as "no pre-off run" or "T-minus capture failed".
 - Dashboard: show locked decision proof (race-by-race: locked timestamp, source model run).

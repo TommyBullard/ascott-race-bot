@@ -18,6 +18,12 @@
 import { formatRelativeAge, isStaleAge } from './relativeTime';
 import { STALE_ODDS_THRESHOLD_MS } from './modelDataQuality';
 import { buildProofPath } from './proofDay';
+import {
+  summarizeLockCoverage,
+  formatLockCoverageValue,
+  lockCoverageTone,
+  type RaceLockStatus,
+} from './lockCoverage';
 
 /** Tone hint for rendering (never a value judgement about a selection). */
 export type ProofTone = 'ok' | 'warn' | 'neutral';
@@ -37,6 +43,12 @@ export interface ProofPanelRaceInput {
   hasModelRun: boolean;
   status: string | null;
   finishPosAvailable: boolean;
+  /**
+   * Live official T-minus lock status for this race (Phase 6A), derived by the
+   * page via `deriveRaceLockStatus`. Optional for back-compat: when absent the
+   * locks row is omitted entirely (never guessed).
+   */
+  lockStatus?: RaceLockStatus | null;
 }
 
 /** Everything the panel needs. Audit-only fields are optional => "unknown". */
@@ -218,6 +230,20 @@ export function buildProofPanelView(input: ProofPanelInput | null): ProofPanelVi
     value: racecardsLoaded ? `${captured}/${races.length} pre-off captured` : 'unknown',
     tone: racecardsLoaded && captured === races.length && races.length > 0 ? 'ok' : 'warn',
   });
+
+  // Official T-minus-5 lock coverage (Phase 6A). Only rendered when the page
+  // supplied per-race lock statuses; a missing signal is omitted, never guessed.
+  const lockStatuses = races
+    .map((r) => r.lockStatus)
+    .filter((s): s is RaceLockStatus => typeof s === 'string');
+  if (racecardsLoaded && lockStatuses.length === races.length) {
+    const coverage = summarizeLockCoverage(lockStatuses);
+    rows.push({
+      label: 'Official T-minus-5 locks',
+      value: formatLockCoverageValue(coverage),
+      tone: lockCoverageTone(coverage),
+    });
+  }
 
   // Results status.
   const settled = races.filter(isSettled).length;

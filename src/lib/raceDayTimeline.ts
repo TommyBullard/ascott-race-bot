@@ -30,6 +30,7 @@ import {
 } from './raceDayStatus';
 import { isStaleAge } from './relativeTime';
 import { STALE_ODDS_THRESHOLD_MS } from './modelDataQuality';
+import { deriveRaceLockStatus, type RaceLockStatus } from './lockCoverage';
 
 /** Warning labels (stable, exported for tests + rendering). */
 export const TIMELINE_WARN_STALE_ODDS = 'Stale odds';
@@ -56,6 +57,12 @@ export interface TimelineInput {
   resultTime?: string | null;
   /** Observational model data-quality verdict (e.g. 'STALE'). */
   runQuality?: string | null;
+  /**
+   * Official locked decision status from the card's `lockedDecision`
+   * (Phase 6A), or null/absent when the race has no lock row. Optional for
+   * back-compat: absent behaves as "no lock", classified by time alone.
+   */
+  lockedDecisionStatus?: string | null;
 }
 
 /** A derived, serialisable operational status row for one race. */
@@ -78,6 +85,12 @@ export interface TimelineEntry {
   settledTime: string | null;
   oddsStale: boolean;
   modelStale: boolean;
+  /**
+   * Live official T-minus lock status (Phase 6A): a locked status verbatim,
+   * `not_locked_yet` while the window is open (never a failure), or
+   * `lock_missing` once the off has passed with no official row.
+   */
+  lockStatus: RaceLockStatus;
   warnings: string[];
 }
 
@@ -156,6 +169,11 @@ export function buildTimelineEntry(input: TimelineInput, now: number): TimelineE
     settledTime: input.resultTime ?? null,
     oddsStale,
     modelStale,
+    lockStatus: deriveRaceLockStatus(
+      input.lockedDecisionStatus ?? null,
+      input.off_time,
+      now,
+    ),
     warnings,
   };
 }

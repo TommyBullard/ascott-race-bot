@@ -18,6 +18,18 @@ import {
   type StatusTone,
 } from '@/lib/raceDayStatus';
 import type { TimelineEntry } from '@/lib/raceDayTimeline';
+import {
+  LOCK_STATUS_LABEL,
+  LOCK_STATUS_TONE,
+  type LockTone,
+} from '@/lib/lockCoverage';
+
+/** Maps a lock tone onto the panel's badge palette. */
+const LOCK_TONE_TO_STATUS: Record<LockTone, StatusTone> = {
+  ok: 'pos',
+  warn: 'warn',
+  neutral: 'neutral',
+};
 
 export interface RaceTimelinePanelProps {
   entries: TimelineEntry[];
@@ -150,6 +162,10 @@ function TimelineRow({ entry, nowMs }: { entry: TimelineEntry; nowMs: number }) 
         <span style={styles.time}>{formatClock(entry.off_time)}</span>
         <span style={styles.name}>{entry.race_name ?? DASH}</span>
         <span style={badgeStyle(state.tone)}>{state.label}</span>
+        {/* Official T-minus lock status (Phase 6A; read-only display). */}
+        <span style={badgeStyle(LOCK_TONE_TO_STATUS[LOCK_STATUS_TONE[entry.lockStatus]])}>
+          {LOCK_STATUS_LABEL[entry.lockStatus]}
+        </span>
         {result.label !== DASH && (
           <span style={badgeStyle(result.tone)}>{`Result: ${result.label}`}</span>
         )}
