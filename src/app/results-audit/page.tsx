@@ -15,7 +15,7 @@
  * pure `predictionAudit` helpers. Decision-support only — not betting advice.
  */
 
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import {
   buildPredictionAuditRow,
   summarizePredictionAudit,
@@ -53,6 +53,13 @@ interface PageCard extends AuditCardInput {
 }
 
 const DASH = '—';
+
+/**
+ * No-op subscribe for useSyncExternalStore: the URL query string does not
+ * change during the page's lifetime, so there is nothing to subscribe to;
+ * module scope keeps the reference stable across renders.
+ */
+const subscribeNoop = (): (() => void) => () => {};
 
 /* ----------------------------- formatting (pure) -------------------------- */
 
@@ -385,6 +392,16 @@ export default function ResultsAuditPage() {
   });
   const [error, setError] = useState<string | null>(null);
   const [nowMs] = useState(() => Date.now());
+  // The dashboard back-link's query string, read hydration-safely: the server
+  // snapshot is '' so SSR and the hydration render both produce href="/", then
+  // React swaps in the real ?date/?course after hydration (same pattern the
+  // dashboard uses for its URL scope; reading window.location directly during
+  // render caused a hydration mismatch).
+  const search = useSyncExternalStore(
+    subscribeNoop,
+    () => window.location.search,
+    () => '',
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -418,7 +435,7 @@ export default function ResultsAuditPage() {
 
   return (
     <main style={styles.page}>
-      <a href={`/${typeof window !== 'undefined' ? window.location.search : ''}`} style={styles.backLink}>
+      <a href={`/${search}`} style={styles.backLink}>
         ← Dashboard
       </a>
       <h1 style={{ ...styles.h1, marginTop: 8 }}>Prediction Audit</h1>

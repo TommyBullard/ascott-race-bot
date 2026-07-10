@@ -23,10 +23,7 @@ import GenaiCommentaryPanel from '@/components/GenaiCommentaryPanel';
 import MlShadowComparisonPanel from '@/components/MlShadowComparisonPanel';
 import type { GenaiCommentaryRow } from '@/lib/genaiCommentaryView';
 import {
-  TODAY_ASCOT_HREF,
-  YESTERDAY_ASCOT_HREF,
-  VIEW_TODAY_LABEL,
-  VIEW_YESTERDAY_LABEL,
+  buildRaceDayNavView,
   RACE_DAY_NAV_EMPTY_MESSAGE,
 } from '@/lib/raceDayNav';
 import {
@@ -1931,12 +1928,16 @@ function SafetyBanner() {
 }
 
 /**
- * Homepage race-day navigation: a prominent link to today's Ascot dashboard and
- * a secondary link to yesterday's results. NAVIGATION ONLY — plain in-app anchors
- * (`/?date=…&course=…`); no backend-route call, no DB write, no wager, no
- * write-mode flag. When unscoped it shows a short "choose a view" prompt.
+ * Homepage race-day navigation, course/date-aware (no hardcoded course): a
+ * primary link to today's races for the SELECTED course, a previous-day
+ * results link derived from the selected date, and a Prediction Audit deep
+ * link preserving the current query. NAVIGATION ONLY — plain in-app anchors;
+ * no backend-route call, no DB write, no wager, no write-mode flag. When
+ * unscoped it shows a short "choose a view" prompt and generic wording.
+ * `search` is the hydration-safe URL query ('' on the server render).
  */
-function RaceDayNav({ scoped }: { scoped: boolean }) {
+function RaceDayNav({ scoped, search }: { scoped: boolean; search: string }) {
+  const nav = buildRaceDayNavView(search);
   return (
     <div style={{ margin: '12px 0 4px' }}>
       {!scoped && (
@@ -1945,11 +1946,16 @@ function RaceDayNav({ scoped }: { scoped: boolean }) {
         </p>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-        <a href={TODAY_ASCOT_HREF} style={raceDayPrimaryButtonStyle}>
-          {VIEW_TODAY_LABEL}
+        <a href={nav.primary.href} style={raceDayPrimaryButtonStyle}>
+          {nav.primary.label}
         </a>
-        <a href={YESTERDAY_ASCOT_HREF} style={raceDaySecondaryLinkStyle}>
-          {VIEW_YESTERDAY_LABEL}
+        {nav.previousDay && (
+          <a href={nav.previousDay.href} style={raceDaySecondaryLinkStyle}>
+            {nav.previousDay.label}
+          </a>
+        )}
+        <a href={nav.audit.href} style={raceDaySecondaryLinkStyle}>
+          {nav.audit.label}
         </a>
       </div>
     </div>
@@ -2061,6 +2067,13 @@ export default function RecommendationsPage() {
     subscribeNoop,
     () => hasRaceDayScope(window.location.search),
     () => false,
+  );
+  // The raw URL query, hydration-safe the same way ('' on the server render);
+  // drives the course/date-aware nav wording and the audit deep link.
+  const search = useSyncExternalStore(
+    subscribeNoop,
+    () => window.location.search,
+    () => '',
   );
   // Epoch ms of the last successful race-card refresh, for the live-mode
   // "data refreshed X ago" indicator. null until the first load completes.
@@ -2481,7 +2494,7 @@ export default function RecommendationsPage() {
       />
       <SafetyBanner />
 
-      <RaceDayNav scoped={scoped} />
+      <RaceDayNav scoped={scoped} search={search} />
 
       <NextRacePanel card={nextRace} nowMs={nowMs} />
 
