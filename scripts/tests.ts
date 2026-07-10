@@ -92,6 +92,7 @@ import './lockCoverage.test';
 import './lockedEvaluation.test';
 import './confidenceCardDiagnostics.test';
 import './predictionAudit.test';
+import './raceDaySupervisor.test';
 import './autoResults.test';
 import './freeResultsMatch.test';
 import './todayResultsSettlement.test';

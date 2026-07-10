@@ -37,6 +37,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Local race-day supervisor logs (operator artefacts, regenerated daily)
+logs/
+
 # Vercel
 .vercel
 
