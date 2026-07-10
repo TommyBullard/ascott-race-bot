@@ -40,6 +40,8 @@ import {
 import { formatRelativeAge, isStaleAge } from '@/lib/relativeTime';
 import { STALE_ODDS_THRESHOLD_MS } from '@/lib/modelDataQuality';
 import { cardConfidenceLadder, type LadderLabel } from '@/lib/confidenceLadder';
+import { cardConfidenceDiagnostic } from '@/lib/confidenceCardDiagnostics';
+import type { ConfidenceComponent } from '@/lib/confidenceDiagnostics';
 import {
   hasRaceDayScope,
   selectDashboardSummary,
@@ -121,6 +123,8 @@ interface RaceCard {
   off_time: string | null;
   course: string | null;
   race_name: string | null;
+  /** `races.handicap_flag`, or null/absent when unrecorded. Display-only. */
+  isHandicap?: boolean | null;
   favourite: RaceCardRunner | null;
   modelPick: RaceCardPick | null;
   alternatives: RaceCardRunner[];
@@ -305,6 +309,64 @@ function displayConfidence(label: string): ConfidenceLabel {
 /** Maps an evidence-ladder label (LOW/MEDIUM/HIGH) to a display label. */
 function ladderToDisplay(label: LadderLabel): ConfidenceLabel {
   return label === 'HIGH' ? 'High' : label === 'MEDIUM' ? 'Medium' : 'Low';
+}
+
+/** Maps a diagnostic component's level to the shared confidence colour, or grey for unknown. */
+function componentColor(level: ConfidenceComponent['level']): string {
+  if (level === 'unknown') return '#8c959f';
+  return CONFIDENCE_COLORS[level === 'high' ? 'High' : level === 'medium' ? 'Medium' : 'Low'];
+}
+
+/**
+ * Collapsible, closed-by-default "why this confidence?" breakdown — the same
+ * six-component decomposition `npm run confidence:audit` computes offline,
+ * reused verbatim client-side via the pure `cardConfidenceDiagnostic`. Purely
+ * explanatory: renders already-computed signals only, never changes the pick,
+ * stake, probability, or the label shown above it. Returns null when there is
+ * no model pick to explain.
+ */
+function ConfidenceBreakdownPanel({ card, nowMs }: { card: RaceCard; nowMs: number }) {
+  const diag = cardConfidenceDiagnostic(card, nowMs);
+  if (!diag) return null;
+
+  const rows: Array<[string, ConfidenceComponent]> = [
+    ['Data', diag.data],
+    ['Market', diag.market],
+    ['Tipster', diag.tipster],
+    ['Contextual', diag.contextual],
+    ['Race type', diag.race_type],
+    ['Execution', diag.execution],
+  ];
+
+  return (
+    <details style={styles.altList}>
+      <summary style={styles.altSummary}>Why this confidence?</summary>
+      <div style={{ fontSize: 12, color: '#424a53', marginTop: 6, lineHeight: 1.5 }}>
+        Original label: <strong>{diag.original_confidence_label ?? '—'}</strong>
+        {' · '}
+        Diagnostic view:{' '}
+        <strong style={{ color: componentColor(diag.overall.level) }}>
+          {diag.overall.level === 'unknown' ? '—' : diag.overall.level.toUpperCase()}
+        </strong>
+        <div style={{ marginTop: 2, color: '#656d76' }}>{diag.overall.reason}</div>
+      </div>
+      {rows.map(([label, c]) => (
+        <div key={label} style={styles.altRow}>
+          <span style={{ width: 68, flexShrink: 0 }}>{label}</span>
+          <span style={{ width: 52, flexShrink: 0, fontWeight: 700, color: componentColor(c.level) }}>
+            {c.level === 'unknown' ? '—' : c.level.toUpperCase()}
+          </span>
+          <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', color: '#656d76' }}>
+            {c.reason}
+          </span>
+        </div>
+      ))}
+      <div style={{ fontSize: 11, color: '#8c959f', marginTop: 8 }}>
+        Read-only explanation of the model&apos;s own confidence signals. Never changes the pick,
+        stake, or probability.
+      </div>
+    </details>
+  );
 }
 
 /** Formats a decimal odds value, or a dash when unknown. */
@@ -1320,6 +1382,7 @@ function RaceCardView({ card, nowMs, mlShadow }: { card: RaceCard; nowMs: number
                 {ladder.reason}
               </div>
             )}
+            <ConfidenceBreakdownPanel card={card} nowMs={nowMs} />
             {tags.length > 0 && (
               <div style={styles.tagRow}>
                 <span style={{ ...styles.sectionLabel, marginBottom: 0 }}>

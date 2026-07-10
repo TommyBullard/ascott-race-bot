@@ -157,6 +157,12 @@ export interface ModelRunObservability {
   tipsterConsensusSummary: string[];
   /** Phase 4E quality-weighted consensus engine output (strength/type/detail). */
   tipsterConsensusEngine: Record<string, unknown> | null;
+  /**
+   * Market completeness (priced/declared, 0..1) from `data_quality_metrics`,
+   * or null when not recorded. Read-only; display-only (e.g. the confidence
+   * breakdown panel) — does not feed probabilities, staking, or ranking.
+   */
+  marketCompleteness: number | null;
 }
 
 /**
@@ -174,6 +180,8 @@ export function getModelObservabilityFromConfig(
 ): ModelRunObservability {
   const dq = getDataQualityOutputsFromConfig(configJson);
   const consensusSummary = getTipsterConsensusSummaryFromConfig(configJson);
+  const metrics = getProp(configJson, 'data_quality_metrics');
+  const marketCompleteness = asNumberOrNull(getProp(metrics, 'market_completeness'));
   return {
     runQuality: dq.run_quality,
     modelAdjustments: dq.model_adjustments,
@@ -187,5 +195,6 @@ export function getModelObservabilityFromConfig(
     tipsterConsensusShortSummary: consensusSummary.short_summary,
     tipsterConsensusSummary: consensusSummary.summary,
     tipsterConsensusEngine: getConsensusEngineFromConfig(configJson),
+    marketCompleteness,
   };
 }

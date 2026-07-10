@@ -27,6 +27,8 @@ export interface RaceObservabilityLike {
   tipsterConsensusSummary?: string[] | null;
   /** Phase 4E quality-weighted consensus engine output (strength/type/detail). */
   tipsterConsensusEngine?: Record<string, unknown> | null;
+  /** Market completeness (0..1) from `data_quality_metrics`, or null when unrecorded. */
+  marketCompleteness?: number | null;
 }
 
 /** Flat, presentational props for <RaceExplanationPanel>. */

@@ -746,6 +746,11 @@ export interface RaceCard {
   off_time: string | null;
   course: string | null;
   race_name: string | null;
+  /**
+   * `races.handicap_flag`, or null when unrecorded. Read-only; display-only
+   * (e.g. the confidence breakdown's race-type component) — not a decision input.
+   */
+  isHandicap: boolean | null;
   /** Shortest-odds runner (the market favourite), or null if no priced field. */
   favourite: RaceCardRunner | null;
   /** Rank-1 recommendation (the model's bet), or null when there is no run. */
@@ -891,7 +896,7 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
   // 1. Race meta for the header + countdown.
   const { data: raceData, error: raceError } = await supabaseAdmin
     .from(RACES_TABLE)
-    .select('off_time, course, race_name, status, official_result_time')
+    .select('off_time, course, race_name, status, official_result_time, handicap_flag')
     .eq('id', raceId)
     .limit(1);
 
@@ -907,6 +912,7 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
     race_name: string | null;
     status: string | null;
     official_result_time: string | null;
+    handicap_flag: boolean | null;
   }[])[0];
 
   const card: RaceCard = {
@@ -916,6 +922,7 @@ export async function fetchRaceCard(raceId: string): Promise<RaceCard> {
     race_name: meta?.race_name ?? null,
     status: meta?.status ?? null,
     result_time: meta?.official_result_time ?? null,
+    isHandicap: typeof meta?.handicap_flag === 'boolean' ? meta.handicap_flag : null,
     favourite: null,
     modelPick: null,
     alternatives: [],

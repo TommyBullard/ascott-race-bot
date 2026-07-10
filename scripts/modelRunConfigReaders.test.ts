@@ -202,6 +202,7 @@ test('observability: null/malformed config -> fully empty, null-safe shape (no t
       tipsterConsensusShortSummary: null,
       tipsterConsensusSummary: [],
       tipsterConsensusEngine: null,
+      marketCompleteness: null,
     });
   }
 });
@@ -219,6 +220,23 @@ test('observability: legacy partial config -> present keys mapped, missing -> nu
   assert.equal(o.tipsterConsensusShortSummary, null);
   assert.deepEqual(o.tipsterConsensusSummary, []);
   assert.equal(o.dataQualityAdjustedConfidence, null);
+  assert.equal(o.marketCompleteness, null);
+});
+
+test('observability: marketCompleteness read from data_quality_metrics; malformed -> null', () => {
+  assert.equal(
+    getModelObservabilityFromConfig({ data_quality_metrics: { market_completeness: 0.74 } })
+      .marketCompleteness,
+    0.74,
+  );
+  for (const bad of [null, 'x', undefined, Number.NaN]) {
+    assert.equal(
+      getModelObservabilityFromConfig({ data_quality_metrics: { market_completeness: bad } })
+        .marketCompleteness,
+      null,
+    );
+  }
+  assert.equal(getModelObservabilityFromConfig({ data_quality_metrics: 'not-an-object' }).marketCompleteness, null);
 });
 
 test('observability: adjusted confidence only mapped when a finite number', () => {
