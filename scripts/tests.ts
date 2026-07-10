@@ -89,6 +89,7 @@ import './lockTMinus.test';
 import './lockedDecisionRead.test';
 import './lockedDayReport.test';
 import './lockCoverage.test';
+import './lockedEvaluation.test';
 import './autoResults.test';
 import './freeResultsMatch.test';
 import './todayResultsSettlement.test';

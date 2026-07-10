@@ -47,8 +47,17 @@ import type { TipsterStatusSummary } from './tipsterStatus';
 import type { GenaiCommentaryRow } from './genaiCommentaryView';
 import {
   fetchLockedDecisionForRace,
+  toLockedDecision,
+  LOCKED_DECISION_COLUMNS,
   type LockedDecision,
 } from './lockedDecisionRead';
+import { LOCKED_DECISIONS_TABLE, OFFICIAL_MINUTES_BEFORE } from './lockTMinus';
+import {
+  buildLockedOutcomes,
+  resolveOfficialMode,
+  type OfficialPerformanceMode,
+  type PerformanceLockCoverage,
+} from './lockedEvaluation';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { TipsterSelection } from './modelProbabilities';
 
@@ -1399,20 +1408,44 @@ export interface ModelPerformanceResult extends ModelPerformance {
   course: string | null;
   /** When this snapshot was computed (ISO 8601). */
   computedAt: string;
-  /** Which run-selection rule produced this snapshot (default `pre_off`). */
+  /** Which run-selection rule produced this snapshot (default `locked_first`). */
   evaluationMode: ModelPerformanceMode;
+  /**
+   * Which rule labels the TOP-LEVEL figures under `locked_first` (Phase 5B):
+   * `official_locked` (all races locked), `mixed` (some lock-missing races —
+   * shown separately in `fallbackPerformance`), or `fallback_pre_off` (no
+   * locks in scope — figures are exactly the legacy pre-off result). Absent
+   * for the legacy `pre_off` / `current` modes. Additive: older clients
+   * ignore it.
+   */
+  officialMode?: OfficialPerformanceMode;
+  /** Lock coverage for the scope (Phase 5B); absent in legacy modes. */
+  lockCoverage?: PerformanceLockCoverage;
+  /**
+   * Pre-off fallback figures for ONLY the lock_missing races (Phase 5B; never
+   * merged into the official top-level figures). Present only in `mixed` mode
+   * when at least one lock-missing race exists.
+   */
+  fallbackPerformance?: ModelPerformance;
 }
 
 /**
- * How {@link computeModelPerformance} picks the model run to evaluate per race.
+ * How {@link computeModelPerformance} picks the decision to evaluate per race.
  *
- *   - `pre_off` (default): the latest run with `run_time <= races.off_time`, so
- *     post-off reruns that superseded the valid pre-off run in `is_current` are
- *     ignored. This is the honest "as-of off time" record.
+ *   - `locked_first` (default, Phase 5B): the OFFICIAL `locked_race_decisions`
+ *     row (minutes_before = 5) when one exists — evaluated at the stored locked
+ *     pick odds/stake only. Races with no lock row are never backfilled: they
+ *     are reported separately (`lockCoverage.lock_missing`) and evaluated only
+ *     into `fallbackPerformance` under the pre-off rule. When the scope has NO
+ *     locks at all, the result equals the legacy `pre_off` figures and is
+ *     labelled `fallback_pre_off`.
+ *   - `pre_off`: the latest run with `run_time <= races.off_time`, so post-off
+ *     reruns that superseded the valid pre-off run in `is_current` are ignored
+ *     (the "as-of off time" record — now the fallback/diagnostic rule).
  *   - `current`: the latest `is_current` run (legacy behaviour), retained for
  *     callers that explicitly want the live current-pointer view.
  */
-export type ModelPerformanceMode = 'pre_off' | 'current';
+export type ModelPerformanceMode = 'locked_first' | 'pre_off' | 'current';
 
 /**
  * Computes {@link ModelPerformance} for one meeting day (optionally a single
@@ -1443,7 +1476,7 @@ export async function computeModelPerformance(
   params: { date: string; course?: string | null; mode?: ModelPerformanceMode },
   now: Date = new Date(),
 ): Promise<ModelPerformanceResult> {
-  const mode: ModelPerformanceMode = params.mode ?? 'pre_off';
+  const mode: ModelPerformanceMode = params.mode ?? 'locked_first';
   const courseLabel = (params.course ?? '').trim() || null;
   const wantCourse = courseLabel === null ? null : normalizeCourse(courseLabel);
 
@@ -1491,6 +1524,112 @@ export async function computeModelPerformance(
   for (const w of (winnerData ?? []) as { id: Id; race_id: Id }[]) {
     winnerByRace.set(String(w.race_id), String(w.id));
   }
+
+  // Locked-first (Phase 5B): the OFFICIAL locked decision is the top-level
+  // record when locks exist; lock-missing races are NEVER backfilled — they
+  // are evaluated separately under the pre-off fallback. Read-only.
+  if (mode === 'locked_first') {
+    const lockedByRace = await readLockedDecisionsForPerformance(raceIds);
+
+    const lockedResult = buildLockedOutcomes(
+      raceRows.map((r) => ({
+        race_id: String(r.id),
+        winner_runner_id: winnerByRace.get(String(r.id)) ?? null,
+        locked: lockedByRace.get(String(r.id)) ?? null,
+      })),
+    );
+    const officialMode = resolveOfficialMode(lockedResult.coverage);
+
+    if (officialMode === 'fallback_pre_off') {
+      // No locks in scope (pre-lock dates / table unreadable): the figures are
+      // exactly the legacy pre-off result, labelled as fallback.
+      const perf = await computeRunBasedPerformance(raceRows, winnerByRace, 'pre_off');
+      return {
+        ...wrap(perf),
+        officialMode,
+        lockCoverage: lockedResult.coverage,
+      };
+    }
+
+    // Official figures: locked picks at stored locked odds/stake; locked
+    // no-bets counted as valid decisions. Lock-missing races -> fallback only.
+    const official = summarizeModelPerformance(
+      lockedResult.outcomes,
+      lockedResult.lockedNoBet,
+    );
+    const missingRows = raceRows.filter((r) =>
+      lockedResult.lockMissingRaceIds.includes(String(r.id)),
+    );
+    const fallbackPerformance =
+      missingRows.length > 0
+        ? await computeRunBasedPerformance(missingRows, winnerByRace, 'pre_off')
+        : undefined;
+
+    return {
+      ...wrap(official),
+      officialMode,
+      lockCoverage: lockedResult.coverage,
+      ...(fallbackPerformance !== undefined ? { fallbackPerformance } : {}),
+    };
+  }
+
+  // Legacy run-based modes (pre_off / current) — behaviour unchanged.
+  return wrap(await computeRunBasedPerformance(raceRows, winnerByRace, mode));
+}
+
+/**
+ * Bulk read of the official locked decisions (`minutes_before = 5`) for the
+ * given races, keyed by race id, projected through the shared
+ * {@link toLockedDecision}. READ-ONLY and FAIL-OPEN: a missing table
+ * (pre-migration) or read error yields an empty map, which the caller labels
+ * `fallback_pre_off` — the API never breaks on the lock read. Missing-table
+ * errors are silent; other errors are logged.
+ */
+async function readLockedDecisionsForPerformance(
+  raceIds: readonly string[],
+): Promise<Map<string, LockedDecision>> {
+  const byRace = new Map<string, LockedDecision>();
+  try {
+    const { data, error } = await supabaseAdmin
+      .from(LOCKED_DECISIONS_TABLE)
+      .select(`race_id, ${LOCKED_DECISION_COLUMNS}`)
+      .in('race_id', raceIds as string[])
+      .eq('minutes_before', OFFICIAL_MINUTES_BEFORE);
+    if (error) {
+      if (classifyTableProbe(error) !== 'missing') {
+        console.error(`Failed to read locked decisions for performance: ${error.message}`);
+      }
+      return byRace;
+    }
+    for (const raw of (data ?? []) as Record<string, unknown>[]) {
+      const decision = toLockedDecision(raw);
+      if (decision && typeof raw.race_id !== 'undefined') {
+        byRace.set(String(raw.race_id), decision);
+      }
+    }
+  } catch (err) {
+    console.error(
+      `Failed to read locked decisions for performance: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+  return byRace;
+}
+
+/**
+ * The run-based (pre_off / current) per-race evaluation — the pre-Phase-5B
+ * `computeModelPerformance` steps 3-5, extracted verbatim so `locked_first`
+ * can reuse it for the lock-missing fallback subset. Read-only.
+ *
+ * @throws if any Supabase query fails.
+ */
+async function computeRunBasedPerformance(
+  raceRows: readonly { id: Id; course: string | null; off_time: string | null }[],
+  winnerByRace: ReadonlyMap<string, string>,
+  mode: 'pre_off' | 'current',
+): Promise<ModelPerformance> {
+  const raceIds = raceRows.map((r) => String(r.id));
 
   // 3. Select the evaluated model run per race (race_id -> run_id).
   const selectedRunIdByRace = new Map<string, string>();
@@ -1542,7 +1681,7 @@ export async function computeModelPerformance(
     }
   }
   if (selectedRunIdByRace.size === 0) {
-    return empty();
+    return summarizeModelPerformance([], 0);
   }
 
   // 4. Rank-1 recommendation for each SELECTED run. No `is_current` filter: a
@@ -1591,7 +1730,7 @@ export async function computeModelPerformance(
     recsByRunId,
   });
 
-  return wrap(summarizeModelPerformance(outcomes, noBetRaces));
+  return summarizeModelPerformance(outcomes, noBetRaces);
 }
 
 /**

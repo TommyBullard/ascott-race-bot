@@ -216,8 +216,37 @@ interface ModelPerformance {
   date: string;
   course: string | null;
   computedAt: string;
-  /** Run-selection rule behind these figures; `pre_off` is the default. */
-  evaluationMode?: 'pre_off' | 'current';
+  /** Decision-selection rule behind these figures (`locked_first` default). */
+  evaluationMode?: 'locked_first' | 'pre_off' | 'current';
+  /**
+   * Which rule labels the top-level figures under locked-first (Phase 5B):
+   * official locked decisions, mixed (some lock-missing), or pre-off fallback.
+   */
+  officialMode?: 'official_locked' | 'fallback_pre_off' | 'mixed';
+  /** Lock coverage counts for the scope (Phase 5B). */
+  lockCoverage?: {
+    races: number;
+    locked: number;
+    locked_pick: number;
+    locked_no_bet: number;
+    no_run_available: number;
+    lock_missing: number;
+    coverage_pct: number;
+  };
+  /** Pre-off fallback figures for ONLY the lock-missing races (mixed mode). */
+  fallbackPerformance?: {
+    recommendations_total: number;
+    settled_count: number;
+    pending_count: number;
+    winners: number;
+    losers: number;
+    strike_rate: number;
+    profit_loss: number;
+    roi: number;
+    average_ev: number | null;
+    total_staked: number;
+    no_bet_races: number;
+  };
 }
 
 /** A tipster's pick in one of today's races (mirrors server `TodaysPick`). */
@@ -1519,6 +1548,23 @@ function PerformancePanel({ performance }: { performance: ModelPerformance | nul
     ? `${performance.date} · ${performance.course}`
     : performance.date;
 
+  // Mode-aware evaluation note (Phase 5B): says plainly whether the headline
+  // figures are the OFFICIAL locked record, a mixed locked/fallback view, or
+  // the pre-off fallback only — so a good diagnostic day can never masquerade
+  // as a good official day.
+  const modeNote =
+    performance.officialMode === 'official_locked'
+      ? 'OFFICIAL — T-minus-5 locked decisions (all races locked).'
+      : performance.officialMode === 'mixed'
+        ? `MIXED — official locked decisions for ${performance.lockCoverage?.locked ?? '?'}/${performance.lockCoverage?.races ?? '?'} races; ${performance.lockCoverage?.lock_missing ?? '?'} lock-missing race(s) shown separately under the pre-off fallback.`
+        : performance.officialMode === 'fallback_pre_off'
+          ? 'FALLBACK — no locked decisions in scope; latest pre-off model run (diagnostic rule).'
+          : performance.evaluationMode !== 'current'
+            ? 'Performance uses latest model run before scheduled off time.'
+            : null;
+  const cov = performance.lockCoverage;
+  const fallback = performance.fallbackPerformance;
+
   if (performance.settled_count === 0) {
     return (
       <div style={styles.perfPanel}>
@@ -1526,11 +1572,7 @@ function PerformancePanel({ performance }: { performance: ModelPerformance | nul
           <span style={styles.perfTitle}>Recommendation performance</span>
           <span style={styles.perfScope}>{scope}</span>
         </div>
-        {performance.evaluationMode !== 'current' && (
-          <div style={styles.perfNote}>
-            Performance uses latest model run before scheduled off time.
-          </div>
-        )}
+        {modeNote && <div style={styles.perfNote}>{modeNote}</div>}
         <span style={styles.muted}>
           No settled races yet — accuracy will appear as results come in.
         </span>
@@ -1539,6 +1581,11 @@ function PerformancePanel({ performance }: { performance: ModelPerformance | nul
             {performance.pending_count} pending of {performance.recommendations_total}{' '}
             recommendation{performance.recommendations_total === 1 ? '' : 's'}
           </span>
+        )}
+        {cov && cov.locked > 0 && (
+          <div style={styles.perfNote}>
+            {`official no-bet ${cov.locked_no_bet} · no run at lock ${cov.no_run_available} · LOCK MISSING ${cov.lock_missing}`}
+          </div>
         )}
       </div>
     );
@@ -1553,11 +1600,7 @@ function PerformancePanel({ performance }: { performance: ModelPerformance | nul
           updated {formatUpdated(performance.computedAt)}
         </span>
       </div>
-      {performance.evaluationMode !== 'current' && (
-        <div style={styles.perfNote}>
-          Performance uses latest model run before scheduled off time.
-        </div>
-      )}
+      {modeNote && <div style={styles.perfNote}>{modeNote}</div>}
       <div style={styles.perfRow}>
         <span style={styles.accuracyMetric}>
           {performance.winners}/{performance.settled_count} winners
@@ -1588,6 +1631,16 @@ function PerformancePanel({ performance }: { performance: ModelPerformance | nul
           {performance.no_bet_races > 0 ? ` · ${performance.no_bet_races} no-bet` : ''}
         </span>
       </div>
+      {cov && cov.locked > 0 && (
+        <div style={styles.perfNote}>
+          {`official no-bet ${cov.locked_no_bet} · no run at lock ${cov.no_run_available} · LOCK MISSING ${cov.lock_missing}`}
+        </div>
+      )}
+      {performance.officialMode === 'mixed' && fallback && fallback.settled_count > 0 && (
+        <div style={styles.perfNote}>
+          {`Fallback (lock-missing races only, NOT official): ${fallback.winners}/${fallback.settled_count} winners · ${formatProfit(fallback.profit_loss)}`}
+        </div>
+      )}
     </div>
   );
 }

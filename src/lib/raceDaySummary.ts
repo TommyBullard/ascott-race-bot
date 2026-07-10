@@ -34,8 +34,8 @@ export interface RaceDayPerformanceLike {
   profit_loss: number;
   roi: number;
   computedAt?: string | null;
-  /** Run-selection rule behind the figures; `pre_off` is the API default. */
-  evaluationMode?: 'pre_off' | 'current';
+  /** Decision-selection rule behind the figures; `locked_first` is the API default (Phase 5B). */
+  evaluationMode?: 'locked_first' | 'pre_off' | 'current';
 }
 
 /** A normalized, source-tagged summary for the header bar. */
@@ -50,10 +50,11 @@ export interface DashboardSummary {
   /** When the underlying snapshot was computed (ISO 8601), or null. */
   computedAt: string | null;
   /**
-   * Evaluation rule for a race-day summary (`pre_off` by default, mirroring
-   * `/api/accuracy`); null for the lifetime summary, which is not off-time scoped.
+   * Evaluation rule for a race-day summary (`locked_first` by default,
+   * mirroring `/api/accuracy`, Phase 5B); null for the lifetime summary, which
+   * is not off-time scoped.
    */
-  evaluationMode: 'pre_off' | 'current' | null;
+  evaluationMode: 'locked_first' | 'pre_off' | 'current' | null;
 }
 
 /** Query-string keys that scope the dashboard to a meeting day/course. */
@@ -101,7 +102,7 @@ export function selectDashboardSummary(
       roiPct: performance.roi,
       computedAt: performance.computedAt ?? null,
       // Surface what the API reported; default to the API's own default.
-      evaluationMode: performance.evaluationMode ?? 'pre_off',
+      evaluationMode: performance.evaluationMode ?? 'locked_first',
     };
   }
   if (accuracy) {

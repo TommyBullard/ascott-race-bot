@@ -4,11 +4,17 @@
  * Returns:
  *  - `accuracy`: the lifetime model accuracy snapshot (strike rate, P/L, ROI
  *    across all settled races with a rank-1 pick), settled at Betfair SP.
- *  - `performance`: the Phase 5B recommendation performance for ONE meeting day
- *    (optionally a single course), computed from the STORED recommendation odds
- *    and stake — winners/losers, strike rate, P/L, ROI, average EV, plus settled
- *    vs pending counts and no-bet races. Pending races are never counted as
- *    losses.
+ *  - `performance`: the recommendation performance for ONE meeting day
+ *    (optionally a single course). LOCKED-FIRST (Phase 5B): when official
+ *    `locked_race_decisions` rows (minutes_before = 5) exist, the top-level
+ *    figures evaluate the OFFICIAL locked picks at the stored locked odds and
+ *    stake (`officialMode: 'official_locked' | 'mixed'`, with `lockCoverage`
+ *    counts and, in mixed mode, a separate `fallbackPerformance` for the
+ *    lock-missing races). When no locks exist in scope the figures fall back
+ *    to the final pre-off run (`officialMode: 'fallback_pre_off'`) — identical
+ *    to the legacy behaviour. Pending races are never counted as losses;
+ *    locked no-bets are valid decisions, never losses; lock-missing races are
+ *    never backfilled.
  *
  * DAY/DATE/COURSE (for `performance` only): defaults to today (UTC).
  * `?day=tomorrow` or `?date=YYYY-MM-DD` selects the meeting day (resolved by

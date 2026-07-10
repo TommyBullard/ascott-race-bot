@@ -80,18 +80,24 @@ test('scoped: the legacy accuracy object does NOT override the race-day performa
   assert.notEqual(summary.roiPct, LIFETIME.roiPct);
 });
 
-test('scoped: race-day summary surfaces performance.evaluationMode = "pre_off" (the value /api/accuracy returns)', () => {
+test('scoped: race-day summary surfaces the performance.evaluationMode the API returned', () => {
   const summary = selectDashboardSummary(LIFETIME, RACE_DAY, true);
   assert.ok(summary);
-  assert.equal(summary.evaluationMode, 'pre_off');
+  assert.equal(summary.evaluationMode, 'pre_off'); // passed through verbatim
+  const lockedFirst = selectDashboardSummary(
+    LIFETIME,
+    { ...RACE_DAY, evaluationMode: 'locked_first' },
+    true,
+  );
+  assert.equal(lockedFirst?.evaluationMode, 'locked_first');
 });
 
-test('scoped: evaluationMode defaults to "pre_off" when an older performance payload omits it', () => {
+test('scoped: evaluationMode defaults to "locked_first" (the API default, Phase 5B) when omitted', () => {
   const legacyPayload: RaceDayPerformanceLike = { ...RACE_DAY };
   delete legacyPayload.evaluationMode;
   const summary = selectDashboardSummary(LIFETIME, legacyPayload, true);
   assert.ok(summary);
-  assert.equal(summary.evaluationMode, 'pre_off');
+  assert.equal(summary.evaluationMode, 'locked_first');
 });
 
 test('unscoped: summary uses the lifetime accuracy (global record), evaluationMode null', () => {

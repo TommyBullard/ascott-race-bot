@@ -263,10 +263,21 @@ highlighted (motivating case: Newmarket 2026-07-09 final race — official
 locked pick Shipbourne lost, diagnostic pick Asmen Warrior won). SELECT-only;
 no commit flag exists.
 
-**Phase 5B (pending):**
-- `/api/accuracy`: evaluate against `locked_race_decisions` when present; fallback to pre-off run.
+**Phase 5B (IMPLEMENTED — src/lib/lockedEvaluation.ts): locked-first
+`/api/accuracy` + dashboard performance.** `computeModelPerformance` defaults
+to `locked_first`: official `locked_race_decisions` (minutes_before = 5)
+evaluated at the STORED locked pick odds/stake; `locked_no_bet` counted as a
+valid no-bet (never a loss); `no_run_available` and `lock_missing` counted
+separately (never losses/no-bets, never backfilled); pending never a loss.
+Response gains additive `officialMode` (`official_locked` / `mixed` /
+`fallback_pre_off`), `lockCoverage`, and (mixed only) `fallbackPerformance`
+for the lock-missing races. Zero locks in scope -> figures identical to the
+legacy pre-off result, labelled fallback. The dashboard performance block
+states the mode explicitly. Legacy `pre_off` / `current` modes unchanged.
+
+**Phase 5C (pending):**
 - `report:day`: show locked decision vs actual winner; compare vs live model diagnostic.
-- Accuracy metrics: strike rate, ROI, confidence calibration — all locked-decision-scoped.
+- Accuracy metrics: confidence calibration — locked-decision-scoped.
 - `export:training-data`: include `locked_decision_id`, `locked_recommendation`, `locked_rank`, `was_locked` flags.
 
 ### Phase 6: Update proof panel to show locked decision coverage
