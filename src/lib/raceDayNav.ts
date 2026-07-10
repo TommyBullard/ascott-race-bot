@@ -40,6 +40,25 @@ export interface RaceDayNavView {
 export const RACE_DAY_NAV_EMPTY_MESSAGE =
   'Choose a race-day view below. The dashboard is read-only and auto-refreshes once a date/course is selected.';
 
+/**
+ * Banner shown when the dashboard is in ALL-COURSES mode (no `?course=` in the
+ * URL): every course's races load, so lock-coverage warnings include courses
+ * that were never actively tracked — technically correct but operationally
+ * noisy. Display-only wording; changes nothing about the data.
+ */
+export const ALL_COURSES_BANNER_MESSAGE =
+  'All courses mode — lock coverage is only meaningful for courses you actively tracked.';
+
+/**
+ * True when the URL has NO usable `?course=` param (all-courses mode) — the
+ * dashboard is then showing every course's races, including untracked ones.
+ * A blank/whitespace course counts as absent. Pure; leading `?` optional;
+ * tolerates null/undefined/empty (the bare homepage is all-courses too).
+ */
+export function isAllCoursesMode(search: string | null | undefined): boolean {
+  return parseRaceDayScope(search).course === null;
+}
+
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Parses the {date, course} scope from a query string (leading `?` optional). Pure. */

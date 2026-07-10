@@ -16,8 +16,10 @@ import { readFileSync } from 'node:fs';
 import {
   buildRaceDayHref,
   buildRaceDayNavView,
+  isAllCoursesMode,
   parseRaceDayScope,
   previousIsoDate,
+  ALL_COURSES_BANNER_MESSAGE,
   RACE_DAY_NAV_EMPTY_MESSAGE,
 } from '../src/lib/raceDayNav';
 
@@ -92,6 +94,25 @@ test('hrefs encode course names with spaces/parentheses', () => {
   assert.equal(buildRaceDayHref({ date: '2026-06-19', course: 'Royal Ascot' }), '/?date=2026-06-19&course=Royal%20Ascot');
 });
 
+/* --------------------------- all-courses mode ------------------------------ */
+
+test('isAllCoursesMode: true when no usable course param (incl. bare homepage)', () => {
+  assert.equal(isAllCoursesMode('?day=today'), true);
+  assert.equal(isAllCoursesMode('?date=2026-07-11'), true);
+  assert.equal(isAllCoursesMode(''), true);
+  assert.equal(isAllCoursesMode(null), true);
+  assert.equal(isAllCoursesMode('?course=%20'), true); // blank counts as absent
+  assert.equal(isAllCoursesMode('?day=today&course=Newmarket'), false);
+  assert.equal(isAllCoursesMode('?date=2026-07-10&course=Ascot'), false);
+});
+
+test('all-courses banner wording is the agreed operator warning', () => {
+  assert.equal(
+    ALL_COURSES_BANNER_MESSAGE,
+    'All courses mode — lock coverage is only meaningful for courses you actively tracked.',
+  );
+});
+
 test('empty-state message unchanged', () => {
   assert.match(
     RACE_DAY_NAV_EMPTY_MESSAGE,
@@ -129,6 +150,22 @@ test('homepage imports + renders the course-aware race-day nav', () => {
   assert.match(PAGE_SRC, /from '@\/lib\/raceDayNav'/);
   assert.match(PAGE_SRC, /<RaceDayNav scoped=\{scoped\} search=\{search\} \/>/);
   assert.match(PAGE_SRC, /buildRaceDayNavView/);
+});
+
+test('homepage renders the all-courses banner with the Newmarket quick link (client-gated)', () => {
+  assert.match(PAGE_SRC, /<AllCoursesBanner search=\{search\} isClient=\{isClient\} \/>/);
+  assert.match(PAGE_SRC, /isAllCoursesMode/);
+  // The quick link is the explicit operator shortcut, exactly as agreed.
+  assert.match(PAGE_SRC, /href: '\/\?day=today&course=Newmarket'/);
+  assert.match(PAGE_SRC, /label: 'Open Newmarket Today →'/);
+  // Banner never renders during SSR (isClient gate) -> no hydration flash.
+  assert.match(PAGE_SRC, /if \(!isClient \|\| !isAllCoursesMode\(search\)\) return null;/);
+  // The banner block is navigation-only.
+  const start = PAGE_SRC.indexOf('function AllCoursesBanner');
+  const end = PAGE_SRC.indexOf('function RaceDayNav');
+  assert.ok(start >= 0 && end > start, 'AllCoursesBanner block located');
+  const block = PAGE_SRC.slice(start, end);
+  assert.doesNotMatch(block, /<form|<button|onClick|onSubmit|fetch\(|method:\s*['"]POST/);
 });
 
 test('nav block is anchors only — no form/button/onClick/fetch/--commit', () => {

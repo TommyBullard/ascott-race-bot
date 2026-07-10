@@ -24,6 +24,8 @@ import MlShadowComparisonPanel from '@/components/MlShadowComparisonPanel';
 import type { GenaiCommentaryRow } from '@/lib/genaiCommentaryView';
 import {
   buildRaceDayNavView,
+  isAllCoursesMode,
+  ALL_COURSES_BANNER_MESSAGE,
   RACE_DAY_NAV_EMPTY_MESSAGE,
 } from '@/lib/raceDayNav';
 import {
@@ -1928,6 +1930,37 @@ function SafetyBanner() {
 }
 
 /**
+ * The operator's active-course quick link for all-courses mode. A UI-level
+ * convenience shortcut (deliberately NOT in the course-agnostic nav lib) —
+ * edit here when the actively-tracked course changes. Navigation only.
+ */
+const ACTIVE_COURSE_QUICK_LINK = {
+  href: '/?day=today&course=Newmarket',
+  label: 'Open Newmarket Today →',
+} as const;
+
+/**
+ * All-courses-mode banner: shown only when the URL has no `?course=` param,
+ * warning that lock coverage then includes courses never actively tracked,
+ * with a prominent quick link to the tracked course. Rendered only after
+ * hydration (`isClient`) so the server render — which cannot see the URL —
+ * never flashes it on course-scoped pages. Display/navigation only.
+ */
+function AllCoursesBanner({ search, isClient }: { search: string; isClient: boolean }) {
+  if (!isClient || !isAllCoursesMode(search)) return null;
+  return (
+    <div style={safetyBannerStyle}>
+      <strong>{ALL_COURSES_BANNER_MESSAGE}</strong>
+      <div style={{ marginTop: 8 }}>
+        <a href={ACTIVE_COURSE_QUICK_LINK.href} style={raceDayPrimaryButtonStyle}>
+          {ACTIVE_COURSE_QUICK_LINK.label}
+        </a>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Homepage race-day navigation, course/date-aware (no hardcoded course): a
  * primary link to today's races for the SELECTED course, a previous-day
  * results link derived from the selected date, and a Prediction Audit deep
@@ -2074,6 +2107,13 @@ export default function RecommendationsPage() {
     subscribeNoop,
     () => window.location.search,
     () => '',
+  );
+  // True only after hydration. Gates URL-derived banners that must not flash
+  // during the server render (which cannot see the query string).
+  const isClient = useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false,
   );
   // Epoch ms of the last successful race-card refresh, for the live-mode
   // "data refreshed X ago" indicator. null until the first load completes.
@@ -2494,6 +2534,7 @@ export default function RecommendationsPage() {
       />
       <SafetyBanner />
 
+      <AllCoursesBanner search={search} isClient={isClient} />
       <RaceDayNav scoped={scoped} search={search} />
 
       <NextRacePanel card={nextRace} nowMs={nowMs} />
