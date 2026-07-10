@@ -249,6 +249,21 @@ as the official source of truth, supporting multi-day, multi-course operations.
 
 ### Phase 5: Update performance/reporting to evaluate locked decisions first
 
+**Phase 5A (IMPLEMENTED — scripts/lockedReport.ts, `npm run report:locked`):**
+read-only locked-decision performance report for a date/course. Evaluates
+official `locked_race_decisions` (minutes_before = 5) against stored
+`runners.finish_pos`; official P/L uses stored locked pick odds/stake only via
+the shared `summarizeModelPerformance`. Five separate buckets — `locked_pick`
+(won/lost/pending), `locked_no_bet` (valid decision, never a loss),
+`no_run_available` (never a loss, never a no-bet), `lock_missing` (no row;
+never backfilled, shown with the pre-off fallback pick OUTSIDE official
+figures), pending (never a loss). Reports lock coverage %, and official-vs-
+final-pre-off-diagnostic divergence with `diagnostic_won_official_lost`
+highlighted (motivating case: Newmarket 2026-07-09 final race — official
+locked pick Shipbourne lost, diagnostic pick Asmen Warrior won). SELECT-only;
+no commit flag exists.
+
+**Phase 5B (pending):**
 - `/api/accuracy`: evaluate against `locked_race_decisions` when present; fallback to pre-off run.
 - `report:day`: show locked decision vs actual winner; compare vs live model diagnostic.
 - Accuracy metrics: strike rate, ROI, confidence calibration — all locked-decision-scoped.

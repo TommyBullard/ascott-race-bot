@@ -87,6 +87,7 @@ import './trainingExport.test';
 import './tMinusCapture.test';
 import './lockTMinus.test';
 import './lockedDecisionRead.test';
+import './lockedDayReport.test';
 import './autoResults.test';
 import './freeResultsMatch.test';
 import './todayResultsSettlement.test';

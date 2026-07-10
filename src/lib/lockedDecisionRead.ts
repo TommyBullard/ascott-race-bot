@@ -64,8 +64,12 @@ export interface LockedDecision {
   locked_state_schema_version: number;
 }
 
-/** The columns the read selects (locked_state intentionally absent). */
-const LOCKED_DECISION_COLUMNS =
+/**
+ * The columns the read selects (locked_state intentionally absent). Exported
+ * for bulk day readers (e.g. the locked-decision report) so every consumer
+ * projects the same shape through {@link toLockedDecision}.
+ */
+export const LOCKED_DECISION_COLUMNS =
   'decision_status, lock_time, minutes_before, capture_target_time, ' +
   'off_time_at_lock, model_run_id, no_bet_reason, pick_runner_id, ' +
   'pick_horse_name, pick_odds, pick_ev, pick_model_prob, pick_market_prob, ' +
