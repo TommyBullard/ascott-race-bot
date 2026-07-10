@@ -1412,11 +1412,12 @@ export interface ModelPerformanceResult extends ModelPerformance {
   evaluationMode: ModelPerformanceMode;
   /**
    * Which rule labels the TOP-LEVEL figures under `locked_first` (Phase 5B):
-   * `official_locked` (all races locked), `mixed` (some lock-missing races —
-   * shown separately in `fallbackPerformance`), or `fallback_pre_off` (no
-   * locks in scope — figures are exactly the legacy pre-off result). Absent
-   * for the legacy `pre_off` / `current` modes. Additive: older clients
-   * ignore it.
+   * `official_locked` (every due race locked — races not yet due to lock,
+   * `lockCoverage.not_locked_yet`, don't demote the mode), `mixed` (some
+   * post-off lock-missing races — shown separately in `fallbackPerformance`),
+   * or `fallback_pre_off` (no locks in scope — figures are exactly the legacy
+   * pre-off result). Absent for the legacy `pre_off` / `current` modes.
+   * Additive: older clients ignore it.
    */
   officialMode?: OfficialPerformanceMode;
   /** Lock coverage for the scope (Phase 5B); absent in legacy modes. */
@@ -1434,11 +1435,13 @@ export interface ModelPerformanceResult extends ModelPerformance {
  *
  *   - `locked_first` (default, Phase 5B): the OFFICIAL `locked_race_decisions`
  *     row (minutes_before = 5) when one exists — evaluated at the stored locked
- *     pick odds/stake only. Races with no lock row are never backfilled: they
- *     are reported separately (`lockCoverage.lock_missing`) and evaluated only
- *     into `fallbackPerformance` under the pre-off rule. When the scope has NO
- *     locks at all, the result equals the legacy `pre_off` figures and is
- *     labelled `fallback_pre_off`.
+ *     pick odds/stake only. Races with no lock row are never backfilled and are
+ *     split time-aware (Phase 5C): `not_locked_yet` while the lock window is
+ *     still open (nothing to evaluate), `lock_missing` only once the off has
+ *     passed — the latter reported separately (`lockCoverage.lock_missing`) and
+ *     evaluated only into `fallbackPerformance` under the pre-off rule. When
+ *     the scope has NO locks at all, the result equals the legacy `pre_off`
+ *     figures and is labelled `fallback_pre_off`.
  *   - `pre_off`: the latest run with `run_time <= races.off_time`, so post-off
  *     reruns that superseded the valid pre-off run in `is_current` are ignored
  *     (the "as-of off time" record — now the fallback/diagnostic rule).
@@ -1534,9 +1537,11 @@ export async function computeModelPerformance(
     const lockedResult = buildLockedOutcomes(
       raceRows.map((r) => ({
         race_id: String(r.id),
+        off_time: r.off_time,
         winner_runner_id: winnerByRace.get(String(r.id)) ?? null,
         locked: lockedByRace.get(String(r.id)) ?? null,
       })),
+      now.getTime(),
     );
     const officialMode = resolveOfficialMode(lockedResult.coverage);
 

@@ -275,7 +275,15 @@ for the lock-missing races. Zero locks in scope -> figures identical to the
 legacy pre-off result, labelled fallback. The dashboard performance block
 states the mode explicitly. Legacy `pre_off` / `current` modes unchanged.
 
-**Phase 5C (pending):**
+**Phase 5C time-aware coverage (IMPLEMENTED — src/lib/lockedEvaluation.ts):**
+accuracy/dashboard `lockCoverage` splits no-lock races using the Phase 6A rule
+(`deriveRaceLockStatus`, plus a recorded winner as post-off evidence):
+`not_locked_yet` while the window is open (now <= off, or off unknown and
+unsettled) — expected, never a gap, excluded from the fallback; `lock_missing`
+only once the off has passed. `official_locked` mode means "no post-off gap"
+even mid-day with races still due to lock. Additive `not_locked_yet` field.
+
+**Phase 5C (remaining, pending):**
 - `report:day`: show locked decision vs actual winner; compare vs live model diagnostic.
 - Accuracy metrics: confidence calibration — locked-decision-scoped.
 - `export:training-data`: include `locked_decision_id`, `locked_recommendation`, `locked_rank`, `was_locked` flags.

@@ -16,9 +16,16 @@
  *   - `locked_no_bet` is a VALID official decision — a no-bet count, never a
  *     loss.
  *   - `no_run_available` is its own counter — never a loss, never a no-bet.
- *   - `lock_missing` (no lock row) is its own counter — NEVER backfilled and
- *     contributes NOTHING to the official figures; the caller may evaluate
- *     those races separately under the labelled pre-off fallback.
+ *   - A race with NO lock row is split time-aware (Phase 5C, reusing the
+ *     Phase 6A `deriveRaceLockStatus` rule): `not_locked_yet` while the lock
+ *     window is still open (now <= off, or the off is unknown AND the race is
+ *     unsettled) — absence is EXPECTED, not a failure; `lock_missing` only
+ *     once the off has passed (or a winner is already recorded, which proves
+ *     the race is post-off even without a usable off time). Neither is ever a
+ *     loss; `lock_missing` is NEVER backfilled and contributes NOTHING to the
+ *     official figures — the caller may evaluate those races separately under
+ *     the labelled pre-off fallback. `not_locked_yet` races carry no decision
+ *     at all yet and are excluded from the fallback too.
  *   - A `locked_pick` without a pick runner id (impossible per the schema
  *     CHECK) is `unevaluable`: excluded from winners AND losers, never guessed.
  *
@@ -28,10 +35,13 @@
 
 import type { RecommendationOutcome } from './modelPerformance';
 import type { LockedDecision } from './lockedDecisionRead';
+import { deriveRaceLockStatus } from './lockCoverage';
 
 /** One race's evaluation input: its official lock (or null) + stored winner. */
 export interface LockedEvaluationRace {
   race_id: string;
+  /** Scheduled off time (ISO 8601), or null when unknown. */
+  off_time: string | null;
   /** Winner runner id (`finish_pos = 1`), or null while the race is pending. */
   winner_runner_id: string | null;
   /** The official locked decision, or null when no lock row exists. */
@@ -46,7 +56,10 @@ export interface PerformanceLockCoverage {
   locked_pick: number;
   locked_no_bet: number;
   no_run_available: number;
+  /** No lock row AND the window has passed (post-off) — a factual gap. */
   lock_missing: number;
+  /** No lock row but the window is still open — expected, not a failure. */
+  not_locked_yet: number;
   /** locked / races * 100, one decimal; 0 when no races. */
   coverage_pct: number;
 }
@@ -67,17 +80,25 @@ export interface LockedOutcomesResult {
   noRunAvailable: number;
   /** locked_pick rows without a pick runner id — excluded from W/L. */
   unevaluable: number;
-  /** Races with NO lock row — fallback-eligible; excluded from official. */
+  /**
+   * Races with NO lock row whose window has PASSED (post-off) —
+   * fallback-eligible; excluded from official. Not-yet-due races are NOT here.
+   */
   lockMissingRaceIds: string[];
+  /** Races with no lock row whose window is still open — nothing to evaluate. */
+  notLockedYet: number;
   coverage: PerformanceLockCoverage;
 }
 
 /**
  * Builds the OFFICIAL outcomes + coverage from each race's locked decision and
- * stored winner. Pure; never throws; input order preserved for outcomes.
+ * stored winner. `nowMs` is injected (never read from a clock here) so the
+ * not-locked-yet / lock-missing split is deterministic and testable. Pure;
+ * never throws; input order preserved for outcomes.
  */
 export function buildLockedOutcomes(
   races: readonly LockedEvaluationRace[],
+  nowMs: number,
 ): LockedOutcomesResult {
   const outcomes: RecommendationOutcome[] = [];
   const lockMissingRaceIds: string[] = [];
@@ -85,11 +106,23 @@ export function buildLockedOutcomes(
   let noRunAvailable = 0;
   let unevaluable = 0;
   let lockedPick = 0;
+  let notLockedYet = 0;
 
   for (const race of races) {
     const locked = race.locked;
     if (!locked) {
-      lockMissingRaceIds.push(race.race_id);
+      // Time-aware split (Phase 5C): only a post-off gap is a MISSING lock. A
+      // recorded winner proves post-off even when the off time is unusable;
+      // otherwise reuse the Phase 6A rule (now <= off, or off unknown ->
+      // not_locked_yet — never accuse "missing" without evidence).
+      const postOff =
+        race.winner_runner_id !== null ||
+        deriveRaceLockStatus(null, race.off_time, nowMs) === 'lock_missing';
+      if (postOff) {
+        lockMissingRaceIds.push(race.race_id);
+      } else {
+        notLockedYet += 1;
+      }
       continue;
     }
     if (locked.decision_status === 'locked_no_bet') {
@@ -124,6 +157,7 @@ export function buildLockedOutcomes(
     locked_no_bet: lockedNoBet,
     no_run_available: noRunAvailable,
     lock_missing: lockMissingRaceIds.length,
+    not_locked_yet: notLockedYet,
     coverage_pct:
       races.length === 0 ? 0 : Math.round((lockedCount / races.length) * 1000) / 10,
   };
@@ -134,6 +168,7 @@ export function buildLockedOutcomes(
     noRunAvailable,
     unevaluable,
     lockMissingRaceIds,
+    notLockedYet,
     coverage,
   };
 }
@@ -143,9 +178,12 @@ export function buildLockedOutcomes(
  *   - no locks at all (incl. an unreadable table) -> `fallback_pre_off` — the
  *     caller computes exactly the legacy pre-off result (no regression for
  *     pre-lock dates);
- *   - every race locked -> `official_locked`;
- *   - some locked, some missing -> `mixed` (official figures + a separate
- *     labelled pre-off fallback for the missing races).
+ *   - locks present and no POST-OFF gap (`lock_missing === 0`) ->
+ *     `official_locked` — the figures are 100% official even when some races
+ *     are simply not yet due to lock (`not_locked_yet` carries no decision and
+ *     nothing to fall back to);
+ *   - some locked, some missing after the off -> `mixed` (official figures +
+ *     a separate labelled pre-off fallback for the missing races).
  * Pure.
  */
 export function resolveOfficialMode(

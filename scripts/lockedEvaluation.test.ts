@@ -6,10 +6,12 @@
  * No DB, no network: synthetic locked decisions + winners exercise the
  * official outcome building (stored locked odds/stake only), the bucket rules
  * (locked_no_bet / no_run_available / lock_missing are NEVER losses; pending
- * is NEVER a loss), the coverage maths, and the mode resolution. The main
- * regression fixture is Newmarket 2026-07-09: coverage 5/7, locked picks 0/3
- * winners, 2 official no-bets, 2 lock-missing — where the old pre-off headline
- * looked better than the official record. Run with:  npm test
+ * is NEVER a loss), the time-aware not_locked_yet vs lock_missing split
+ * (Phase 5C — a race is only MISSING once its off has passed or a winner is
+ * recorded), the coverage maths, and the mode resolution. The main regression
+ * fixture is Newmarket 2026-07-09: coverage 5/7, locked picks 0/3 winners,
+ * 2 official no-bets, 2 lock-missing (all post-off) — where the old pre-off
+ * headline looked better than the official record. Run with:  npm test
  */
 
 import { test } from 'node:test';
@@ -52,8 +54,16 @@ function lockedDecision(over: Partial<LockedDecision> = {}): LockedDecision {
   };
 }
 
+/** Deterministic "now" for every test: evening of the fixture day (post-off). */
+const NOW_MS = Date.parse('2026-07-09T18:00:00.000Z');
+
 function race(over: Partial<LockedEvaluationRace> & { race_id: string }): LockedEvaluationRace {
-  return { winner_runner_id: null, locked: lockedDecision(), ...over };
+  return {
+    off_time: '2026-07-09T15:40:00.000Z', // past relative to NOW_MS
+    winner_runner_id: null,
+    locked: lockedDecision(),
+    ...over,
+  };
 }
 
 /* ----------------------------- outcome building --------------------------- */
@@ -62,7 +72,7 @@ test('locked_pick: won/lost from stored winner; stored locked odds/stake/ev only
   const r = buildLockedOutcomes([
     race({ race_id: 'a', winner_runner_id: 'runner-pick' }), // official winner
     race({ race_id: 'b', winner_runner_id: 'runner-other' }), // official loser
-  ]);
+  ], NOW_MS);
   assert.equal(r.outcomes.length, 2);
   assert.deepEqual(r.outcomes[0], {
     settled: true,
@@ -76,7 +86,7 @@ test('locked_pick: won/lost from stored winner; stored locked odds/stake/ev only
 });
 
 test('locked_pick pending: no winner yet -> settled false, NEVER a loss', () => {
-  const r = buildLockedOutcomes([race({ race_id: 'a', winner_runner_id: null })]);
+  const r = buildLockedOutcomes([race({ race_id: 'a', winner_runner_id: null })], NOW_MS);
   assert.equal(r.outcomes[0].settled, false);
   const perf = summarizeModelPerformance(r.outcomes, r.lockedNoBet);
   assert.equal(perf.pending_count, 1);
@@ -90,7 +100,7 @@ test('stored nulls pass through (a winning pick with no odds pays 0, never inven
       winner_runner_id: 'runner-pick',
       locked: lockedDecision({ pick_odds: null, pick_stake: null, pick_ev: null }),
     }),
-  ]);
+  ], NOW_MS);
   assert.deepEqual(r.outcomes[0], {
     settled: true,
     won: true,
@@ -116,7 +126,7 @@ test('locked_no_bet: a valid official decision — counted, never a loss', () =>
         pick_runner_id: null,
       }),
     }),
-  ]);
+  ], NOW_MS);
   assert.equal(r.lockedNoBet, 1);
   assert.equal(r.outcomes.length, 0);
   const perf = summarizeModelPerformance(r.outcomes, r.lockedNoBet);
@@ -135,7 +145,7 @@ test('no_run_available: separate counter — never a loss, never a no-bet', () =
         pick_runner_id: null,
       }),
     }),
-  ]);
+  ], NOW_MS);
   assert.equal(r.noRunAvailable, 1);
   assert.equal(r.lockedNoBet, 0);
   assert.equal(r.outcomes.length, 0);
@@ -144,12 +154,79 @@ test('no_run_available: separate counter — never a loss, never a no-bet', () =
 test('lock_missing: listed for fallback, contributes NOTHING official — never a loss/no-bet', () => {
   const r = buildLockedOutcomes([
     race({ race_id: 'gone', winner_runner_id: 'runner-x', locked: null }),
-  ]);
+  ], NOW_MS);
   assert.deepEqual(r.lockMissingRaceIds, ['gone']);
   assert.equal(r.outcomes.length, 0);
   assert.equal(r.lockedNoBet, 0);
   assert.equal(r.noRunAvailable, 0);
   assert.equal(r.coverage.lock_missing, 1);
+  assert.equal(r.coverage.not_locked_yet, 0);
+});
+
+/* -------------------- time-aware missing-lock split (Phase 5C) ------------- */
+
+test('no lock + future off: not_locked_yet — NOT missing, NOT fallback-eligible', () => {
+  const r = buildLockedOutcomes([
+    race({
+      race_id: 'upcoming',
+      off_time: '2026-07-09T19:30:00.000Z', // after NOW_MS
+      winner_runner_id: null,
+      locked: null,
+    }),
+  ], NOW_MS);
+  assert.equal(r.notLockedYet, 1);
+  assert.equal(r.coverage.not_locked_yet, 1);
+  assert.equal(r.coverage.lock_missing, 0);
+  assert.deepEqual(r.lockMissingRaceIds, []); // never enters the fallback
+  assert.equal(r.outcomes.length, 0); // and never the official figures
+});
+
+test('no lock + now exactly at the off (inclusive): still not_locked_yet (6A rule)', () => {
+  const r = buildLockedOutcomes([
+    race({
+      race_id: 'at-off',
+      off_time: '2026-07-09T18:00:00.000Z', // === NOW_MS: the lock CLI's last safe moment
+      winner_runner_id: null,
+      locked: null,
+    }),
+  ], NOW_MS);
+  assert.equal(r.coverage.not_locked_yet, 1);
+  assert.equal(r.coverage.lock_missing, 0);
+});
+
+test('no lock + unknown off + no winner: not_locked_yet (never accuse without evidence)', () => {
+  const r = buildLockedOutcomes(
+    [race({ race_id: 'no-off', off_time: null, winner_runner_id: null, locked: null })],
+    NOW_MS,
+  );
+  assert.equal(r.coverage.not_locked_yet, 1);
+  assert.equal(r.coverage.lock_missing, 0);
+});
+
+test('no lock + unknown off BUT winner recorded: lock_missing (settled proves post-off)', () => {
+  const r = buildLockedOutcomes(
+    [race({ race_id: 'settled', off_time: null, winner_runner_id: 'runner-w', locked: null })],
+    NOW_MS,
+  );
+  assert.equal(r.coverage.lock_missing, 1);
+  assert.equal(r.coverage.not_locked_yet, 0);
+  assert.deepEqual(r.lockMissingRaceIds, ['settled']);
+});
+
+test('locks present + only not-yet-due gaps: mode stays official_locked (figures 100% official)', () => {
+  const r = buildLockedOutcomes([
+    race({ race_id: 'locked-1', winner_runner_id: 'runner-other1' }),
+    race({
+      race_id: 'upcoming',
+      off_time: '2026-07-09T19:30:00.000Z',
+      winner_runner_id: null,
+      locked: null,
+    }),
+  ], NOW_MS);
+  assert.equal(r.coverage.locked, 1);
+  assert.equal(r.coverage.lock_missing, 0);
+  assert.equal(r.coverage.not_locked_yet, 1);
+  assert.equal(resolveOfficialMode(r.coverage), 'official_locked');
 });
 
 test('unevaluable locked_pick (null pick_runner_id) excluded from winners AND losers', () => {
@@ -159,7 +236,7 @@ test('unevaluable locked_pick (null pick_runner_id) excluded from winners AND lo
       winner_runner_id: 'runner-x',
       locked: lockedDecision({ pick_runner_id: null }),
     }),
-  ]);
+  ], NOW_MS);
   assert.equal(r.unevaluable, 1);
   assert.equal(r.outcomes.length, 0);
 });
@@ -167,16 +244,19 @@ test('unevaluable locked_pick (null pick_runner_id) excluded from winners AND lo
 /* --------------------------- coverage + mode ------------------------------- */
 
 test('resolveOfficialMode: all locked / some missing / none', () => {
-  const all = buildLockedOutcomes([race({ race_id: 'a' }), race({ race_id: 'b' })]);
+  const all = buildLockedOutcomes([race({ race_id: 'a' }), race({ race_id: 'b' })], NOW_MS);
   assert.equal(resolveOfficialMode(all.coverage), 'official_locked');
 
-  const some = buildLockedOutcomes([race({ race_id: 'a' }), race({ race_id: 'b', locked: null })]);
+  const some = buildLockedOutcomes(
+    [race({ race_id: 'a' }), race({ race_id: 'b', locked: null })],
+    NOW_MS,
+  );
   assert.equal(resolveOfficialMode(some.coverage), 'mixed');
 
-  const none = buildLockedOutcomes([race({ race_id: 'a', locked: null })]);
+  const none = buildLockedOutcomes([race({ race_id: 'a', locked: null })], NOW_MS);
   assert.equal(resolveOfficialMode(none.coverage), 'fallback_pre_off');
   // Empty scope is also fallback (no locks) — and never divides by zero.
-  assert.equal(resolveOfficialMode(buildLockedOutcomes([]).coverage), 'fallback_pre_off');
+  assert.equal(resolveOfficialMode(buildLockedOutcomes([], NOW_MS).coverage), 'fallback_pre_off');
 });
 
 /* ------------------- Newmarket 2026-07-09 regression fixture --------------- */
@@ -227,14 +307,15 @@ test('Newmarket 2026-07-09: official record 0/3, 2 no-bet, 5/7 coverage, 2 missi
     race({ race_id: 'r6-missing', winner_runner_id: 'runner-w6', locked: null }),
     race({ race_id: 'r7-missing', winner_runner_id: 'runner-w7', locked: null }),
   ];
-  const r = buildLockedOutcomes(inputs);
+  const r = buildLockedOutcomes(inputs, NOW_MS);
 
   assert.equal(r.coverage.races, 7);
   assert.equal(r.coverage.locked, 5);
   assert.equal(r.coverage.coverage_pct, 71.4);
   assert.equal(r.coverage.locked_pick, 3);
   assert.equal(r.coverage.locked_no_bet, 2);
-  assert.equal(r.coverage.lock_missing, 2);
+  assert.equal(r.coverage.lock_missing, 2); // all offs passed -> true missing
+  assert.equal(r.coverage.not_locked_yet, 0); // nothing still due post-day
   assert.equal(resolveOfficialMode(r.coverage), 'mixed');
   assert.deepEqual(r.lockMissingRaceIds, ['r6-missing', 'r7-missing']);
 

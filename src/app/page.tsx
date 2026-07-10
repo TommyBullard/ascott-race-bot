@@ -230,7 +230,10 @@ interface ModelPerformance {
     locked_pick: number;
     locked_no_bet: number;
     no_run_available: number;
+    /** No lock row AND the window has passed (post-off) — a factual gap. */
     lock_missing: number;
+    /** No lock row but the window is still open — expected (Phase 5C). */
+    not_locked_yet?: number;
     coverage_pct: number;
   };
   /** Pre-off fallback figures for ONLY the lock-missing races (mixed mode). */
@@ -1552,11 +1555,15 @@ function PerformancePanel({ performance }: { performance: ModelPerformance | nul
   // figures are the OFFICIAL locked record, a mixed locked/fallback view, or
   // the pre-off fallback only — so a good diagnostic day can never masquerade
   // as a good official day.
+  const notYet = performance.lockCoverage?.not_locked_yet ?? 0;
+  const notYetSuffix = notYet > 0 ? ` ${notYet} race(s) not yet due to lock.` : '';
   const modeNote =
     performance.officialMode === 'official_locked'
-      ? 'OFFICIAL — T-minus-5 locked decisions (all races locked).'
+      ? notYet > 0
+        ? `OFFICIAL — T-minus-5 locked decisions (${performance.lockCoverage?.locked ?? '?'}/${performance.lockCoverage?.races ?? '?'} locked; ${notYet} not yet due to lock).`
+        : 'OFFICIAL — T-minus-5 locked decisions (all races locked).'
       : performance.officialMode === 'mixed'
-        ? `MIXED — official locked decisions for ${performance.lockCoverage?.locked ?? '?'}/${performance.lockCoverage?.races ?? '?'} races; ${performance.lockCoverage?.lock_missing ?? '?'} lock-missing race(s) shown separately under the pre-off fallback.`
+        ? `MIXED — official locked decisions for ${performance.lockCoverage?.locked ?? '?'}/${performance.lockCoverage?.races ?? '?'} races; ${performance.lockCoverage?.lock_missing ?? '?'} lock-missing race(s) (off passed, no lock) shown separately under the pre-off fallback.${notYetSuffix}`
         : performance.officialMode === 'fallback_pre_off'
           ? 'FALLBACK — no locked decisions in scope; latest pre-off model run (diagnostic rule).'
           : performance.evaluationMode !== 'current'
@@ -1584,7 +1591,7 @@ function PerformancePanel({ performance }: { performance: ModelPerformance | nul
         )}
         {cov && cov.locked > 0 && (
           <div style={styles.perfNote}>
-            {`official no-bet ${cov.locked_no_bet} · no run at lock ${cov.no_run_available} · LOCK MISSING ${cov.lock_missing}`}
+            {`official no-bet ${cov.locked_no_bet} · no run at lock ${cov.no_run_available} · not locked yet ${cov.not_locked_yet ?? 0} · LOCK MISSING ${cov.lock_missing}`}
           </div>
         )}
       </div>
@@ -1633,7 +1640,7 @@ function PerformancePanel({ performance }: { performance: ModelPerformance | nul
       </div>
       {cov && cov.locked > 0 && (
         <div style={styles.perfNote}>
-          {`official no-bet ${cov.locked_no_bet} · no run at lock ${cov.no_run_available} · LOCK MISSING ${cov.lock_missing}`}
+          {`official no-bet ${cov.locked_no_bet} · no run at lock ${cov.no_run_available} · not locked yet ${cov.not_locked_yet ?? 0} · LOCK MISSING ${cov.lock_missing}`}
         </div>
       )}
       {performance.officialMode === 'mixed' && fallback && fallback.settled_count > 0 && (
