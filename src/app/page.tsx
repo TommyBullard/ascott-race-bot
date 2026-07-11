@@ -19,6 +19,8 @@ import RaceTimelinePanel from '@/components/RaceTimelinePanel';
 import SettlementStatusPanel from '@/components/SettlementStatusPanel';
 import PlaceAuditPanel from '@/components/PlaceAuditPanel';
 import ProofOfUpdatePanel from '@/components/ProofOfUpdatePanel';
+import CommandCentrePanel from '@/components/CommandCentrePanel';
+import { buildCommandCentre } from '@/lib/commandCentre';
 import GenaiCommentaryPanel from '@/components/GenaiCommentaryPanel';
 import MlShadowComparisonPanel from '@/components/MlShadowComparisonPanel';
 import type { GenaiCommentaryRow } from '@/lib/genaiCommentaryView';
@@ -2442,6 +2444,31 @@ export default function RecommendationsPage() {
   // new fetch / API route, no DB writes). Audit-only signals not known to the UI
   // (results source, training capture) render as "unknown" / "not available" and
   // never imply success; GenAI live generation is off by default (shadow-only).
+  // Race-Day Command Centre (read-only): one compact ops view over the cards
+  // already loaded + the page's own fetch state. Pure derivation, no new fetch.
+  const commandCentre =
+    status !== 'loading'
+      ? buildCommandCentre({
+          now: nowMs,
+          feedState: status === 'ready' ? 'ready' : 'error',
+          statusPollError: statusError,
+          scoped,
+          races: cards.map((c) => ({
+            race_id: c.race_id,
+            off_time: c.off_time,
+            race_name: c.race_name,
+            course: c.course,
+            oddsUpdatedAt: c.latestOddsSnapshotTime ?? null,
+            modelUpdatedAt: c.latestModelRunTime ?? null,
+            hasModelRun: c.hasModelRun ?? false,
+            status: c.status ?? null,
+            resultTime: c.result_time ?? null,
+            runQuality: c.observability?.runQuality ?? null,
+            lockedDecisionStatus: c.lockedDecision?.decision_status ?? null,
+          })),
+        })
+      : null;
+
   const proofScope = readScopeFromUrl();
   const proofPanelView =
     status === 'ready'
@@ -2524,6 +2551,8 @@ export default function RecommendationsPage() {
         only, not betting advice. Recommendations are model outputs, not
         guarantees.
       </p>
+
+      {commandCentre && <CommandCentrePanel view={commandCentre} />}
 
       <LiveModeBar
         scoped={scoped}
