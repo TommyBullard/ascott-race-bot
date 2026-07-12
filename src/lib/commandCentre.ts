@@ -89,8 +89,11 @@ export interface CommandCentreView {
   };
 }
 
-/** Humanises a non-negative wait in ms, e.g. "due now", "in 4m", "in 1h 05m". */
-function formatUntil(waitMs: number): string {
+/**
+ * Humanises a non-negative wait in ms, e.g. "due now", "in 4m", "in 1h 05m".
+ * Exported for reuse by the Decision Console (single countdown wording).
+ */
+export function formatUntil(waitMs: number): string {
   if (waitMs <= 0) return 'due now';
   const totalMinutes = Math.ceil(waitMs / 60_000);
   if (totalMinutes < 60) return `in ${totalMinutes}m`;
@@ -109,9 +112,16 @@ function latestMs(timestamps: ReadonlyArray<string | null>): number | null {
   return latest;
 }
 
-/** True when the entry's race has not gone off yet (freshness matters NOW). */
+/** Race states strictly BEFORE the off (freshness still matters NOW). */
+export const PRE_OFF_STATES: readonly string[] = ['upcoming', 't-minus-10', 't-minus-5'];
+
+/**
+ * True when the entry's race has not gone off yet (freshness matters NOW).
+ * Includes the t-minus-10 / t-minus-5 states — a race 8 minutes from the off
+ * with stale odds matters MORE, not less.
+ */
 function stillToRun(entry: TimelineEntry): boolean {
-  return entry.raceState === 'upcoming';
+  return PRE_OFF_STATES.includes(entry.raceState);
 }
 
 /**

@@ -21,6 +21,8 @@ import PlaceAuditPanel from '@/components/PlaceAuditPanel';
 import ProofOfUpdatePanel from '@/components/ProofOfUpdatePanel';
 import CommandCentrePanel from '@/components/CommandCentrePanel';
 import { buildCommandCentre } from '@/lib/commandCentre';
+import DecisionConsolePanel from '@/components/DecisionConsolePanel';
+import { buildDecisionConsole } from '@/lib/decisionConsole';
 import GenaiCommentaryPanel from '@/components/GenaiCommentaryPanel';
 import MlShadowComparisonPanel from '@/components/MlShadowComparisonPanel';
 import type { GenaiCommentaryRow } from '@/lib/genaiCommentaryView';
@@ -2444,6 +2446,22 @@ export default function RecommendationsPage() {
   // new fetch / API route, no DB writes). Audit-only signals not known to the UI
   // (results source, training capture) render as "unknown" / "not available" and
   // never imply success; GenAI live generation is off by default (shadow-only).
+  // Shared read-only card projection for the Command Centre + Decision Console
+  // (both pure derivations over data already loaded; no new fetch, no writes).
+  const timelineRaces = cards.map((c) => ({
+    race_id: c.race_id,
+    off_time: c.off_time,
+    race_name: c.race_name,
+    course: c.course,
+    oddsUpdatedAt: c.latestOddsSnapshotTime ?? null,
+    modelUpdatedAt: c.latestModelRunTime ?? null,
+    hasModelRun: c.hasModelRun ?? false,
+    status: c.status ?? null,
+    resultTime: c.result_time ?? null,
+    runQuality: c.observability?.runQuality ?? null,
+    lockedDecisionStatus: c.lockedDecision?.decision_status ?? null,
+  }));
+
   // Race-Day Command Centre (read-only): one compact ops view over the cards
   // already loaded + the page's own fetch state. Pure derivation, no new fetch.
   const commandCentre =
@@ -2453,20 +2471,15 @@ export default function RecommendationsPage() {
           feedState: status === 'ready' ? 'ready' : 'error',
           statusPollError: statusError,
           scoped,
-          races: cards.map((c) => ({
-            race_id: c.race_id,
-            off_time: c.off_time,
-            race_name: c.race_name,
-            course: c.course,
-            oddsUpdatedAt: c.latestOddsSnapshotTime ?? null,
-            modelUpdatedAt: c.latestModelRunTime ?? null,
-            hasModelRun: c.hasModelRun ?? false,
-            status: c.status ?? null,
-            resultTime: c.result_time ?? null,
-            runQuality: c.observability?.runQuality ?? null,
-            lockedDecisionStatus: c.lockedDecision?.decision_status ?? null,
-          })),
+          races: timelineRaces,
         })
+      : null;
+
+  // Race-Day Decision Console (read-only): every race classified into
+  // NEXT ACTION / WARNING / MONITOR / GOOD. Display-only prioritisation.
+  const decisionConsole =
+    status === 'ready' && cards.length > 0
+      ? buildDecisionConsole(timelineRaces, nowMs)
       : null;
 
   const proofScope = readScopeFromUrl();
@@ -2553,6 +2566,8 @@ export default function RecommendationsPage() {
       </p>
 
       {commandCentre && <CommandCentrePanel view={commandCentre} />}
+
+      {decisionConsole && <DecisionConsolePanel view={decisionConsole} />}
 
       <LiveModeBar
         scoped={scoped}

@@ -125,6 +125,19 @@ test('AMBER: stale odds on an UPCOMING race only — a finished day is never sta
   assert.equal(finishedDay.badge, 'green');
 });
 
+test('AMBER: stale odds still counts inside the t-minus window (minutes from the off)', () => {
+  // Off in 8 minutes -> raceState 't-minus-10', NOT 'upcoming'; staleness must
+  // still matter (it matters MORE this close to the off).
+  const view = build([
+    upcomingRace({
+      off_time: new Date(NOW + 8 * 60_000).toISOString(),
+      oddsUpdatedAt: '2026-07-11T13:00:00.000Z', // 60m old
+    }),
+  ]);
+  assert.equal(view.badge, 'amber');
+  assert.equal(view.health.oddsStale, true);
+});
+
 test('AMBER: result still pending >15m after the off; not before', () => {
   const slow = build([
     settledRace({
