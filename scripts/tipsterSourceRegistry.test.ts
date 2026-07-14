@@ -5,11 +5,20 @@
  * acquisition (paid/login can never be scraped), the PR correlation family maps
  * + caps to one representative, the seed carries names+structure with NO
  * fabricated numbers, and the lib does no I/O and touches no engine/betting code.
+ *
+ * The on-disk-registry test below reads a committed SYNTHETIC fixture
+ * (scripts/fixtures/tipster-source-registry-sample.csv) — a minimal registry
+ * CSV containing only the already-public CORE_ACTIVE_POOL names (no invented
+ * evidence numbers, no personal data). It replaces the real, machine-local,
+ * git-ignored operational registry file (`data/*.csv`) so the suite is
+ * reproducible on a fresh clone without that file present, while still
+ * exercising the disk-read + parse path the original test covered.
  */
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import {
   CORE_ACTIVE_POOL,
@@ -105,8 +114,8 @@ test('current-selection eligibility: synthetic + non-approved are never eligible
   assert.equal(registryRowCurrentSelectionEligible({ ...core, review_status: 'approved' }), true);
 });
 
-test('the seeded registry CSV file exists and parses to the core pool', () => {
-  const text = readFileSync('data/tipster-source-registry-2026-06-19.csv', 'utf8');
+test('a seeded registry CSV file exists and parses to the core pool', () => {
+  const text = readFileSync('scripts/fixtures/tipster-source-registry-sample.csv', 'utf8');
   const rows = parseRegistryCsv(text);
   const labels = new Set(rows.map((r) => r.source_label));
   for (const name of CORE) assert.ok(labels.has(name), `registry CSV missing ${name}`);
@@ -117,4 +126,20 @@ test('registry lib does no I/O and touches no engine/betting code', () => {
   assert.doesNotMatch(src, /supabaseAdmin|fetch\(|api\.openai|https?:\/\/|node:fs/);
   assert.doesNotMatch(src, /bettingEngine|kellyStake|runModelForRace|modelProbabilities|calculateEV/);
   assert.doesNotMatch(src, /placeOrder|placeBet|submitOrder/i);
+});
+
+test('this suite no longer depends on the git-ignored, machine-local registry CSV', () => {
+  const thisFile = fileURLToPath(import.meta.url);
+  const src = readFileSync(thisFile, 'utf8');
+  // The real operational registry is intentionally git-ignored (data/*.csv) and
+  // unavailable on a fresh clone; the suite must run entirely off the
+  // committed synthetic fixture above. Check the actual file-read calls (not
+  // this file's own explanatory prose) never target an ignored data/*.csv path.
+  const readCalls = [...src.matchAll(/readFileSync\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
+  for (const path of readCalls) {
+    assert.ok(
+      !/^data\/.*\.csv$/.test(path) || /\.example\.csv$/.test(path),
+      `test reads a git-ignored data/*.csv path: ${path}`,
+    );
+  }
 });

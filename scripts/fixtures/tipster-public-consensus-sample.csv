@@ -1,0 +1,25 @@
+date,course,race_time,race_name,source_label,tipster_name,source_url,published_at,runner_name,opinion_type,confidence,evidence_excerpt,licence_status,source_access_class,correlation_group,duplicate_family_signal,model_active_eligible,review_status,notes
+2099-03-03,Fixtureton,13:00,Sample Stakes,Freetips Sample,Ada Example,https://example.invalid/1,,Runner Alpha,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,13:00,Sample Stakes,OLBG Sample,Ben Example,https://example.invalid/2,,Runner Alpha,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,13:00,Sample Stakes,Freetips Sample,Ada Example,https://example.invalid/3,,Runner Beta,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,13:00,Sample Stakes,Newsroom Sample,Cy Example,https://example.invalid/4,,Runner Beta,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,13:35,Trial Handicap,Freetips Sample,Dee Example,https://example.invalid/5,,Runner Gamma,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,13:35,Trial Handicap,OLBG Sample,Eli Example,https://example.invalid/6,,Runner Gamma,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,13:35,Trial Handicap,Newsroom Sample,Fay Example,https://example.invalid/7,,Runner Delta,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,13:35,Trial Handicap,Freetips Sample,Dee Example,https://example.invalid/8,,Runner Delta,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,14:10,Fixture Cup,OLBG Sample,Gia Example,https://example.invalid/9,,Runner Epsilon,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,14:10,Fixture Cup,Newsroom Sample,Hal Example,https://example.invalid/10,,Runner Epsilon,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,14:10,Fixture Cup,Freetips Sample,Ivy Example,https://example.invalid/11,,Runner Epsilon,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,14:10,Fixture Cup,RacingInsider Sample,Jax Example,https://example.invalid/12,,Runner Epsilon,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,14:45,Synthetic Sprint,Freetips Sample,Jon Vine,https://example.invalid/13,,Runner Zeta,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row; syndication case
+2099-03-03,Fixtureton,14:45,Synthetic Sprint,RacingInsider Sample,Jon Vine,https://example.invalid/14,,Runner Zeta,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row; same tipster, second source label -> syndication
+2099-03-03,Fixtureton,14:45,Synthetic Sprint,OLBG Sample,Kay Example,https://example.invalid/15,,Runner Zeta,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,14:45,Synthetic Sprint,Newsroom Sample,Leo Example,https://example.invalid/16,,Runner Eta2,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,15:20,Portability Plate,Freetips Sample,Mia Example,https://example.invalid/17,,Runner Theta,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,15:20,Portability Plate,OLBG Sample,Noa Example,https://example.invalid/18,,Runner Theta,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,15:20,Portability Plate,Newsroom Sample,Omar Example,https://example.invalid/19,,Runner Iota,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,15:20,Portability Plate,RacingInsider Sample,Pia Example,https://example.invalid/20,,Runner Iota,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,15:55,Regression Stakes,Freetips Sample,Quin Example,https://example.invalid/21,,Runner Kappa,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,15:55,Regression Stakes,OLBG Sample,Rae Example,https://example.invalid/22,,Runner Kappa,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,15:55,Regression Stakes,Newsroom Sample,Sam Example,https://example.invalid/23,,Runner Lambda,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row
+2099-03-03,Fixtureton,15:55,Regression Stakes,RacingInsider Sample,Tia Example,https://example.invalid/24,,Runner Lambda,tip,,,public_allowed,public_free,,,false,pending,synthetic fixture row

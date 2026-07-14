@@ -7,11 +7,21 @@
  * duplicated group, paid/login sources are blocked, the approved example can
  * never be imported, and neither the lib nor the CLI introduces scraping/network,
  * model-maths, staking, or betting code.
+ *
+ * The manual-review CSV under test is a committed SYNTHETIC fixture
+ * (scripts/fixtures/tipster-manual-review-sample.csv) — invented rows only, no
+ * secrets, no personal data. It replaces the real, machine-local, git-ignored
+ * operational sheet (`data/*.csv`) so the suite is reproducible on a fresh
+ * clone / a second computer without that file present. It preserves every
+ * behavioural case the original assertions rely on: >=14 pending/not-eligible
+ * rows with no fabricated runner/race/evidence, an all-blocked (unverified
+ * licence) report, and a `paid_login` row for the blocked-source assertion.
  */
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import {
   MANUAL_REVIEW_COLUMNS,
@@ -26,7 +36,7 @@ import {
   type ManualReviewRow,
 } from '../src/lib/tipsterManualReview';
 
-const MR_CSV = readFileSync('data/tipster-opinions-2026-06-19-ascot-manual-review.csv', 'utf8');
+const MR_CSV = readFileSync('scripts/fixtures/tipster-manual-review-sample.csv', 'utf8');
 const AUDIT = JSON.parse(readFileSync('data/tipster-source-audit-2026-06-19-ascot.json', 'utf8'));
 const APPROVED_EXAMPLE = readFileSync('data/tipster-opinions-2026-06-19-ascot-approved.example.csv', 'utf8');
 
@@ -142,4 +152,13 @@ test('manual-review lib + review CLI change no model maths / staking and place n
     assert.doesNotMatch(src, /kellyStake|bettingEngine|modelProbabilities|calculateEV|runModelForRace/);
     assert.doesNotMatch(src, /placeOrder|placeBet|submitOrder|sendOrder/i);
   }
+});
+
+test('this suite no longer depends on the git-ignored, machine-local manual-review CSV', () => {
+  const thisFile = fileURLToPath(import.meta.url);
+  const src = readFileSync(thisFile, 'utf8');
+  // The real operational sheet is intentionally git-ignored (data/*.csv) and
+  // unavailable on a fresh clone; the suite must run entirely off the
+  // committed synthetic fixture above, never this path.
+  assert.doesNotMatch(src, /data\/tipster-opinions-2026-06-19-ascot-manual-review\.csv/);
 });

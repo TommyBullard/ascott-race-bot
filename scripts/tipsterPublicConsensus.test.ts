@@ -6,11 +6,20 @@
  * PR-family flagging; model-pick / market-favourite agreement; deterministic
  * ordering + render; and that neither the lib nor the CLI introduces scraping,
  * network, DB writes, model-maths, staking, or betting code.
+ *
+ * The "runs over a manual-review CSV" test below reads a committed SYNTHETIC
+ * fixture (scripts/fixtures/tipster-public-consensus-sample.csv) — invented
+ * races/runners/sources/tipsters, no secrets, no personal data, no real
+ * opinions. It replaces the real, machine-local, git-ignored manual-review
+ * sheet (`data/*.csv`) so the suite is reproducible on a fresh clone. It
+ * preserves the original shape (>=5 races, >=20 rows, at least one syndicated
+ * tipster across two source labels).
  */
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import {
   buildPublicConsensusReport,
@@ -122,13 +131,14 @@ test('report is research-only and deterministic', () => {
   assert.ok(md.includes(CONSENSUS_RESEARCH_NOTE));
 });
 
-test('runs over the real 2026-06-20 manual-review CSV', () => {
-  const csv = readFileSync('data/tipster-opinions-2026-06-20-ascot-manual-review.csv', 'utf8');
+test('runs over a manual-review CSV (synthetic fixture, same shape as a real day)', () => {
+  const csv = readFileSync('scripts/fixtures/tipster-public-consensus-sample.csv', 'utf8');
   const rows = parseManualReviewCsv(csv);
   const report = buildPublicConsensusReport({ date: '2026-06-20', course: 'Ascot', generatedAt: 'T', rows });
   assert.ok(report.race_count >= 5);
   assert.ok(report.total_rows >= 20);
-  // Jon Vine appears on both Freetips and RacingInsider -> at least one syndication flag.
+  // Jon Vine appears on both Freetips Sample and RacingInsider Sample -> at
+  // least one syndication flag.
   assert.ok(report.races.some((r) => r.runners.some((x) => x.syndication_duplicate)));
 });
 
@@ -149,4 +159,20 @@ test('source: CLI is read-only (no writes/scraping/betting)', () => {
   assert.equal(/placeOrder|placeBet|submitOrder/.test(src), false);
   // best-effort read-only DB enrichment uses select-only helpers
   assert.ok(/fetchRaceCard|fetchRaceIdsForMeeting/.test(src));
+});
+
+test('this suite no longer depends on the git-ignored, machine-local manual-review CSV', () => {
+  const thisFile = fileURLToPath(import.meta.url);
+  const src = readFileSync(thisFile, 'utf8');
+  // The real operational sheet is intentionally git-ignored (data/*.csv) and
+  // unavailable on a fresh clone; the suite must run entirely off the
+  // committed synthetic fixture above. Check the actual file-read calls (not
+  // this file's own explanatory prose) never target an ignored data/*.csv path.
+  const readCalls = [...src.matchAll(/readFileSync\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
+  for (const path of readCalls) {
+    assert.ok(
+      !/^data\/.*\.csv$/.test(path) || /\.example\.csv$/.test(path),
+      `test reads a git-ignored data/*.csv path: ${path}`,
+    );
+  }
 });

@@ -1,0 +1,15 @@
+date,course,race_time,race_name,source_label,tipster_name,source_url,published_at,runner_name,opinion_type,confidence,evidence_excerpt,licence_status,source_access_class,correlation_group,duplicate_family_signal,model_active_eligible,review_status,notes
+2099-01-01,Testchester,,,Synthetic Source 1,Synthetic Tipster A,https://example.invalid/source-1,,,,,,,,,,false,pending,invented test row
+2099-01-01,Testchester,,,Synthetic Source 2,Synthetic Tipster B,https://example.invalid/source-2,,,,,,,,,,false,pending,invented test row
+2099-01-01,Testchester,,,Synthetic Source 3,Synthetic Tipster C,https://example.invalid/source-3,,,,,,,,,,false,pending,invented test row
+2099-01-01,Testchester,,,The Times Rob Wright,Synthetic Tipster D,https://example.invalid/source-4,,,,,,,paid_login,,,false,pending,invented test row; paid/login source stays blocked
+2099-01-01,Testchester,,,Synthetic Source 5,Synthetic Tipster E,https://example.invalid/source-5,,,,,,,,,,false,pending,invented test row
+2099-01-01,Testchester,,,Synthetic Source 6,Synthetic Tipster F,https://example.invalid/source-6,,,,,,,,,,false,pending,invented test row
+2099-01-01,Testchester,,,Synthetic Source 7,Synthetic Tipster G,https://example.invalid/source-7,,,,,,,,,,false,pending,invented test row
+2099-01-01,Testchester,,,Synthetic Source 8,Synthetic Tipster H,https://example.invalid/source-8,,,,,,,,,,false,pending,invented test row
+2099-01-01,Testchester,,,Synthetic Source 9,Synthetic Tipster I,https://example.invalid/source-9,,,,,,,,,,false,pending,invented test row
+2099-01-01,Testchester,,,Synthetic Source 10,Synthetic Tipster J,https://example.invalid/source-10,,,,,,,,,,false,pending,invented test row
+2099-01-01,Testchester,,,Synthetic Source 11,Synthetic Tipster K,https://example.invalid/source-11,,,,,,,,,,false,pending,invented test row
+2099-01-01,Testchester,,,Synthetic Source 12,Synthetic Tipster L,https://example.invalid/source-12,,,,,,,,,,false,pending,invented test row
+2099-01-01,Testchester,,,Synthetic Source 13,Synthetic Tipster M,https://example.invalid/source-13,,,,,,,,,,false,pending,invented test row
+2099-01-01,Testchester,,,Synthetic Source 14,Synthetic Tipster N,https://example.invalid/source-14,,,,,,,,,,false,pending,invented test row
