@@ -313,6 +313,22 @@ impossible, so missing is then a fact). Remaining Phase 6B items below.
 - Document T-minus-5 timing, lock CLI command, recovery procedures if lock fails.
 - Update Newmarket enable list in `RAILWAY_RACE_DAY_AUTOMATION.md`.
 
+### Phase 7A: Nationwide UK & Ireland foundation
+
+**Phase 7A.1 (IMPLEMENTED — scripts/nationwideAudit.ts, `npm run audit:nationwide`):**
+SELECT-only nationwide audit for a date. Groups every stored race (all
+courses) by `normalizeCourse` and reports per-course + overall: race/runner
+counts, odds & pre-off model coverage, diagnostic pick/no-bet counts, official
+T-minus-5 lock coverage (time-aware via the shared `buildLockedOutcomes` —
+not_locked_yet vs LOCK MISSING with recorded-winner evidence), official locked
+outcomes at stored odds/stake, results progress, course-label/country
+warnings (merged raw labels always reported; 'GB' fallback flagged), and an
+informational PASS/REVIEW/FAIL evidence-gate verdict. No --commit flag exists;
+the only write is `reports/nationwide-audit-<date>.md`. The verdict never
+enables, schedules, or invokes nationwide commit mode. Remaining Phase 7A
+steps (dry-run day procedure doc, gated national supervisor bat) and all of
+Phase 7B are pending.
+
 ### Gates
 
 - **Proceed Phase 1 → Phase 2:** migration deployed, `locked_race_decisions` accessible.
