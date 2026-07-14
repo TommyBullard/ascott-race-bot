@@ -58,6 +58,7 @@
     "lock:t-minus": "tsx scripts/lockTMinus.ts",
     "report:locked": "tsx scripts/lockedReport.ts",
     "audit:nationwide": "tsx scripts/nationwideAudit.ts",
+    "timing:nationwide": "tsx scripts/nationwideTiming.ts",
     "results:auto": "tsx scripts/autoResults.ts",
     "extract:notes": "tsx scripts/extractNotes.ts",
     "intelligence:prepare": "tsx scripts/prepareRaceIntelligence.ts",

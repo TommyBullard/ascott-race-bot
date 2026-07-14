@@ -325,9 +325,35 @@ outcomes at stored odds/stake, results progress, course-label/country
 warnings (merged raw labels always reported; 'GB' fallback flagged), and an
 informational PASS/REVIEW/FAIL evidence-gate verdict. No --commit flag exists;
 the only write is `reports/nationwide-audit-<date>.md`. The verdict never
-enables, schedules, or invokes nationwide commit mode. Remaining Phase 7A
-steps (dry-run day procedure doc, gated national supervisor bat) and all of
-Phase 7B are pending.
+enables, schedules, or invokes nationwide commit mode.
+
+**Phase 7A.2a (IMPLEMENTED — scripts/nationwideTiming.ts,
+`npm run timing:nationwide`; docs/NATIONWIDE_DRY_RUN_PROCEDURE.md):**
+SELECT-only nationwide dry-run TIMING harness. For a date it walks every
+stored race (all courses, unless `--course` given) SEQUENTIALLY — matching the
+real `pipeline:watch` for-loop — timing the exact READ + pure-SCORE path
+`runModelForRace` runs before it writes anything (`fetchRaceModelInputs` +
+`fetchTipsterSelections` + `getTipsterStats`, then the pure `scoreRaceRunners`
+— the same scoring core `scripts/backtest.ts` already reuses read-only).
+DELIBERATELY does NOT apply the production pre-off guard (POST_OFF/RESULTED
+skip): that guard protects a *written* decision record from a stale post-off
+write, which cannot happen here since nothing is ever written, and skipping
+post-off/resulted races would make the harness useless for its purpose —
+retrospective measurement against already-completed race days (exactly the
+2026-07-09/10/11 evidence already available). Every race is timed regardless
+of off status; the only skip is a genuine data gap (no priced field / no
+market snapshot). It NEVER calls `runModelForRace`, never writes `model_runs`
+/ `model_runner_scores` / `recommendations`, never calls `lock:t-minus` or
+touches `locked_race_decisions`, never settles a result. There is NO
+`--commit` flag anywhere in this procedure — nothing here ever writes to the
+database. Per-race failures are isolated (caught, recorded, loop continues).
+Reports coverage (scored/skipped-no-priced-field/failed), duration stats
+(total/min/mean/median/p95/max), margin against the 5-minute watcher cadence,
+and an informational PASS/REVIEW/FAIL verdict (REVIEW at 60% of cadence, or
+any failure/skip; FAIL at/above the full cadence). The only write is
+`reports/nationwide-timing-<date>.md`. This is evidence-gathering for the
+future gated Phase 7B decision, not an enablement step. Remaining Phase 7A
+steps (gated national supervisor bat) and all of Phase 7B are pending.
 
 ### Gates
 
