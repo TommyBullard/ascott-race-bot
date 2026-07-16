@@ -97,6 +97,7 @@ import './commandCentre.test';
 import './decisionConsole.test';
 import './nationwideAudit.test';
 import './nationwideTiming.test';
+import './producerClaim.test';
 import './autoResults.test';
 import './freeResultsMatch.test';
 import './todayResultsSettlement.test';

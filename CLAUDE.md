@@ -352,8 +352,31 @@ Reports coverage (scored/skipped-no-priced-field/failed), duration stats
 and an informational PASS/REVIEW/FAIL verdict (REVIEW at 60% of cadence, or
 any failure/skip; FAIL at/above the full cadence). The only write is
 `reports/nationwide-timing-<date>.md`. This is evidence-gathering for the
-future gated Phase 7B decision, not an enablement step. Remaining Phase 7A
-steps (gated national supervisor bat) and all of Phase 7B are pending.
+future gated Phase 7B decision, not an enablement step.
+
+**Phase 7A.2b Step 1 (IMPLEMENTED — schema + diagnostic CLI only, NOT WIRED —
+supabase/migrations/20260711000000_producer_run_claims.sql,
+src/lib/producerClaim.ts, `npm run producer:claim-check`):** day-level,
+FAIL-CLOSED producer ownership claim, deliberately separate from the per-race
+`model_run_locks` (which is fail-open by design — a bounded, single-race
+risk). One claim row PER RACE DATE (not per scope) owns the entire
+provider/model producer domain for that date; the requested scope
+(`all-uk-ire` or `course:<normalizeCourse output>`, reusing the existing
+course-normalisation rule verbatim — no second rule) is stored as metadata on
+that same row, making the conservative "every scope conflicts with every
+scope for one date" policy atomically trivial (a second claim of ANY scope is
+just a second row racing the same primary key). Three atomic RPCs mirror
+`model_run_locks`' TTL-lease pattern exactly (insert/steal-if-expired/
+same-owner-idempotent-renew; owner-scoped heartbeat; owner-scoped release);
+default TTL 240s against the 5-minute cadence. The diagnostic CLI
+(`--op status|claim|heartbeat|release`, `status` read-only default, the other
+three each requiring an explicit `--owner-id`, no `--commit` flag anywhere)
+never calls the Racing API, Betfair, the model, `lock:t-minus`,
+`results:auto`, `pipeline:day`, or `pipeline:watch` — source-scan tested.
+**NOT YET WIRED into any producer script** (`pipeline:day` /
+`pipeline:watch` / `lock:t-minus` / `results:auto` are all unmodified and
+unaware of this table) — that integration, plus the remaining Phase 7A steps
+(gated national supervisor bat) and all of Phase 7B, are pending.
 
 ### Gates
 
