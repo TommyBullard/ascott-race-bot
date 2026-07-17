@@ -352,8 +352,93 @@ Reports coverage (scored/skipped-no-priced-field/failed), duration stats
 and an informational PASS/REVIEW/FAIL verdict (REVIEW at 60% of cadence, or
 any failure/skip; FAIL at/above the full cadence). The only write is
 `reports/nationwide-timing-<date>.md`. This is evidence-gathering for the
-future gated Phase 7B decision, not an enablement step. Remaining Phase 7A
-steps (gated national supervisor bat) and all of Phase 7B are pending.
+future gated Phase 7B decision, not an enablement step.
+
+**Phase 7A.2b Step 1 (IMPLEMENTED, HARDENED — schema + diagnostic CLI only,
+NOT WIRED — supabase/migrations/20260711000000_producer_run_claims.sql,
+src/lib/producerClaim.ts, `npm run producer:claim-check`):** day-level,
+FAIL-CLOSED producer ownership claim, deliberately separate from the per-race
+`model_run_locks` (which is fail-open by design — a bounded, single-race
+risk). One claim row PER RACE DATE (not per scope) owns the entire
+provider/model producer domain for that date; the requested scope
+(`all-uk-ire` or `course:<normalizeCourse output>`, reusing the existing
+course-normalisation rule verbatim — no second rule) is stored as metadata on
+that same row, making the conservative "every scope conflicts with every
+scope for one date" policy atomically trivial (a second claim of ANY scope is
+just a second row racing the same primary key). Four atomic RPCs mirror
+`model_run_locks`' TTL-lease pattern (insert/steal-if-expired/
+same-owner-idempotent-renew; owner-scoped heartbeat; owner-scoped release;
+plus a READ-ONLY `producer_claim_status` that returns the claim row alongside
+the database's own `now()` in one atomic statement); default TTL 240s,
+server-side clamped to `[30, 900]`s in every TTL-accepting RPC so an operator
+typo can never create a day-long, effectively unstealable claim. Every lease
+carries a **generation (fencing token)**: starts at 1, increments only when a
+different owner steals an expired claim (never on same-owner renewal or
+heartbeat) — tracked and returned now; enforcement (a writer verifying its
+generation before a persistence-sensitive stage) is deferred to the future
+supervisor-wiring phase. `try_acquire_producer_claim`'s contended path
+retries its insert-then-lock decision at most once if the row vanishes
+between the failed insert and the row-lock read (a concurrent release); if
+still indeterminate after that bounded retry, it returns an explicit,
+distinguishable anomaly (never a silent success, never conflated with a
+normal refusal or a malformed response) that the TypeScript layer classifies
+as `transient_uncertain`. Status liveness (`live`/`expired`/`absent`/
+`unknown`) is always computed from that same server `now()`, never the local
+machine's clock. Permission-denied errors (SQLSTATE 42501, or a "permission
+denied" message) classify as `mechanism_unavailable`, not
+`transient_uncertain` — misconfigured grants/RLS will not resolve on retry.
+The diagnostic CLI (`--op status|claim|heartbeat|release`, `status` read-only
+default, the other three each requiring an explicit `--owner-id`, no
+`--commit` flag anywhere, plus `--json` for exactly-one-object machine-
+readable output) never calls the Racing API, Betfair, the model,
+`lock:t-minus`, `results:auto`, `pipeline:day`, or `pipeline:watch` —
+source-scan tested; the process always terminates after one operation (no
+retry loop that could run indefinitely).
+
+**Enforcement is cooperative, not mandatory**, until every producer entry
+point is explicitly wired or disabled — the claim protects nothing by itself,
+it only records who says they own a date. Known entry points that make
+provider calls today and do NOT yet consult this claim: the Railway cron jobs
+(`/api/cron/racecards`, `/api/cron/odds`, `/api/cron/model`,
+`/api/cron/results`, `/api/cron/tipster-discovery`), any manual
+`CRON_SECRET`-authenticated call to those routes, `npm run run:model` /
+`model:day`, `pipeline:day` / `pipeline:watch` (until a future wiring phase),
+and `results:auto`. For the first future wiring phase: `lock:t-minus` is
+expected to stay OUTSIDE this claim (no provider calls; insert-only;
+`unique(race_id, minutes_before)`; commit-windowed — a duplicate run is
+harmless, while a claim-induced miss of an official lock would be worse);
+`results:auto` is expected to stay unwired until the nationwide settlement
+phase; read-only audits/reports/timing commands are exempt unconditionally
+(no provider calls, no lease held).
+
+**NOT YET WIRED into any producer script** (`pipeline:day` /
+`pipeline:watch` / `lock:t-minus` / `results:auto` are all unmodified and
+unaware of this table) — that integration, plus the remaining Phase 7A steps
+(gated national supervisor bat) and all of Phase 7B, are pending. Hardened per
+an independent Producer Ownership Safety Review; the migration remains
+UNAPPLIED to any database.
+
+**Security/consistency pass (IMPLEMENTED, still unapplied):** all four
+functions explicitly `revoke all ... from public, anon, authenticated` BEFORE
+`grant execute ... to service_role` — table RLS alone does not protect a
+`SECURITY DEFINER` function, and Postgres grants EXECUTE to PUBLIC by default
+on creation, so this includes the read-only `producer_claim_status` (it
+exposes `owner_id`/`hostname`/`pid`/`app_version`/`mode`, which must never
+reach a browser, an anon/authenticated Postgres role, or a public API route).
+The table itself gets the identical `revoke all ... from public, anon,
+authenticated` before RLS is enabled. The whole revoke-then-grant block is
+safely re-runnable and converges to the intended posture on every
+application, since `CREATE OR REPLACE FUNCTION` does not by itself reset a
+prior grant. TTL now uses `least(greatest(coalesce(p_ttl_seconds, 240), 30),
+900)` in both `try_acquire_producer_claim` and `heartbeat_producer_claim` —
+an explicit SQL `NULL` or an omitted argument both resolve to the 240s
+default BEFORE clamping (not the 30s floor), agreeing exactly with the
+TypeScript wrapper's default-then-clamp order. New table CHECK constraints
+bound `owner_id` (1-128 chars), `hostname`/`app_version`/`mode` (≤120 chars
+or null), and `pid` (null or positive) as defense-in-depth against a direct
+RPC caller bypassing the TypeScript sanitisation in `producerClaim.ts` — SQL
+deliberately does not attempt credential-content scanning, only size/shape
+bounds.
 
 ### Gates
 
