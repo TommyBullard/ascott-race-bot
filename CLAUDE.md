@@ -445,6 +445,34 @@ live, and `run:model`/`model:day`. `lock:t-minus` and `results:auto` remain
 deliberately OUTSIDE the claim (test-enforced). Nationwide execution remains
 disabled.
 
+**Phase 7A.2b Step 3 (IMPLEMENTED — Producer Readiness Preflight;
+src/lib/producerPreflight.ts, `npm run producer:preflight -- --date YYYY-MM-DD
+--course "COURSE"`):** finite, READ-ONLY preflight returning one verdict —
+READY / REVIEW / BLOCKED — over twelve checks (ownership mechanism, active
+claim, date/course scope, stored races/odds/model coverage, required
+configuration, server reachability, local-process knowledge, Railway job
+state, Vercel cron state, bypass entry points). Its ONLY operations are: the
+read-only `producer_claim_status` RPC (never claim/heartbeat/release),
+SELECT-only workload queries, one optional bounded GET to the FIXED read-only
+health path `/api/cron/health?date=` (redirects refused, 401/403 classified
+honestly, CRON_SECRET sent as a bearer but never printed), and one local
+Markdown report ONLY with `--report`
+(`reports/producer-preflight-<date>-<slug>.md`). SELECTED-COURSE ONLY: the
+reserved nationwide input (`all-uk-ire` / `all uk ire`, any spelling or
+normalised equivalent) is explicitly rejected and can never become a course
+scope. Verdict rules: live claim / mechanism failure / unknown liveness /
+missing SUPABASE_URL+SERVICE_ROLE_KEY+CRON_SECRET / invalid base URL /
+reachable-wrong-app all BLOCK; expired claim (stealable, never auto-stolen),
+zero stored races, races without odds, unprobed/unreachable server (without
+`--require-server`), and unconfirmed external conditions are REVIEW; stored
+model coverage is workload evidence and NEVER a blocker (the pipeline creates
+model runs). External conditions (Railway/Vercel/legacy processes) are
+UNKNOWN/manual unless the operator passes `--confirm-external`, which is
+recorded as `external_checks_source: operator_attestation` — an operator
+attestation only, never "automatically verified". READY prints the exact next
+`pipeline:day --commit` command as TEXT and never executes it; the preflight
+itself rejects `--commit`. Exit codes: 0 READY, 3 REVIEW, 2 BLOCKED, 1 usage.
+
 **Still pending:** the remaining Phase 7A steps (gated national supervisor
 bat, route-level claim enforcement) and all of Phase 7B. Hardened per
 an independent Producer Ownership Safety Review; the migration remains
