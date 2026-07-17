@@ -6,12 +6,23 @@
  *
  *   - DRY-RUN BY DEFAULT: prints what it would run + the schedule, writes nothing.
  *   - Writes only with `--commit`.
- *   - `--date YYYY-MM-DD` (required), `--course Ascot` (optional),
+ *   - `--date YYYY-MM-DD` (required), `--course Ascot` (REQUIRED with --commit —
+ *     the producer ownership claim needs a course scope; optional for dry runs),
  *     `--interval-minutes N` (default 5), `--until HH:MM` (optional local stop
  *     time), `--max-cycles N` (optional, for testing), `--allow-stale`
  *     (run the model even if an odds refresh fails), `--base-url` (default
  *     http://localhost:3000).
  *   - Stops on --until, after --max-cycles, or on Ctrl+C (clean).
+ *
+ * PRODUCER OWNERSHIP (Phase 7A.2b Step 2): in commit mode this process claims
+ * the race date via `producer_run_claims` BEFORE any provider/model work — one
+ * claim + one generated owner id for the whole process, renewed by a 60s
+ * heartbeat (held through the inter-cycle waits, never released between
+ * cycles), verified (owner + generation) before every cycle and before every
+ * provider call / per-race model run, released on graceful shutdown. FAIL-
+ * CLOSED: a refused claim, an unavailable claim mechanism, or confirmed
+ * ownership loss stops this process with zero further provider/model work —
+ * it NEVER reclaims mid-run. Crash recovery is by TTL expiry (240s).
  *
  * Usage:
  *   npm run pipeline:watch -- --date 2026-06-16 --course Ascot --interval-minutes 5 --dry-run
@@ -37,6 +48,15 @@ import {
   formatCycleSummary,
   type TimeOfDay,
 } from '../src/lib/raceDayWatch';
+import {
+  COURSE_REQUIRED_MESSAGE,
+  acquireProducerOwnership,
+  createHeartbeatController,
+  describeAcquireFailure,
+  describeStopReason,
+  guardPipelineDeps,
+  releaseProducerOwnership,
+} from '../src/lib/producerOwnership';
 
 /** Loads env from .env.local then .env (first found wins). */
 function loadEnv(): void {
@@ -138,11 +158,45 @@ async function main(): Promise<void> {
     return;
   }
 
-  const deps: PipelineRunnerDeps = {
-    callCron: createCallCron(),
-    fetchRaceRows: createFetchRaceRows(),
-    runOneRace: runModelForRace,
-  };
+  // Producer ownership (Phase 7A.2b Step 2): commit mode requires a course —
+  // the day-level claim needs a course scope, and nationwide scope is not
+  // permitted in the production pipeline.
+  if (!args.course) {
+    console.error(COURSE_REQUIRED_MESSAGE);
+    process.exitCode = 1;
+    return;
+  }
+
+  // Acquire the date-level producer claim ONCE for the whole watch process,
+  // BEFORE the loop and before any provider/model work. FAIL-CLOSED: a
+  // refusal / unavailable mechanism / unresolved uncertainty exits here with
+  // ZERO provider calls (the .bat restart loop will retry ~every 60s and keep
+  // being refused while another producer legitimately owns the date).
+  const ownership = await acquireProducerOwnership({
+    raceDate: args.date,
+    course: args.course,
+    mode: 'pipeline-watch',
+  });
+  if (!ownership.ok) {
+    const { message, exitCode } = describeAcquireFailure(ownership);
+    console.error(message);
+    process.exitCode = exitCode;
+    return;
+  }
+  // One owner id + one claim for the process lifetime; the 60s heartbeat keeps
+  // it alive through every cycle AND the inter-cycle waits (never released
+  // between cycles). Started only after ownership is proven.
+  const heartbeat = createHeartbeatController(ownership.state);
+  heartbeat.start();
+
+  const deps: PipelineRunnerDeps = guardPipelineDeps(
+    {
+      callCron: createCallCron(),
+      fetchRaceRows: createFetchRaceRows(),
+      runOneRace: runModelForRace,
+    },
+    ownership.state,
+  );
 
   // Clean Ctrl+C handling: first SIGINT stops after the current wait/cycle; a
   // second one forces an exit.
@@ -178,59 +232,89 @@ async function main(): Promise<void> {
   const intervalMs = args.intervalMinutes * 60_000;
   let completed = 0;
 
-  for (;;) {
-    const stopBefore = shouldStopWatching(completed, args.maxCycles, until, new Date());
-    if (stopBefore) {
-      console.log(`\nStopping watch: ${stopBefore}.`);
-      break;
-    }
-    if (stopRequested) {
-      console.log('\nStopping watch: interrupted.');
-      break;
-    }
+  try {
+    for (;;) {
+      const stopBefore = shouldStopWatching(completed, args.maxCycles, until, new Date());
+      if (stopBefore) {
+        console.log(`\nStopping watch: ${stopBefore}.`);
+        break;
+      }
+      if (stopRequested) {
+        console.log('\nStopping watch: interrupted.');
+        break;
+      }
 
-    const startedAt = new Date().toISOString();
-    console.log(`\n=== Cycle ${completed + 1} — started ${startedAt} ===`);
-    const result = await runPipelineCommitCycle(deps, {
-      date: args.date,
-      course: args.course,
-      baseUrl: args.baseUrl,
-      allowStale: args.allowStale,
-      now: new Date(),
-    });
-    const completedAt = new Date().toISOString();
-    completed += 1;
+      // Ownership reverify before every cycle: the first cycle relies on the
+      // just-completed acquire; each later cycle gets an awaited, DB-confirmed
+      // heartbeat (owner + generation) before any stage may start. Confirmed
+      // loss / uncertainty / unavailable mechanism → stop the whole process
+      // (never reclaim mid-run; the .bat restart applies the refusal path).
+      if (completed > 0) await heartbeat.beatNow();
+      if (ownership.state.stopReason) {
+        const { message, exitCode } = describeStopReason(ownership.state.stopReason);
+        console.error(`\n${message}`);
+        process.exitCode = exitCode;
+        break;
+      }
 
-    console.log('');
-    for (const line of formatCycleSummary({
-      cycle: completed,
-      startedAt,
-      completedAt,
-      summary: result.summary,
-      dashboardUrl: result.dashboardUrl,
-    })) {
-      console.log(line);
-    }
+      const startedAt = new Date().toISOString();
+      console.log(`\n=== Cycle ${completed + 1} — started ${startedAt} ===`);
+      const result = await runPipelineCommitCycle(deps, {
+        date: args.date,
+        course: args.course,
+        baseUrl: args.baseUrl,
+        allowStale: args.allowStale,
+        now: new Date(),
+      });
+      const completedAt = new Date().toISOString();
+      completed += 1;
 
-    const stopAfter = shouldStopWatching(completed, args.maxCycles, until, new Date());
-    if (stopAfter) {
-      console.log(`\nStopping watch: ${stopAfter}.`);
-      break;
-    }
-    if (stopRequested) {
-      console.log('\nStopping watch: interrupted.');
-      break;
-    }
+      console.log('');
+      for (const line of formatCycleSummary({
+        cycle: completed,
+        startedAt,
+        completedAt,
+        summary: result.summary,
+        dashboardUrl: result.dashboardUrl,
+      })) {
+        console.log(line);
+      }
 
-    console.log(`\nNext cycle in ${args.intervalMinutes} min… (Ctrl+C to stop)`);
-    await wait(intervalMs);
-    if (stopRequested) {
-      console.log('\nStopping watch: interrupted.');
-      break;
+      // Ownership stopped mid-cycle: the guarded deps already blocked every
+      // further provider call / model write inside the cycle; stop the process.
+      if (ownership.state.stopReason) {
+        const { message, exitCode } = describeStopReason(ownership.state.stopReason);
+        console.error(`\n${message}`);
+        process.exitCode = exitCode;
+        break;
+      }
+
+      const stopAfter = shouldStopWatching(completed, args.maxCycles, until, new Date());
+      if (stopAfter) {
+        console.log(`\nStopping watch: ${stopAfter}.`);
+        break;
+      }
+      if (stopRequested) {
+        console.log('\nStopping watch: interrupted.');
+        break;
+      }
+
+      console.log(`\nNext cycle in ${args.intervalMinutes} min… (Ctrl+C to stop)`);
+      // The claim is deliberately NOT released here — it is held (and renewed
+      // by the 60s heartbeat) through the wait so no other producer can slip
+      // in between cycles.
+      await wait(intervalMs);
+      if (stopRequested) {
+        console.log('\nStopping watch: interrupted.');
+        break;
+      }
     }
+  } finally {
+    process.removeListener('SIGINT', onSigint);
+    // Graceful shutdown: stop the heartbeat FIRST, then owner-scoped release.
+    // A failed release is logged and left to TTL expiry (never restarts work).
+    await releaseProducerOwnership(ownership.state, heartbeat);
   }
-
-  process.removeListener('SIGINT', onSigint);
   console.log(`\nWatch finished after ${completed} cycle(s).`);
 }
 

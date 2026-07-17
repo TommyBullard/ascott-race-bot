@@ -13,12 +13,19 @@
  *
  *   - DRY-RUN BY DEFAULT: prints the URLs / operation it would run, writes nothing.
  *   - Writes only with `--commit`.
- *   - `--date YYYY-MM-DD` (required), `--course Ascot` (optional),
+ *   - `--date YYYY-MM-DD` (required), `--course Ascot` (REQUIRED with --commit —
+ *     the producer ownership claim needs a course scope; optional for dry runs),
  *     `--base-url http://localhost:3000` (optional; default shown).
  *   - SAFETY (commit mode): if the odds refresh fails, the model run is SKIPPED
  *     by default so it can't re-score against stale odds. Pass `--allow-stale`
  *     to run the model anyway. A failed racecards step alone does NOT skip the
  *     model (the cards may already be in the DB).
+ *   - PRODUCER OWNERSHIP (Phase 7A.2b Step 2): commit mode claims the race date
+ *     via `producer_run_claims` BEFORE any provider/model work (one claim + one
+ *     generated owner id for this one-shot run, 60s heartbeat while it runs,
+ *     released in a finally). FAIL-CLOSED: a refused claim / unavailable
+ *     mechanism / confirmed loss means zero further provider/model work and a
+ *     non-zero exit; it never waits for or reclaims ownership.
  *
  * Usage:
  *   npm run pipeline:day -- --date 2026-06-16 --course Ascot --dry-run
@@ -42,6 +49,15 @@ import {
   createFetchRaceRows,
   type PipelineRunnerDeps,
 } from '../src/lib/raceDayPipelineRunner';
+import {
+  COURSE_REQUIRED_MESSAGE,
+  acquireProducerOwnership,
+  createHeartbeatController,
+  describeAcquireFailure,
+  describeStopReason,
+  guardPipelineDeps,
+  releaseProducerOwnership,
+} from '../src/lib/producerOwnership';
 
 /** Loads env from .env.local then .env (first found wins). */
 function loadEnv(): void {
@@ -114,26 +130,68 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Run one pipeline cycle (racecards + odds + gated model run), reusing the
-  // shared runner so this script and pipeline:watch behave identically.
-  const deps: PipelineRunnerDeps = {
-    callCron: createCallCron(),
-    fetchRaceRows: createFetchRaceRows(),
-    runOneRace: runModelForRace,
-  };
-  const result = await runPipelineCommitCycle(deps, {
-    date: args.date,
-    course: args.course,
-    baseUrl: args.baseUrl,
-    allowStale: args.allowStale,
-    now,
-  });
-
-  console.log('\nSummary:');
-  for (const line of formatPipelineSummary(result.summary, result.dashboardUrl)) console.log(line);
-
-  if (result.racecards === 'failed' || result.odds === 'failed' || result.summary.failures > 0) {
+  // Producer ownership (Phase 7A.2b Step 2): commit mode requires a course —
+  // the day-level claim needs a course scope, and nationwide scope is not
+  // permitted in the production pipeline.
+  if (!args.course) {
+    console.error(COURSE_REQUIRED_MESSAGE);
     process.exitCode = 1;
+    return;
+  }
+
+  // Acquire the date-level producer claim BEFORE any provider/model work.
+  // FAIL-CLOSED: a refusal (someone else owns this date), an unavailable
+  // mechanism, or unresolved uncertainty all exit here with ZERO provider calls.
+  const ownership = await acquireProducerOwnership({
+    raceDate: args.date,
+    course: args.course,
+    mode: 'pipeline-day',
+  });
+  if (!ownership.ok) {
+    const { message, exitCode } = describeAcquireFailure(ownership);
+    console.error(message);
+    process.exitCode = exitCode;
+    return;
+  }
+  const heartbeat = createHeartbeatController(ownership.state);
+  heartbeat.start();
+
+  try {
+    // Run one pipeline cycle (racecards + odds + gated model run), reusing the
+    // shared runner so this script and pipeline:watch behave identically. The
+    // deps are wrapped so every provider HTTP call and every per-race model run
+    // is gated on the ownership belief.
+    const deps: PipelineRunnerDeps = guardPipelineDeps(
+      {
+        callCron: createCallCron(),
+        fetchRaceRows: createFetchRaceRows(),
+        runOneRace: runModelForRace,
+      },
+      ownership.state,
+    );
+    const result = await runPipelineCommitCycle(deps, {
+      date: args.date,
+      course: args.course,
+      baseUrl: args.baseUrl,
+      allowStale: args.allowStale,
+      now,
+    });
+
+    console.log('\nSummary:');
+    for (const line of formatPipelineSummary(result.summary, result.dashboardUrl)) console.log(line);
+
+    if (result.racecards === 'failed' || result.odds === 'failed' || result.summary.failures > 0) {
+      process.exitCode = 1;
+    }
+    // Ownership stopped mid-run: the guarded deps already blocked all further
+    // provider/model work; report it and exit non-zero (overrides the generic 1).
+    if (ownership.state.stopReason) {
+      const { message, exitCode } = describeStopReason(ownership.state.stopReason);
+      console.error(`\n${message}`);
+      process.exitCode = exitCode;
+    }
+  } finally {
+    await releaseProducerOwnership(ownership.state, heartbeat);
   }
 }
 

@@ -354,8 +354,8 @@ any failure/skip; FAIL at/above the full cadence). The only write is
 `reports/nationwide-timing-<date>.md`. This is evidence-gathering for the
 future gated Phase 7B decision, not an enablement step.
 
-**Phase 7A.2b Step 1 (IMPLEMENTED, HARDENED — schema + diagnostic CLI only,
-NOT WIRED — supabase/migrations/20260711000000_producer_run_claims.sql,
+**Phase 7A.2b Step 1 (IMPLEMENTED, HARDENED, migration APPLIED —
+supabase/migrations/20260711000000_producer_run_claims.sql,
 src/lib/producerClaim.ts, `npm run producer:claim-check`):** day-level,
 FAIL-CLOSED producer ownership claim, deliberately separate from the per-race
 `model_run_locks` (which is fail-open by design — a bounded, single-race
@@ -397,24 +397,56 @@ retry loop that could run indefinitely).
 
 **Enforcement is cooperative, not mandatory**, until every producer entry
 point is explicitly wired or disabled — the claim protects nothing by itself,
-it only records who says they own a date. Known entry points that make
-provider calls today and do NOT yet consult this claim: the Railway cron jobs
-(`/api/cron/racecards`, `/api/cron/odds`, `/api/cron/model`,
-`/api/cron/results`, `/api/cron/tipster-discovery`), any manual
-`CRON_SECRET`-authenticated call to those routes, `npm run run:model` /
-`model:day`, `pipeline:day` / `pipeline:watch` (until a future wiring phase),
-and `results:auto`. For the first future wiring phase: `lock:t-minus` is
-expected to stay OUTSIDE this claim (no provider calls; insert-only;
-`unique(race_id, minutes_before)`; commit-windowed — a duplicate run is
-harmless, while a claim-induced miss of an official lock would be worse);
-`results:auto` is expected to stay unwired until the nationwide settlement
-phase; read-only audits/reports/timing commands are exempt unconditionally
-(no provider calls, no lease held).
+it only records who says they own a date. Since Step 2, `pipeline:day` and
+`pipeline:watch` (and, transitively, `race-day:refresh-today` and the
+documented Railway `pipeline-refresh` job) DO consult it. Entry points that
+still make provider/model calls WITHOUT consulting it: direct
+`CRON_SECRET`-authenticated calls to the cron routes (`/api/cron/racecards`,
+`/api/cron/odds`, `/api/cron/model`, `/api/cron/results`,
+`/api/cron/tipster-discovery`) and `POST /api/run-model` — including the
+vercel.json platform crons if a Vercel deployment is live — plus
+`npm run run:model` / `model:day`, and `results:auto`. Those are
+operationally restricted until a future route-level enforcement phase.
+By policy: `lock:t-minus` stays OUTSIDE this claim (no provider calls;
+insert-only; `unique(race_id, minutes_before)`; commit-windowed — a
+duplicate run is harmless, while a claim-induced miss of an official lock
+would be worse); `results:auto` stays unwired until the nationwide
+settlement phase; read-only audits/reports/timing commands are exempt
+unconditionally (no provider calls, no lease held).
 
-**NOT YET WIRED into any producer script** (`pipeline:day` /
-`pipeline:watch` / `lock:t-minus` / `results:auto` are all unmodified and
-unaware of this table) — that integration, plus the remaining Phase 7A steps
-(gated national supervisor bat) and all of Phase 7B, are pending. Hardened per
+**Phase 7A.2b Step 2 (IMPLEMENTED — selected-course producer ownership
+integration; src/lib/producerOwnership.ts):** `pipeline:day` and
+`pipeline:watch` now ACQUIRE the day-level claim in commit mode BEFORE any
+provider/model work — one claim + one generated `newOwnerId()` per process
+(watch holds it for the whole process, renewed by a 60s non-overlapping
+heartbeat through every cycle AND the inter-cycle waits; day releases in a
+`finally`). Commit mode now REQUIRES `--course` (the claim scope is always
+`course:<normalizeCourse output>` via `buildCourseScope`; the nationwide
+scope is never used by the production pipeline — dry runs are unchanged and
+claim-free). Stage gating rides the existing dependency-injection seam:
+`guardPipelineDeps` wraps `callCron` (checked before EVERY racecards/odds
+HTTP call) and `runOneRace` (checked before EVERY per-race score+persist
+unit) — `runPipelineCommitCycle`, `modelDayRun`, and `runModelForRace` are
+untouched. Every heartbeat verifies owner AND generation; `renewed:false` or
+a generation mismatch is CONFIRMED loss → stop the process (exit non-zero),
+never reclaim mid-run; transient errors retry exactly once then stop
+fail-closed; a missing/denied mechanism stops fail-closed. Structured
+secret-free events (`PRODUCER_CLAIM_ACQUIRED/REFUSED/STOLEN`,
+`PRODUCER_HEARTBEAT_RENEWED`, `PRODUCER_OWNERSHIP_UNCERTAIN/LOST`,
+`PRODUCER_CLAIM_UNAVAILABLE`, `PRODUCER_CLAIM_RELEASED/RELEASE_FAILED`) carry
+only date/scope/8-char-owner-prefix/generation/classification/expiry/mode/
+stage. This TRANSITIVELY gates `race-day:refresh-today`, the documented
+Railway `pipeline-refresh` job, and both local-supervisor pipeline paths
+(none of those files changed). Known remaining bypasses (route-level
+enforcement is a future hardening phase, operationally restricted until
+then): direct `CRON_SECRET` calls to `/api/cron/racecards|odds|model|results`
+and `/api/run-model`, vercel.json platform crons if a Vercel deployment is
+live, and `run:model`/`model:day`. `lock:t-minus` and `results:auto` remain
+deliberately OUTSIDE the claim (test-enforced). Nationwide execution remains
+disabled.
+
+**Still pending:** the remaining Phase 7A steps (gated national supervisor
+bat, route-level claim enforcement) and all of Phase 7B. Hardened per
 an independent Producer Ownership Safety Review; the migration remains
 UNAPPLIED to any database.
 

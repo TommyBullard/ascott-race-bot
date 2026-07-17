@@ -971,14 +971,17 @@ test('the migration rollback drops exactly the objects the forward migration cre
   assert.match(src, /enable row level security/);
 });
 
-test('the migration is NOT wired into any producer script yet (schema-only this phase)', () => {
-  for (const file of [
-    'scripts/runRaceDayPipeline.ts',
-    'scripts/runRaceDayPipelineWatch.ts',
-    'scripts/lockTMinus.ts',
-    'scripts/autoResults.ts',
-  ]) {
+test('claim-domain boundary: lock:t-minus and results:auto remain OUTSIDE the producer claim (Step 2 policy)', () => {
+  // Step 2 wired the claim into pipeline:day / pipeline:watch (see
+  // producerOwnership.test.ts for those assertions). lock:t-minus (no provider
+  // calls; insert-only; commit-windowed) and results:auto (unwired until the
+  // nationwide settlement phase) must stay claim-free.
+  for (const file of ['scripts/lockTMinus.ts', 'scripts/autoResults.ts']) {
     const src = readFileSync(file, 'utf8');
-    assert.equal(/producer_run_claims|producerClaim/i.test(src), false, `${file} should not reference the new claim yet`);
+    assert.equal(
+      /producer_run_claims|producerClaim|producerOwnership/i.test(src),
+      false,
+      `${file} must not reference the producer claim (exempt by policy)`,
+    );
   }
 });
