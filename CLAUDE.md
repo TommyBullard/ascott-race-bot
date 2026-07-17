@@ -473,8 +473,40 @@ attestation only, never "automatically verified". READY prints the exact next
 `pipeline:day --commit` command as TEXT and never executes it; the preflight
 itself rejects `--commit`. Exit codes: 0 READY, 3 REVIEW, 2 BLOCKED, 1 usage.
 
-**Still pending:** the remaining Phase 7A steps (gated national supervisor
-bat, route-level claim enforcement) and all of Phase 7B. Hardened per
+**Phase 7A.2b Step 4 (IMPLEMENTED — ownership-aware configurable local
+supervisor; race-day-local/start-race-day.bat, src/lib/raceDayLauncher.ts,
+`npm run race-day:launch-check`):** the local launcher now REQUIRES an
+explicit date and selected course (no hardcoded defaults), validates them via
+the pure, read-only `race-day:launch-check` helper (strict date; Windows-safe
+course charset — letters/digits/spaces/hyphen/apostrophe/parentheses/period,
+every cmd metacharacter rejected by name, nothing silently rewritten; every
+reserved nationwide spelling rejected), then acquires an ATOMIC local
+launcher lock (a `supervisor.lock` DIRECTORY via bare `mkdir`, created BEFORE
+preflight/pipeline/watchers; an existing lock refuses with recovery guidance
+and is NEVER deleted automatically; metadata is date/course/slug/created_at
+only; the DATABASE producer claim remains the authoritative cross-machine
+guard). Launch is gated by `producer:preflight --require-server`: BLOCKED/
+usage → nothing starts, the no-children lock is cleaned, non-zero exit;
+REVIEW → the operator must type CONTINUE exactly (logged as an operator
+attestation — never automatic verification) before a rerun WITH
+`--confirm-external`, and only READY continues; `--preflight-only` mode
+prints the launch plan + scoped URLs, cleans its own lock, and starts
+nothing (Gate C mode). A failed initial `pipeline:day` launches zero watcher
+windows. The rewritten watch-pipeline.bat preserves npm's exit code through
+PowerShell Tee-Object (`exit $LASTEXITCODE`) and applies Step 2's contract:
+0 graceful / 2 mechanism / 3 ownership-refused-or-lost are TERMINAL (never
+restarted); anything else retries at most 5 times at 60s, then stays visibly
+degraded. watch-locks.bat and watch-results.bat are byte-identical
+(claim-exempt, independent, dry-run-first results preserved). Dashboard
+links: local always; production ONLY from the distinct, explicit
+`PUBLIC_DASHBOARD_URL` config (never guessed from PIPELINE_BASE_URL, no
+hardcoded Railway host — absent → "not configured"). Lock cleanup only via
+the exact STOPPED acknowledgement after all watcher windows are closed; the
+launcher never releases the database claim. Nationwide execution remains
+disabled.
+
+**Still pending:** the remaining Phase 7A steps (route-level claim
+enforcement) and all of Phase 7B. Hardened per
 an independent Producer Ownership Safety Review; the migration remains
 UNAPPLIED to any database.
 

@@ -61,6 +61,7 @@
     "timing:nationwide": "tsx scripts/nationwideTiming.ts",
     "producer:claim-check": "tsx scripts/producerClaimCheck.ts",
     "producer:preflight": "tsx scripts/producerPreflight.ts",
+    "race-day:launch-check": "tsx scripts/raceDayLaunchCheck.ts",
     "results:auto": "tsx scripts/autoResults.ts",
     "extract:notes": "tsx scripts/extractNotes.ts",
     "intelligence:prepare": "tsx scripts/prepareRaceIntelligence.ts",
