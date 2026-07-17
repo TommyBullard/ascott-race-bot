@@ -649,15 +649,19 @@ test('boundary: the shared cycle, model-day loop, and model runner remain untouc
   }
 });
 
-test('boundary: the local supervisor .bat files are unchanged by Step 2 (no claim vocabulary)', () => {
-  for (const file of [
-    'race-day-local/start-race-day.bat',
-    'race-day-local/watch-pipeline.bat',
-    'race-day-local/watch-locks.bat',
-    'race-day-local/watch-results.bat',
-  ]) {
+test('boundary: the claim-EXEMPT watchers (locks/results) contain no claim vocabulary', () => {
+  // Since Step 4 the launcher legitimately runs producer:preflight and the
+  // pipeline wrapper prints producer:claim-check STATUS guidance — but the
+  // lock and results watchers must stay entirely claim-free (exempt by policy).
+  for (const file of ['race-day-local/watch-locks.bat', 'race-day-local/watch-results.bat']) {
     const src = readFileSync(file, 'utf8');
     assert.equal(/producer|claim-check|owner-id/i.test(src), false, `${file} must not reference the claim`);
+  }
+  // The launcher and pipeline wrapper may MENTION the diagnostics, but must
+  // never invoke a mutating claim operation.
+  for (const file of ['race-day-local/start-race-day.bat', 'race-day-local/watch-pipeline.bat']) {
+    const src = readFileSync(file, 'utf8');
+    assert.equal(/--op (claim|heartbeat|release)/.test(src), false, `${file} must never invoke a mutating claim op`);
   }
 });
 
