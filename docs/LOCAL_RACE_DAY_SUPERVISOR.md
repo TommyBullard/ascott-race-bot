@@ -116,7 +116,14 @@ The pipeline window is exit-code aware and **never loops blindly**:
 | `stopped GRACEFULLY (exit 0)` | Deliberate stop (until/max-cycles/Ctrl+C) | Nothing — not restarted |
 | `TERMINAL: producer OWNERSHIP refused or lost (exit 3)` | Another producer holds/took the date's claim | `npm run producer:claim-check -- --date <date>`; stop the other producer or wait for its TTL, then re-run the launcher |
 | `TERMINAL: claim mechanism unavailable/uncertain (exit 2)` | Fail-closed — Supabase/RPC problem | Investigate connectivity; nothing ran after the failure |
+| `TERMINAL: npm.cmd could not be executed (wrapper code 86)` | Configuration failure — npm.cmd not found / never started, so no pipeline work ran at all | Check the Node.js/npm installation and PATH; never reported as graceful |
 | `bounded retry n/5 in 60 seconds` | Generic failure/crash | It retries at most 5 times, then stays visibly DEGRADED |
+
+The wrapper invokes `npm.cmd` explicitly inside PowerShell (bare `npm` would
+resolve to `npm.ps1`, which restrictive execution policies block — no
+`Set-ExecutionPolicy` change is needed or used), and both the launcher and the
+pipeline wrapper switch the console to UTF-8 (`chcp 65001`) before printing,
+so preflight output renders correctly.
 
 Other cases:
 

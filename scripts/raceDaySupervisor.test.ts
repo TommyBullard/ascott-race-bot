@@ -216,10 +216,52 @@ test('launcher: never releases the database claim; logs the lifecycle to supervi
 
 /* --------------------------- pipeline watcher wrapper ------------------------ */
 
-test('pipeline wrapper: npm exit code survives Tee-Object via PowerShell exit $LASTEXITCODE (no plain cmd pipe)', () => {
-  assert.match(PIPELINE, /powershell -NoProfile -Command "npm run pipeline:watch -- --date %RACE_DATE% --course \\"%COURSE%\\" --interval-minutes 5 --commit 2>&1 \| Tee-Object -FilePath '%LOG%' -Append; exit \$LASTEXITCODE"/);
+test('pipeline wrapper: invokes npm.cmd EXPLICITLY inside PowerShell — never bare npm, never npm.ps1, no execution-policy workarounds', () => {
+  const psLine = PIPELINE.split(/\r?\n/).find((l) => l.includes('powershell -NoProfile'));
+  assert.ok(psLine, 'PowerShell wrapper line present');
+  assert.match(psLine!, /npm\.cmd run pipeline:watch -- --date %RACE_DATE% --course \\"%COURSE%\\" --interval-minutes 5 --commit/);
+  // Inside the PowerShell command, npm appears ONLY as npm.cmd (bare `npm`
+  // would resolve to npm.ps1, which a restrictive execution policy blocks).
+  assert.equal(/(?<!\.cmd)(?<!npm)\bnpm run /.test(psLine!), false, 'no bare npm inside PowerShell');
+  for (const src of ALL_BATS) {
+    assert.equal(/npm\.ps1/i.test(src), false, 'npm.ps1 must never be referenced');
+    assert.equal(/Set-ExecutionPolicy/i.test(src), false, 'no execution-policy change');
+    assert.equal(/ExecutionPolicy\s+Bypass/i.test(src), false, 'no execution-policy bypass');
+  }
+});
+
+test('pipeline wrapper: captures the native exit code IMMEDIATELY and can never report a phantom graceful 0', () => {
+  const psLine = PIPELINE.split(/\r?\n/).find((l) => l.includes('powershell -NoProfile'))!;
+  // Immediately after the Tee pipeline (Tee-Object is a cmdlet and does not
+  // touch $LASTEXITCODE), the code is captured into a local, null-checked —
+  // a wrapper that never started npm.cmd exits with the 86 sentinel, NOT 0.
+  assert.match(psLine, /\$code = \$LASTEXITCODE; if \(\$null -eq \$code\) \{ [^}]*exit 86 \}; exit \$code/);
+  assert.match(psLine, /try \{ npm\.cmd run/);
+  assert.match(psLine, /Tee-Object -FilePath '%LOG%' -Append/);
   assert.match(PIPELINE, /set "CODE=%ERRORLEVEL%"/);
   assert.equal(/call npm run pipeline:watch[^\r\n]*\|/.test(PIPELINE), false, 'no cmd-level pipe that overwrites ERRORLEVEL');
+});
+
+test('pipeline wrapper: the 86 npm-not-executed sentinel is a TERMINAL configuration failure, never graceful, never retried', () => {
+  const start = PIPELINE.indexOf('if "%CODE%"=="86" (');
+  assert.ok(start > 0, '86 branch present');
+  const terminalIdx = PIPELINE.indexOf('goto terminal', start);
+  const loopIdx = PIPELINE.indexOf('goto loop', start);
+  assert.ok(terminalIdx > start && (loopIdx === -1 || terminalIdx < loopIdx), '86 must be terminal');
+  assert.match(PIPELINE, /npm\.cmd could not be executed/);
+  assert.match(PIPELINE, /Configuration failure/);
+});
+
+test('launcher + pipeline wrapper establish UTF-8 (chcp 65001) before any output; locks/results untouched', () => {
+  for (const [name, src] of [['launcher', LAUNCHER], ['pipeline wrapper', PIPELINE]] as const) {
+    const chcpIdx = src.indexOf('chcp 65001 >nul');
+    assert.ok(chcpIdx > 0, `${name}: chcp 65001 present`);
+    const firstOutputIdx = src.search(/\r?\n\s*(echo[. ]|type )/);
+    assert.ok(firstOutputIdx > 0 && chcpIdx < firstOutputIdx, `${name}: chcp precedes the first output`);
+  }
+  for (const src of [LOCKS, RESULTS]) {
+    assert.equal(/chcp/.test(src), false, 'claim-exempt watchers stay byte-identical (no chcp)');
+  }
 });
 
 test('pipeline wrapper: exits 0, 2 and 3 are TERMINAL (no restart); each states its meaning', () => {

@@ -40,6 +40,7 @@ rem the local lock only prevents duplicate three-window launchers on this
 rem machine. Runbook: docs\LOCAL_RACE_DAY_SUPERVISOR.md
 rem ============================================================================
 setlocal EnableExtensions EnableDelayedExpansion
+chcp 65001 >nul
 
 set "RACE_DATE=%~1"
 set "COURSE=%~2"

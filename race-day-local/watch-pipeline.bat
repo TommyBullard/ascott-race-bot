@@ -16,6 +16,9 @@ rem        investigate before any restart.
 rem   3 -> ownership REFUSED or LOST. TERMINAL - another producer owns the
 rem        date (or took it over); restarting cannot help until the operator
 rem        intervenes. Check: npm run producer:claim-check -- --date <date>
+rem   86 -> wrapper sentinel: npm.cmd was not found or never started ^(no
+rem        native exit code was produced^). TERMINAL configuration failure -
+rem        NEVER reported as graceful.
 rem   1/other -> generic failure/crash. Bounded retry: at most 5 restarts,
 rem        60 seconds apart, then a visible degraded terminal state.
 rem
@@ -25,6 +28,7 @@ rem Args: %1 = date  %2 = course  %3 = log dir
 rem Launched by start-race-day.bat - not usually run by hand.
 rem ============================================================================
 setlocal EnableExtensions
+chcp 65001 >nul
 set "RACE_DATE=%~1"
 set "COURSE=%~2"
 set "LOGDIR=%~3"
@@ -35,7 +39,7 @@ set /a RETRIES=0
 echo.
 echo [%DATE% %TIME%] pipeline:watch starting (interval 5 min, --commit)...
 echo [%DATE% %TIME%] pipeline:watch starting>>"%LOG%"
-powershell -NoProfile -Command "npm run pipeline:watch -- --date %RACE_DATE% --course \"%COURSE%\" --interval-minutes 5 --commit 2>&1 | Tee-Object -FilePath '%LOG%' -Append; exit $LASTEXITCODE"
+powershell -NoProfile -Command "try { npm.cmd run pipeline:watch -- --date %RACE_DATE% --course \"%COURSE%\" --interval-minutes 5 --commit 2>&1 | Tee-Object -FilePath '%LOG%' -Append } catch { Write-Host ('wrapper: npm.cmd invocation failed - ' + $_.Exception.Message) }; $code = $LASTEXITCODE; if ($null -eq $code) { Write-Host 'wrapper: npm.cmd did not run (no native exit code) - reporting wrapper failure 86'; exit 86 }; exit $code"
 set "CODE=%ERRORLEVEL%"
 >>"%LOG%" echo [%DATE% %TIME%] pipeline:watch exited with code %CODE%
 
@@ -58,6 +62,15 @@ if "%CODE%"=="2" (
   echo [%DATE% %TIME%] TERMINAL: claim mechanism unavailable/uncertain ^(exit 2^).
   echo   Fail-closed: no provider/model work ran after the failure. Investigate
   echo   Supabase reachability before any restart. NOT restarting automatically.
+  goto terminal
+)
+
+if "%CODE%"=="86" (
+  echo.
+  echo [%DATE% %TIME%] TERMINAL: npm.cmd could not be executed ^(wrapper code 86^).
+  echo   Configuration failure - npm.cmd was not found or never started, so NO
+  echo   pipeline work ran. Check the Node.js/npm installation and PATH, then
+  echo   re-run the launcher. NOT retrying automatically.
   goto terminal
 )
 

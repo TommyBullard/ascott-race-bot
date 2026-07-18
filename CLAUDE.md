@@ -503,7 +503,18 @@ links: local always; production ONLY from the distinct, explicit
 hardcoded Railway host — absent → "not configured"). Lock cleanup only via
 the exact STOPPED acknowledgement after all watcher windows are closed; the
 launcher never releases the database claim. Nationwide execution remains
-disabled.
+disabled. **Windows-compat correction (live-tested):** the wrapper invokes
+`npm.cmd` EXPLICITLY inside PowerShell — bare `npm` resolves to `npm.ps1`,
+which restrictive execution policies block, and the failed invocation then
+produced a phantom "graceful exit 0" (no native exit code was ever set). The
+wrapper now captures `$LASTEXITCODE` into a local immediately after the Tee
+pipeline, maps a null (npm.cmd never ran) to the TERMINAL wrapper sentinel
+86 ("npm.cmd could not be executed" — configuration failure, never graceful,
+never retried), and only then exits with the real code; no
+`Set-ExecutionPolicy` change or bypass is used anywhere. Both the launcher
+and the pipeline wrapper set `chcp 65001` before any output so UTF-8
+preflight/pipeline text renders without mojibake (locks/results watchers
+remain byte-identical).
 
 **Still pending:** the remaining Phase 7A steps (route-level claim
 enforcement) and all of Phase 7B. Hardened per
