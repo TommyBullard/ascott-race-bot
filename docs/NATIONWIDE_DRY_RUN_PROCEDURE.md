@@ -1,7 +1,21 @@
-# Nationwide dry-run timing procedure (Phase 7A.2a)
+# Nationwide dry-run procedures (Phase 7A.2a timing + Phase 7A.2b Step 5)
 
-> **Decision-support only — not betting advice.** This procedure never places a bet, never
-> enables auto-betting, and never writes to the database beyond a local Markdown report file.
+> **Decision-support only — not betting advice.** These procedures never place a bet, never
+> enable auto-betting, and — except where explicitly noted (live-provider mode's provider
+> ingestion writes) — never write to the database beyond a local Markdown report file.
+
+This document covers TWO related but distinct commands:
+
+- **Part 1 — `npm run timing:nationwide`** (Phase 7A.2a): a pure SELECT-only timing
+  measurement, no ownership claim, no provider calls. Unchanged by Step 5.
+- **Part 2 — `npm run nationwide:preflight` / `npm run nationwide:dry-run`**
+  (Phase 7A.2b Step 5): the first commands that hold a real nationwide
+  (`all-uk-ire`) producer ownership claim, with an optional live provider
+  refresh. See "Part 2" below.
+
+---
+
+## Part 1: Nationwide dry-run timing procedure (Phase 7A.2a)
 
 ## What this measures
 
@@ -102,3 +116,116 @@ single-course-gated architecture *could* handle nationwide scoring inside the wa
 it is not, by itself, authorization to enable nationwide `--commit` writes, nationwide locking,
 or a national supervisor. Those remain separate, explicitly gated future phases (Phase 7A
 "gated national supervisor bat" and Phase 7B) with their own review and rollout steps.
+
+---
+
+## Part 2: Ownership-aware nationwide preflight + dry-run (Phase 7A.2b Step 5)
+
+### 1. What these commands are (and are not)
+
+| Command | Purpose | Writes? |
+| --- | --- | --- |
+| `npm run nationwide:preflight -- --date YYYY-MM-DD` | READ-ONLY readiness check: ownership status, stored workload reconciliation, server health, external attestation. Returns READY / REVIEW / BLOCKED. | Never — except one optional local Markdown report with `--report`. |
+| `npm run nationwide:dry-run -- --date YYYY-MM-DD --mode stored-only` | Acquires the nationwide claim, scores every already-stored race IN MEMORY. No provider calls. | Only the claim lifecycle (acquire/heartbeat/release) — no model/recommendation/lock/result writes. |
+| `npm run nationwide:dry-run -- --date YYYY-MM-DD --mode live-provider` | Acquires the nationwide claim, refreshes racecards + odds (this **does** write races/runners/market_snapshots/runner_quotes), then scores every eligible race IN MEMORY. | Provider ingestion data + the claim lifecycle. **Never** model/recommendation/lock/result data. |
+
+Unlike Part 1's `timing:nationwide` (SELECT-only, no ownership claim at all),
+these two commands acquire a real, fail-closed `producer_run_claims` claim
+with scope `all-uk-ire` before doing anything else.
+
+`--mode` has **no default** — you must type `stored-only` or `live-provider`
+exactly. There is no `--commit` flag in either command (nothing here ever
+persists a betting-relevant decision), and no `--allow-stale` flag — a
+provider failure always stops the run rather than falling back to stale
+stored data.
+
+### 2. Required order of operations
+
+**Always run `nationwide:preflight` first and obtain a genuine READY before
+`nationwide:dry-run --mode live-provider`.** This is a documented operator
+discipline, not a code-enforced gate: `nationwide:dry-run` does not check,
+call, or require the preflight's result, and it never accepts a
+`--confirm-external` flag itself — that concept belongs to the preflight
+only, and the dry-run command never manufactures it on your behalf.
+
+```bat
+npm run nationwide:preflight -- --date 2026-07-20 --require-server
+```
+
+- **BLOCKED** → do not run the dry-run. Fix the reported reason first.
+- **REVIEW** → the checks listed as REVIEW are genuinely manual (Railway job
+  state, Vercel cron/deployment state, other-machine producers, a locally
+  detected selected-course supervisor lock). Confirm them yourself, then
+  re-run with `--confirm-external`:
+  ```bat
+  npm run nationwide:preflight -- --date 2026-07-20 --require-server --confirm-external
+  ```
+  Only a second **READY** means proceed. `--confirm-external` is recorded as
+  `external_checks_source: operator_attestation` — your attestation, never a
+  claim that this command verified those systems itself.
+- **READY** → `nationwide:dry-run --mode live-provider` is safe to run.
+
+`stored-only` mode carries lower risk (no provider calls at all) and does not
+require a READY first, though running the preflight is still good practice.
+
+### 3. Ownership behaviour
+
+Both commands acquire the SAME `producer_run_claims` date-level claim used by
+the selected-course pipeline, with scope fixed to `all-uk-ire`. Because the
+claim's primary key is the race date alone, a nationwide claim **conflicts
+with every selected-course claim for that date, and vice versa** — you cannot
+run a nationwide dry-run and a selected-course `pipeline:watch` for the same
+date at the same time. One claim, one generation, one owner id for the whole
+command; released in a `finally` block; a crashed process's claim recovers by
+TTL expiry (240s) exactly like the selected-course pipeline.
+
+Ownership is verified (heartbeat, generation-checked) before racecards,
+after racecards, before odds, after odds, before scoring, and between each
+course's races during scoring. Any refusal, confirmed loss, or mechanism
+failure stops the run immediately — there is no mid-run reclaim.
+
+### 4. live-provider mode: no stale fallback
+
+If the racecard stage fails, the run stops. If the odds stage fails, the run
+stops. If either response is malformed, the run stops before scoring. If the
+post-ingestion reconciliation finds zero races, zero courses, or an
+impossible value (e.g. more priced runners than stored runners for a race),
+the run stops before scoring. None of these have a bypass — there is no
+`--allow-stale` flag.
+
+### 5. Reconciliation
+
+Before scoring, both commands reconcile the stored nationwide workload using
+the exact same rule the nationwide audit (`audit:nationwide`) uses:
+`normalizeCourse` for grouping, and `checkRollupInvariants` for the hard
+bounds (races-with-odds ≤ races, priced-runners ≤ runners). Per-course totals
+are also cross-checked against the nationwide total as a second, independent
+computation of the same numbers. Course-label merges and unexpected/GB-
+fallback country values are reported as warnings, never as proven labels.
+
+### 6. Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Completed (dry-run) / READY (preflight) |
+| 1 | Usage error, invalid `--mode`, or a non-ownership stoppage (provider/reconciliation failure) |
+| 2 | Ownership mechanism unavailable or uncertain / BLOCKED (preflight) |
+| 3 | Ownership refused or lost / REVIEW (preflight) |
+
+### 7. Reports
+
+Neither command writes a report unless `--report` is passed. When passed:
+
+- `reports/nationwide-preflight-<date>.md`
+- `reports/nationwide-dry-run-<date>-<mode>.md`
+
+Both are deterministic Markdown, secret-free, and explicitly state that no
+model run, recommendation, lock, or result was persisted, and that no bet was
+placed.
+
+### 8. What remains disabled
+
+Nationwide production writes, a nationwide supervisor, nationwide scheduling
+or cron, and any commit-style flag for nationwide operation. `all-uk-ire` is
+never reachable from the selected-course pipeline, launcher, or preflight —
+those remain exactly as hardened in Phases 7A.2b Steps 1–4.

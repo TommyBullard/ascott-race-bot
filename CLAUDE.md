@@ -516,6 +516,47 @@ and the pipeline wrapper set `chcp 65001` before any output so UTF-8
 preflight/pipeline text renders without mojibake (locks/results watchers
 remain byte-identical).
 
+**Phase 7A.2b Step 5 (IMPLEMENTED — nationwide preflight + ownership-aware
+dry-run; src/lib/nationwideOwnership.ts, src/lib/nationwideDryRun.ts,
+src/lib/nationwidePreflight.ts, `npm run nationwide:preflight -- --date
+YYYY-MM-DD`, `npm run nationwide:dry-run -- --date YYYY-MM-DD --mode
+stored-only|live-provider`):** the first commands that hold a REAL nationwide
+(`all-uk-ire`) producer ownership claim. `--mode` has NO default — missing or
+invalid input performs zero claim/provider/scoring/write work and exits 1.
+`nationwideOwnership.ts` is a SEPARATE adapter (never widens
+`producerOwnership.ts`'s `PipelineMode`/`OwnershipState`) that claims EXACTLY
+`all-uk-ire`, reusing every generic piece of the selected-course module
+(deps, events, `describeAcquireFailure`/`describeStopReason`, the
+heartbeat/generation-verification contract) and reimplementing only the
+narrowly-typed state/controller. `stored-only` mode makes zero provider
+calls and writes nothing beyond the claim lifecycle; `live-provider` mode
+calls the SAME authenticated racecard/odds routes the selected-course
+pipeline uses (course-blind, so this genuinely writes nationwide races/
+runners/market_snapshots/runner_quotes) and STOPS on any racecard/odds
+failure or malformed response — no `--allow-stale`, no stale-data fallback,
+no mid-run reclaim. Before scoring, both modes reconcile the stored
+nationwide workload via `reconcileNationwideWorkload`, reusing
+`checkRollupInvariants`/`normalizeCourse`/`EXPECTED_COUNTRIES`/
+`FALLBACK_COUNTRY_VALUE` from `nationwideAudit.ts` verbatim (no second
+rollup or course rule); zero races/courses or an impossible value (e.g.
+priced runners exceeding stored runners) blocks scoring. Scoring reuses
+`fetchRaceModelInputs`/`scoreRaceRunners`/`tipsterStatsFromPriors` (the exact
+`nationwideTiming.ts` read+score pattern) and the SAME `buildNationwideTimingReport`
+duration/percentile aggregator — it NEVER calls `runModelForRace` and creates
+NO `model_runs`/`model_runner_scores`/`recommendations`/
+`locked_race_decisions`/result rows. `nationwide:preflight` is a SEPARATE
+command from `producer:preflight` (which is untouched and still rejects
+`all-uk-ire`); it reuses `producer:preflight`'s generic health-probe/base-URL/
+claim-status helpers, blocks on ANY live claim of any scope (date-level PK),
+and — like `producer:preflight` — labels Railway/Vercel/other-machine-producer
+checks `operator_attestation` only when `--confirm-external` is passed, never
+"automatically verified"; a detected local `supervisor.lock` for the date is
+a genuine automated signal (REVIEW) distinct from the attested-or-unknown
+external checks. Neither command supports `--commit`; reports are optional
+(`--report`) and deterministic. Nationwide execution remains otherwise
+disabled: no supervisor, no cron/scheduling, no Railway/Vercel change, no
+migration change.
+
 **Still pending:** the remaining Phase 7A steps (route-level claim
 enforcement) and all of Phase 7B. Hardened per
 an independent Producer Ownership Safety Review; the migration remains

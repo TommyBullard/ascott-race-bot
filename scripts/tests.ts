@@ -101,6 +101,8 @@ import './producerClaim.test';
 import './producerOwnership.test';
 import './producerPreflight.test';
 import './raceDayLauncher.test';
+import './nationwideDryRun.test';
+import './nationwidePreflight.test';
 import './autoResults.test';
 import './freeResultsMatch.test';
 import './todayResultsSettlement.test';

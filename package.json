@@ -62,6 +62,8 @@
     "producer:claim-check": "tsx scripts/producerClaimCheck.ts",
     "producer:preflight": "tsx scripts/producerPreflight.ts",
     "race-day:launch-check": "tsx scripts/raceDayLaunchCheck.ts",
+    "nationwide:dry-run": "tsx scripts/nationwideDryRun.ts",
+    "nationwide:preflight": "tsx scripts/nationwidePreflight.ts",
     "results:auto": "tsx scripts/autoResults.ts",
     "extract:notes": "tsx scripts/extractNotes.ts",
     "intelligence:prepare": "tsx scripts/prepareRaceIntelligence.ts",
