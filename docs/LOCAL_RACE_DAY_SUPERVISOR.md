@@ -109,21 +109,36 @@ Never assume the watchers stopped just because the launcher window closed.
 
 ## 4. What bad output looks like (and what to do)
 
-The pipeline window is exit-code aware and **never loops blindly**:
+The pipeline window is exit-code aware and **never loops blindly**. All of the
+messages below come from the Node helper `run-pipeline-watch.js` (see below):
 
-| Pipeline window says | Meaning | What to do |
+| Helper says | Meaning | What to do |
 | --- | --- | --- |
-| `stopped GRACEFULLY (exit 0)` | Deliberate stop (until/max-cycles/Ctrl+C) | Nothing — not restarted |
+| `stopped GRACEFULLY (exit 0)` | Deliberate stop (Ctrl+C / until / max-cycles) — the watcher released its claim in its `finally` first | Nothing — not restarted |
 | `TERMINAL: producer OWNERSHIP refused or lost (exit 3)` | Another producer holds/took the date's claim | `npm run producer:claim-check -- --date <date>`; stop the other producer or wait for its TTL, then re-run the launcher |
 | `TERMINAL: claim mechanism unavailable/uncertain (exit 2)` | Fail-closed — Supabase/RPC problem | Investigate connectivity; nothing ran after the failure |
-| `TERMINAL: npm.cmd could not be executed (wrapper code 86)` | Configuration failure — npm.cmd not found / never started, so no pipeline work ran at all | Check the Node.js/npm installation and PATH; never reported as graceful |
-| `bounded retry n/5 in 60 seconds` | Generic failure/crash | It retries at most 5 times, then stays visibly DEGRADED |
+| `TERMINAL: npm.cmd could not be executed (config failure, exit 86)` | Configuration failure — npm.cmd/log dir/args, so no pipeline work ran at all | Check the Node.js/npm installation and PATH; never reported as graceful |
+| `bounded retry n/5 in 60s` | Generic crash (no Ctrl+C) | It retries at most 5 times, then stays visibly DEGRADED; a Ctrl+C is never retried |
 
-The wrapper invokes `npm.cmd` explicitly inside PowerShell (bare `npm` would
-resolve to `npm.ps1`, which restrictive execution policies block — no
-`Set-ExecutionPolicy` change is needed or used), and both the launcher and the
-pipeline wrapper switch the console to UTF-8 (`chcp 65001`) before printing,
-so preflight output renders correctly.
+### Graceful Ctrl+C — how the wrapper works
+
+`watch-pipeline.bat` is now a **thin launcher**: it runs the Node helper
+`race-day-local/run-pipeline-watch.js`, which owns the whole watcher lifecycle
+as one long-lived process. The helper spawns `npm.cmd run pipeline:watch`
+(explicit `npm.cmd`, never `npm.ps1`; `shell:false`; **non-detached**, so the
+watcher shares this console) and tees its output to the console and an
+append-only, UTF-8 `pipeline-watch.log`. On **Ctrl+C**, Windows delivers the
+event to the whole console group: the watcher receives it directly and runs its
+own `finally` release (emitting `PRODUCER_CLAIM_RELEASED`) before exiting 0; the
+helper **does not exit on the first Ctrl+C** — it waits for that graceful exit,
+then prints `stopped GRACEFULLY` and propagates exit 0. A **second Ctrl+C** is
+an explicit force-stop (any un-released claim then TTL-expires). This replaced
+the earlier cmd + PowerShell `Tee-Object` chain, which was hard-killed on Ctrl+C
+before the watcher's async release could complete. No `Set-ExecutionPolicy`
+change or bypass is used anywhere; `chcp 65001` keeps the launcher/wrapper
+console UTF-8. If cmd shows "Terminate batch job (Y/N)?" after the helper has
+already printed GRACEFUL, it is harmless — the release and exit code are already
+done.
 
 Other cases:
 

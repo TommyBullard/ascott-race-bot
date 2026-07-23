@@ -12,12 +12,14 @@
  * producer:preflight gates every launch (first WITHOUT --confirm-external;
  * --confirm-external appears only after the exact CONTINUE attestation
  * prompt); --preflight-only starts nothing and cleans its own lock; a failed
- * initial pipeline:day launches zero watcher windows; the pipeline watcher
- * wrapper preserves npm's exit code through PowerShell Tee-Object and treats
- * 0/2/3 as terminal with a bounded 5-retry policy for everything else; the
- * lock and results watchers keep their existing business rules byte-for-byte;
- * and nothing in any batch file touches the database, providers, betting, or
- * the nationwide scope. Run with:  npm test
+ * initial pipeline:day launches zero watcher windows; the pipeline watcher is
+ * a THIN launcher that delegates to the Node helper run-pipeline-watch.js
+ * (which spawns npm.cmd — never npm.ps1 — non-detached so Ctrl+C reaches the
+ * watcher directly, tees to an append-only UTF-8 log, waits for the watcher's
+ * own graceful SIGINT release, and applies the 0/2/3/86-terminal + bounded-
+ * 5-retry policy); the lock and results watchers keep their existing business
+ * rules byte-for-byte; and nothing in any batch/helper file touches the
+ * database, providers, betting, or the nationwide scope. Run with:  npm test
  */
 
 import { test } from 'node:test';
@@ -28,6 +30,7 @@ const LAUNCHER = readFileSync('race-day-local/start-race-day.bat', 'utf8');
 const PIPELINE = readFileSync('race-day-local/watch-pipeline.bat', 'utf8');
 const LOCKS = readFileSync('race-day-local/watch-locks.bat', 'utf8');
 const RESULTS = readFileSync('race-day-local/watch-results.bat', 'utf8');
+const HELPER = readFileSync('race-day-local/run-pipeline-watch.js', 'utf8');
 const RUNBOOK = readFileSync('docs/LOCAL_RACE_DAY_SUPERVISOR.md', 'utf8');
 const ALL_BATS = [LAUNCHER, PIPELINE, LOCKS, RESULTS];
 
@@ -216,82 +219,93 @@ test('launcher: never releases the database claim; logs the lifecycle to supervi
 
 /* --------------------------- pipeline watcher wrapper ------------------------ */
 
-test('pipeline wrapper: invokes npm.cmd EXPLICITLY inside PowerShell — never bare npm, never npm.ps1, no execution-policy workarounds', () => {
-  const psLine = PIPELINE.split(/\r?\n/).find((l) => l.includes('powershell -NoProfile'));
-  assert.ok(psLine, 'PowerShell wrapper line present');
-  assert.match(psLine!, /npm\.cmd run pipeline:watch -- --date %RACE_DATE% --course \\"%COURSE%\\" --interval-minutes 5 --commit/);
-  // Inside the PowerShell command, npm appears ONLY as npm.cmd (bare `npm`
-  // would resolve to npm.ps1, which a restrictive execution policy blocks).
-  assert.equal(/(?<!\.cmd)(?<!npm)\bnpm run /.test(psLine!), false, 'no bare npm inside PowerShell');
-  for (const src of ALL_BATS) {
-    assert.equal(/npm\.ps1/i.test(src), false, 'npm.ps1 must never be referenced');
+test('pipeline wrapper: is a THIN launcher — runs the Node helper synchronously via plain `node`, NO PowerShell / Tee-Object INVOCATION / cmd retry loop', () => {
+  assert.match(PIPELINE, /node "%~dp0run-pipeline-watch\.js" "%RACE_DATE%" "%COURSE%" "%LOGDIR%"/);
+  assert.match(PIPELINE, /set "CODE=%ERRORLEVEL%"/);
+  assert.match(PIPELINE, /exit \/b %CODE%/);
+  // The fragile chain that broke graceful Ctrl+C is gone. Scan for actual
+  // INVOCATION syntax, not the words (the header comment explains what it
+  // replaced): `powershell -<flag>`, a `| Tee-Object` pipe, and any cmd
+  // retry loop label/jump.
+  assert.equal(/powershell\s+-/i.test(PIPELINE), false, 'no PowerShell invocation in the thin launcher');
+  assert.equal(/\|\s*Tee-Object/i.test(PIPELINE), false, 'no Tee-Object pipeline in the thin launcher');
+  assert.equal(/^:loop\b|goto loop/m.test(PIPELINE), false, 'no cmd retry loop in the thin launcher (owned by the helper)');
+});
+
+test('pipeline wrapper + helper: npm is only ever the npm.cmd shim (never a .ps1 command), and no execution-policy change/bypass anywhere', () => {
+  for (const src of [...ALL_BATS, HELPER]) {
+    // A quoted/command-position `.ps1` (the header prose says "never the .ps1
+    // shim" without quoting it — that is documentation, not an invocation).
+    assert.equal(/['"]npm\.ps1['"]|npm\.ps1\s/i.test(src), false, 'no npm.ps1 command');
     assert.equal(/Set-ExecutionPolicy/i.test(src), false, 'no execution-policy change');
     assert.equal(/ExecutionPolicy\s+Bypass/i.test(src), false, 'no execution-policy bypass');
   }
+  // POSITIVE proof: the helper spawns the watcher via the npm.cmd shim, shell:false.
+  assert.match(HELPER, /runWatcherProcess\(spawn, 'npm\.cmd'/);
+  assert.match(HELPER, /shell: false/);
 });
 
-test('pipeline wrapper: captures the native exit code IMMEDIATELY and can never report a phantom graceful 0', () => {
-  const psLine = PIPELINE.split(/\r?\n/).find((l) => l.includes('powershell -NoProfile'))!;
-  // Immediately after the Tee pipeline (Tee-Object is a cmdlet and does not
-  // touch $LASTEXITCODE), the code is captured into a local, null-checked —
-  // a wrapper that never started npm.cmd exits with the 86 sentinel, NOT 0.
-  assert.match(psLine, /\$code = \$LASTEXITCODE; if \(\$null -eq \$code\) \{ [^}]*exit 86 \}; exit \$code/);
-  assert.match(psLine, /try \{ npm\.cmd run/);
-  assert.match(psLine, /Tee-Object -FilePath '%LOG%' -Append/);
-  assert.match(PIPELINE, /set "CODE=%ERRORLEVEL%"/);
-  assert.equal(/call npm run pipeline:watch[^\r\n]*\|/.test(PIPELINE), false, 'no cmd-level pipe that overwrites ERRORLEVEL');
+test('helper: spawns non-detached with stdout/stderr piped-and-teed and stdin inherited (child stays in this console for Ctrl+C)', () => {
+  assert.match(HELPER, /stdio: \['inherit', 'pipe', 'pipe'\]/);
+  assert.equal(/detached:\s*true/.test(HELPER), false, 'child must never be detached');
+  // Both streams are teed to console AND the append-only log.
+  assert.match(HELPER, /child\.stdout\.on\('data'/);
+  assert.match(HELPER, /child\.stderr\.on\('data'/);
+  assert.match(HELPER, /appendFileSync/);
+  assert.match(HELPER, /createWriteStream|appendFileSync/); // append-only writer
 });
 
-test('pipeline wrapper: the 86 npm-not-executed sentinel is a TERMINAL configuration failure, never graceful, never retried', () => {
-  const start = PIPELINE.indexOf('if "%CODE%"=="86" (');
-  assert.ok(start > 0, '86 branch present');
-  const terminalIdx = PIPELINE.indexOf('goto terminal', start);
-  const loopIdx = PIPELINE.indexOf('goto loop', start);
-  assert.ok(terminalIdx > start && (loopIdx === -1 || terminalIdx < loopIdx), '86 must be terminal');
-  assert.match(PIPELINE, /npm\.cmd could not be executed/);
-  assert.match(PIPELINE, /Configuration failure/);
+test('helper: first SIGINT WAITS (never process.exit, never kills the child); a second SIGINT is the explicit force path', () => {
+  // The whole point of the fix: on the first Ctrl+C the helper must not exit or
+  // kill — it lets the watcher run its finally-release and awaits child exit.
+  const firstPressStart = HELPER.indexOf('if (sigintCount === 1) {');
+  const elseIdx = HELPER.indexOf('} else {', firstPressStart);
+  assert.ok(firstPressStart > 0 && elseIdx > firstPressStart, 'first-press / else branches present');
+  const firstPressBlock = HELPER.slice(firstPressStart, elseIdx);
+  assert.match(firstPressBlock, /waiting for pipeline:watch to release its claim/);
+  assert.equal(/process\.exit/.test(firstPressBlock), false, 'first SIGINT must NOT process.exit');
+  assert.equal(/\.kill\(/.test(firstPressBlock), false, 'first SIGINT must NOT kill the child');
+  // Second press: explicit force-stop (the ONLY place the child is killed).
+  const elseBlock = HELPER.slice(elseIdx, HELPER.indexOf('});', elseIdx));
+  assert.match(elseBlock, /second Ctrl\+C/);
+  assert.match(elseBlock, /currentChild\.kill\(\)/);
 });
 
-test('launcher + pipeline wrapper establish UTF-8 (chcp 65001) before any output; locks/results untouched', () => {
+test('helper: exit-code policy — 0 graceful / 2 mechanism / 3 ownership / 86 config are terminal; generic non-zero is bounded-retried; SIGINT is never retried', () => {
+  assert.match(HELPER, /stopped GRACEFULLY \(exit 0\)/);
+  assert.match(HELPER, /OWNERSHIP refused or lost \(exit 3\)/);
+  assert.match(HELPER, /mechanism unavailable\/uncertain \(exit 2\)/);
+  assert.match(HELPER, /npm\.cmd could not be executed/);
+  assert.match(HELPER, /Max \$\{MAX_RETRIES\} bounded retries reached/);
+  // Once a Ctrl+C is seen the classification can only be terminal (never 'retryable').
+  assert.match(HELPER, /if \(sigintReceived\) return code === 0 \? 'terminal_graceful' : 'terminal_forced'/);
+});
+
+test('helper: is claim-exempt and provider/model-free — spawns ONLY pipeline:watch, touches no DB/claim/provider', () => {
+  assert.match(HELPER, /'run', 'pipeline:watch'/);
+  // No other npm script, no claim/RPC/provider/model surface.
+  assert.equal(/pipeline:day|lock:t-minus|results:auto|run:model|model:day/.test(HELPER), false);
+  assert.equal(/producer_run_claims|producerClaim|producerOwnership|tryAcquire|heartbeat|releaseProducer|--op (claim|heartbeat|release)/i.test(HELPER), false);
+  assert.equal(/supabaseAdmin|@supabase|createClient|racingApi|betfair/i.test(HELPER), false);
+  // No secrets, no betting/order tokens.
+  assert.equal(/SERVICE_ROLE|CRON_SECRET|RACING_API_KEY|BETFAIR_|Authorization|placeBet|placeOrder|submitOrder/i.test(HELPER), false);
+  // Runs only as an entrypoint; pure pieces are exported for tests.
+  assert.match(HELPER, /if \(require\.main === module\)/);
+  assert.match(HELPER, /module\.exports = \{/);
+});
+
+test('launcher + pipeline wrapper establish UTF-8 (chcp 65001) before any output; helper writes UTF-8 explicitly; locks/results untouched', () => {
   for (const [name, src] of [['launcher', LAUNCHER], ['pipeline wrapper', PIPELINE]] as const) {
     const chcpIdx = src.indexOf('chcp 65001 >nul');
     assert.ok(chcpIdx > 0, `${name}: chcp 65001 present`);
-    const firstOutputIdx = src.search(/\r?\n\s*(echo[. ]|type )/);
-    assert.ok(firstOutputIdx > 0 && chcpIdx < firstOutputIdx, `${name}: chcp precedes the first output`);
+    const firstOutputIdx = src.search(/\r?\n\s*(echo[. ]|type |node )/);
+    assert.ok(firstOutputIdx > 0 && chcpIdx < firstOutputIdx, `${name}: chcp precedes the first output/child launch`);
   }
+  // The helper's single log writer is explicitly UTF-8 (no mixed encoding).
+  assert.match(HELPER, /Buffer\.from\(chunk, 'utf8'\)/);
   for (const src of [LOCKS, RESULTS]) {
     assert.equal(/chcp/.test(src), false, 'claim-exempt watchers stay byte-identical (no chcp)');
   }
-});
-
-test('pipeline wrapper: exits 0, 2 and 3 are TERMINAL (no restart); each states its meaning', () => {
-  for (const code of ['0', '3', '2']) {
-    // Slice each classification branch from its `if` to the next control point;
-    // it must reach `goto terminal` without any `goto loop` in between.
-    const start = PIPELINE.indexOf(`if "%CODE%"=="${code}" (`);
-    assert.ok(start > 0, `branch for exit ${code} present`);
-    const terminalIdx = PIPELINE.indexOf('goto terminal', start);
-    const loopIdx = PIPELINE.indexOf('goto loop', start);
-    assert.ok(terminalIdx > start, `exit ${code} must be terminal`);
-    assert.ok(loopIdx === -1 || terminalIdx < loopIdx, `exit ${code} must not restart`);
-  }
-  assert.match(PIPELINE, /OWNERSHIP refused or lost/);
-  assert.match(PIPELINE, /mechanism unavailable\/uncertain/);
-  assert.match(PIPELINE, /GRACEFULLY/);
-  assert.match(PIPELINE, /NOT restarting automatically/);
-});
-
-test('pipeline wrapper: generic failures retry at most 5 times with a 60s delay — no unconditional restart loop', () => {
-  assert.match(PIPELINE, /set \/a RETRIES\+=1/);
-  assert.match(PIPELINE, /if %RETRIES% GTR 5 \(/);
-  assert.match(PIPELINE, /timeout \/t 60 \/nobreak/);
-  assert.match(PIPELINE, /bounded retry %RETRIES%\/5/);
-  assert.match(PIPELINE, /staying DEGRADED, not looping/);
-  // The ONLY `goto loop` is the one after the bounded-retry delay.
-  assert.equal((PIPELINE.match(/goto loop/g) ?? []).length, 1, 'exactly one retry path back to the loop');
-  const retryGoto = PIPELINE.indexOf('goto loop');
-  const boundCheck = PIPELINE.indexOf('if %RETRIES% GTR 5');
-  assert.ok(boundCheck < retryGoto, 'the bound check precedes the retry goto');
 });
 
 /* ------------------------- lock + results watchers --------------------------- */

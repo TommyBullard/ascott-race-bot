@@ -514,7 +514,28 @@ never retried), and only then exits with the real code; no
 `Set-ExecutionPolicy` change or bypass is used anywhere. Both the launcher
 and the pipeline wrapper set `chcp 65001` before any output so UTF-8
 preflight/pipeline text renders without mojibake (locks/results watchers
-remain byte-identical).
+remain byte-identical). **Graceful-Ctrl+C correction (live-drill-driven):**
+the earlier cmd + PowerShell `Tee-Object` chain destroyed graceful shutdown —
+Windows broadcasts Ctrl+C to the whole console group, PowerShell 5.1's
+pipeline hard-killed the watcher's Node process mid-`await` of its release RPC
+(so `PRODUCER_CLAIM_RELEASED` never landed) and the batch was torn down before
+capturing the exit code. `watch-pipeline.bat` is now a **thin launcher** that
+runs a single long-lived Node helper `race-day-local/run-pipeline-watch.js`
+(plain CommonJS, run by `node` — fewest console-attached intermediaries). The
+helper spawns `npm.cmd run pipeline:watch` (never `npm.ps1`; `shell:false`;
+**non-detached**, so the watcher receives Ctrl+C directly and runs its own
+`finally` release to completion), tees stdout/stderr to the console AND an
+append-only UTF-8 `pipeline-watch.log` (single writer — no mixed encoding),
+**does not exit on the first Ctrl+C** (it awaits the watcher's graceful exit),
+force-stops only on a second Ctrl+C, captures the child's real exit code, and
+applies the SAME policy (0 graceful / 2 mechanism / 3 ownership / 86 config —
+all terminal; generic non-zero bounded-retry ≤5 at 60s; a Ctrl+C is never
+retried), reuse-verified against `classifyPipelineWatchExit` +
+`MAX_PIPELINE_WATCH_RETRIES`/`PIPELINE_WATCH_RETRY_DELAY_SECONDS` in
+`src/lib/raceDayLauncher.ts`. The helper touches no DB/claim/provider/model
+(pipeline:watch still owns and releases the claim); `pipeline:watch` TS was
+proven correct and left unchanged. `watch-locks.bat`/`watch-results.bat`
+remain byte-identical.
 
 **Phase 7A.2b Step 5 (IMPLEMENTED — nationwide preflight + ownership-aware
 dry-run; src/lib/nationwideOwnership.ts, src/lib/nationwideDryRun.ts,
