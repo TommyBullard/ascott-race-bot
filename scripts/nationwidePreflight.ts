@@ -7,13 +7,21 @@
  * WITHOUT starting anything. One verdict — READY / REVIEW / BLOCKED — over
  * twelve checks (see src/lib/nationwidePreflight.ts).
  *
- * Usage:
- *   npm run nationwide:preflight -- --date 2026-07-18
- *   npm run nationwide:preflight -- --date 2026-07-18 --json
- *   npm run nationwide:preflight -- --date 2026-07-18 --report
- *   npm run nationwide:preflight -- --date 2026-07-18 --skip-server
- *   npm run nationwide:preflight -- --date 2026-07-18 --require-server
- *   npm run nationwide:preflight -- --date 2026-07-18 --confirm-external
+ * Usage (--target-mode is REQUIRED — there is no default):
+ *   npm run nationwide:preflight -- --date 2026-07-18 --target-mode stored-only
+ *   npm run nationwide:preflight -- --date 2026-07-18 --target-mode live-provider
+ *   npm run nationwide:preflight -- --date 2026-07-18 --target-mode live-provider --json
+ *   npm run nationwide:preflight -- --date 2026-07-18 --target-mode live-provider --report
+ *   npm run nationwide:preflight -- --date 2026-07-18 --target-mode live-provider --skip-server
+ *   npm run nationwide:preflight -- --date 2026-07-18 --target-mode live-provider --require-server
+ *   npm run nationwide:preflight -- --date 2026-07-18 --target-mode live-provider --confirm-external
+ *
+ * `--target-mode` controls how an EMPTY stored workload is judged: for
+ * `stored-only` (which scores only already-stored data) zero races BLOCKS;
+ * for `live-provider` (which is expected to ingest racecards/odds) zero
+ * races is the normal starting state and does not block by itself. Missing
+ * or invalid `--target-mode`, or any unrecognised flag, exits 1 before any
+ * status RPC, workload query, health probe, claim, or filesystem write.
  *
  * The operator MUST obtain a genuine READY here before running
  * `nationwide:dry-run -- --mode live-provider` (see
@@ -32,10 +40,11 @@
 
 import { mkdirSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { isEnvValuePresent } from '../src/lib/envPreflight';
 import { fetchProducerClaimStatus } from '../src/lib/producerClaim';
-import { fetchNationwideWorkloadRows, type NationwideWorkloadClient } from '../src/lib/nationwideDryRun';
+import { fetchNationwideWorkloadRows, parseNationwideCliMode, type NationwideWorkloadClient } from '../src/lib/nationwideDryRun';
 import {
   buildNationwidePreflightJson,
   buildNationwidePreflightPath,
@@ -60,8 +69,10 @@ function loadEnv(): void {
   }
 }
 
-interface Args {
+export interface Args {
   date: string | null;
+  /** Raw --target-mode value, unvalidated (validated by the caller via parseNationwideCliMode). */
+  targetMode: string | null;
   baseUrl: string;
   skipServer: boolean;
   requireServer: boolean;
@@ -70,9 +81,15 @@ interface Args {
   json: boolean;
 }
 
-function parseArgs(argv: readonly string[]): Args {
+/**
+ * Parses argv. Unrecognised `--flag`-shaped tokens are collected, never
+ * silently ignored. Exported so tests exercise the REAL parser directly
+ * rather than only a pure-helper approximation of it.
+ */
+export function parseArgs(argv: readonly string[]): { args: Args; unknownFlags: string[] } {
   const args: Args = {
     date: null,
+    targetMode: null,
     baseUrl: 'http://localhost:3000',
     skipServer: false,
     requireServer: false,
@@ -80,12 +97,16 @@ function parseArgs(argv: readonly string[]): Args {
     report: false,
     json: false,
   };
+  const unknownFlags: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
     const next = () => argv[++i];
     switch (flag) {
       case '--date':
         args.date = (next() ?? '').trim();
+        break;
+      case '--target-mode':
+        args.targetMode = (next() ?? '').trim();
         break;
       case '--base-url': {
         const value = (next() ?? '').trim();
@@ -108,10 +129,11 @@ function parseArgs(argv: readonly string[]): Args {
         args.json = true;
         break;
       default:
+        if (flag.startsWith('--')) unknownFlags.push(flag);
         break;
     }
   }
-  return args;
+  return { args, unknownFlags };
 }
 
 function usageError(json: boolean, message: string): void {
@@ -167,16 +189,29 @@ function createWorkloadClient(): NationwideWorkloadClient {
 }
 
 async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
+  const { args, unknownFlags } = parseArgs(process.argv.slice(2));
 
+  if (unknownFlags.length > 0) {
+    usageError(args.json, `Unknown flag(s): ${unknownFlags.join(', ')}. See usage: npm run nationwide:preflight -- --date YYYY-MM-DD --target-mode stored-only|live-provider [...]`);
+    return; // NO status RPC, NO workload query, NO health probe, NO claim, NO write.
+  }
   if (args.skipServer && args.requireServer) {
     usageError(args.json, '--skip-server and --require-server are mutually exclusive.');
     return;
   }
+  const targetMode = parseNationwideCliMode(args.targetMode);
+  if (!targetMode) {
+    usageError(
+      args.json,
+      'Usage: npm run nationwide:preflight -- --date YYYY-MM-DD --target-mode stored-only|live-provider [--base-url URL] [--skip-server|--require-server] [--confirm-external] [--report] [--json]\n' +
+        '--target-mode is REQUIRED — there is no default. Only stored-only or live-provider are valid.',
+    );
+    return; // NO status RPC, NO workload query, NO health probe, NO claim, NO write.
+  }
   if (!args.date) {
     usageError(
       args.json,
-      'Usage: npm run nationwide:preflight -- --date YYYY-MM-DD [--base-url URL] [--skip-server|--require-server] [--confirm-external] [--report] [--json]',
+      'Usage: npm run nationwide:preflight -- --date YYYY-MM-DD --target-mode stored-only|live-provider [--base-url URL] [--skip-server|--require-server] [--confirm-external] [--report] [--json]',
     );
     return;
   }
@@ -217,6 +252,7 @@ async function main(): Promise<void> {
 
   const report = evaluateNationwidePreflight({
     date: args.date,
+    targetMode,
     requireServer: args.requireServer,
     confirmExternal: args.confirmExternal,
     env,
@@ -244,7 +280,12 @@ async function main(): Promise<void> {
   process.exitCode = report.verdict === 'READY' ? 0 : report.verdict === 'REVIEW' ? 3 : 2;
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : String(err));
-  process.exitCode = 2;
-});
+// Only run when this file is the invoked entrypoint (`tsx scripts/nationwidePreflight.ts …`),
+// never merely when imported (e.g. by scripts/nationwidePreflight.test.ts for `parseArgs`).
+const isEntrypoint = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1];
+if (isEntrypoint) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exitCode = 2;
+  });
+}

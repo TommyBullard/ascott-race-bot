@@ -45,7 +45,32 @@ import {
   type PreflightVerdict,
 } from './producerPreflight';
 import { ALL_UK_IRE_SCOPE } from './producerClaim';
-import { reconcileNationwideWorkload, type NationwideReconciliation, type NationwideWorkloadRow } from './nationwideDryRun';
+import {
+  reconcileNationwideWorkload,
+  type NationwideCliMode,
+  type NationwideReconciliation,
+  type NationwideWorkloadRow,
+} from './nationwideDryRun';
+
+export type { NationwideCliMode };
+
+/**
+ * The pre-ingestion workload state, INDEPENDENT of whether it blocks or
+ * passes — that judgement depends on `targetMode` (see
+ * {@link evaluateNationwidePreflight}): `invalid` = date invalid, checks
+ * skipped; `unavailable` = the workload read failed; `empty` = zero stored
+ * races/courses (an ACCEPTABLE precondition for `live-provider`, since that
+ * mode exists to ingest them — but NOT for `stored-only`, which has nothing
+ * to score); `present` = stored races exist.
+ */
+export type PreIngestionWorkloadState = 'invalid' | 'unavailable' | 'empty' | 'present';
+
+/** The operational writes `live-provider` mode is EXPECTED to make (never model/recommendation/lock/result data). */
+export const LIVE_PROVIDER_WRITE_BOUNDARY = ['races', 'runners', 'market_snapshots', 'runner_quotes', 'cron_runs'] as const;
+
+const STORED_ONLY_ZERO_WORKLOAD_REASON = 'stored-only mode has no stored workload to score';
+const LIVE_PROVIDER_EMPTY_WORKLOAD_NOTE =
+  'pre-ingestion workload empty; live-provider mode is expected to ingest racecards and odds under the nationwide claim';
 
 export {
   buildHealthProbeUrl,
@@ -64,6 +89,8 @@ export {
 
 export interface NationwidePreflightInput {
   date: string;
+  /** The mode the operator intends to run next — REQUIRED; controls how an empty stored workload is judged. */
+  targetMode: NationwideCliMode;
   requireServer: boolean;
   confirmExternal: boolean;
   env: {
@@ -91,6 +118,12 @@ export interface NationwidePreflightInput {
 export interface NationwidePreflightReport {
   date: string;
   scope: string;
+  targetMode: NationwideCliMode;
+  preIngestionWorkloadState: PreIngestionWorkloadState;
+  /** True only for `stored-only` — an empty workload BLOCKS that mode. */
+  storedWorkloadRequired: boolean;
+  /** The writes `live-provider` is expected to make; empty for `stored-only` (no provider calls at all). */
+  expectedWriteBoundary: readonly string[];
   verdict: PreflightVerdict;
   checks: PreflightCheck[];
   externalChecksSource: 'operator_attestation' | 'unknown';
@@ -98,9 +131,9 @@ export interface NationwidePreflightReport {
   suggestedCommand: string | null;
 }
 
-/** The exact next-safe-command text (suggestion only — never executed here). Pure. */
-export function buildSuggestedNationwideCommand(date: string): string {
-  return `npm run nationwide:dry-run -- --date ${date} --mode live-provider`;
+/** The exact next-safe-command text for the given mode (suggestion only — never executed here). Pure. */
+export function buildSuggestedNationwideCommand(date: string, targetMode: NationwideCliMode): string {
+  return `npm run nationwide:dry-run -- --date ${date} --mode ${targetMode} --report`;
 }
 
 function skippedCheck(id: string, label: string): PreflightCheck {
@@ -182,8 +215,17 @@ export function evaluateNationwidePreflight(input: NationwidePreflightInput): Na
   }
 
   // 4-6. stored workload / odds coverage / rollup reconciliation / country warnings.
+  // MODE-AWARE (this is the Correction under test): an empty stored workload
+  // means something different depending on what the operator plans to run
+  // next. `stored-only` scores what is ALREADY stored — zero rows means there
+  // is nothing to score, so it BLOCKS. `live-provider` exists precisely to
+  // INGEST racecards/odds — an empty pre-ingestion workload is the NORMAL,
+  // expected starting state, so it must never review/block for that reason
+  // alone.
   let reconciliation: NationwideReconciliation | null = null;
+  let preIngestionWorkloadState: PreIngestionWorkloadState;
   if (!isValidDate) {
+    preIngestionWorkloadState = 'invalid';
     checks.push(
       skippedCheck('stored_workload', 'stored nationwide workload'),
       skippedCheck('odds_coverage', 'odds coverage'),
@@ -191,6 +233,7 @@ export function evaluateNationwidePreflight(input: NationwidePreflightInput): Na
       skippedCheck('country_region_warnings', 'country / region warnings'),
     );
   } else if (input.workloadRows === null) {
+    preIngestionWorkloadState = 'unavailable';
     const why = input.workloadError ?? 'not gathered';
     checks.push(
       { id: 'stored_workload', label: 'stored nationwide workload', status: 'review', evidence: 'unavailable', detail: `could not be read (${why})` },
@@ -202,19 +245,31 @@ export function evaluateNationwidePreflight(input: NationwidePreflightInput): Na
     reconciliation = reconcileNationwideWorkload(input.workloadRows);
     const t = reconciliation.totals;
     if (t.races === 0 || t.courses === 0) {
-      checks.push({
-        id: 'stored_workload',
-        label: 'stored nationwide workload',
-        status: 'review',
-        evidence: 'automatically_verified',
-        detail: `ZERO stored races/courses for this date — racecards have not been ingested yet (never fetched by this command)`,
-      });
+      preIngestionWorkloadState = 'empty';
+      if (input.targetMode === 'stored-only') {
+        checks.push({
+          id: 'stored_workload',
+          label: 'stored nationwide workload',
+          status: 'blocked',
+          evidence: 'automatically_verified',
+          detail: STORED_ONLY_ZERO_WORKLOAD_REASON,
+        });
+      } else {
+        checks.push({
+          id: 'stored_workload',
+          label: 'stored nationwide workload',
+          status: 'pass',
+          evidence: 'automatically_verified',
+          detail: LIVE_PROVIDER_EMPTY_WORKLOAD_NOTE,
+        });
+      }
       checks.push(
         { id: 'odds_coverage', label: 'odds coverage', status: 'info', evidence: 'not_applicable', detail: 'no stored races' },
         { id: 'rollup_reconciliation', label: 'rollup reconciliation', status: 'info', evidence: 'not_applicable', detail: 'no stored races' },
         { id: 'country_region_warnings', label: 'country / region warnings', status: 'info', evidence: 'not_applicable', detail: 'no stored races' },
       );
     } else {
+      preIngestionWorkloadState = 'present';
       checks.push({
         id: 'stored_workload',
         label: 'stored nationwide workload',
@@ -360,11 +415,15 @@ export function evaluateNationwidePreflight(input: NationwidePreflightInput): Na
   return {
     date: input.date,
     scope: ALL_UK_IRE_SCOPE,
+    targetMode: input.targetMode,
+    preIngestionWorkloadState,
+    storedWorkloadRequired: input.targetMode === 'stored-only',
+    expectedWriteBoundary: input.targetMode === 'live-provider' ? LIVE_PROVIDER_WRITE_BOUNDARY : [],
     verdict,
     checks,
     externalChecksSource: input.confirmExternal ? 'operator_attestation' : 'unknown',
     reconciliation,
-    suggestedCommand: verdict === 'READY' ? buildSuggestedNationwideCommand(input.date) : null,
+    suggestedCommand: verdict === 'READY' ? buildSuggestedNationwideCommand(input.date, input.targetMode) : null,
   };
 }
 
@@ -381,10 +440,16 @@ const STATUS_TAG: Record<CheckStatus, string> = {
 
 export function renderNationwidePreflightConsole(report: NationwidePreflightReport): string[] {
   const lines: string[] = [];
-  lines.push(`Nationwide readiness — ${report.date} — scope ${report.scope}`);
+  lines.push(`Nationwide readiness — ${report.date} — scope ${report.scope} — target mode: ${report.targetMode}`);
   lines.push('READ ONLY — status inspection only; no claim acquired, no provider/scoring work, nothing executed.');
   lines.push('');
   lines.push(`Verdict: ${report.verdict}`);
+  lines.push(`Target mode: ${report.targetMode}`);
+  lines.push(`Pre-ingestion workload state: ${report.preIngestionWorkloadState}`);
+  lines.push(`Stored workload required: ${report.storedWorkloadRequired}`);
+  lines.push(
+    `Expected write boundary: ${report.expectedWriteBoundary.length > 0 ? report.expectedWriteBoundary.join(', ') : 'none (no provider calls in this mode)'}`,
+  );
   lines.push(
     `External checks source: ${report.externalChecksSource === 'operator_attestation' ? 'operator_attestation (NOT automatically verified)' : 'unknown (manual checks outstanding)'}`,
   );
@@ -411,6 +476,10 @@ export function buildNationwidePreflightJson(report: NationwidePreflightReport):
     read_only: true,
     date: report.date,
     scope: report.scope,
+    target_mode: report.targetMode,
+    pre_ingestion_workload_state: report.preIngestionWorkloadState,
+    stored_workload_required: report.storedWorkloadRequired,
+    expected_write_boundary: report.expectedWriteBoundary,
     verdict: report.verdict,
     external_checks_source: report.externalChecksSource,
     checks: report.checks.map((c) => ({ id: c.id, label: c.label, status: c.status, evidence: c.evidence, detail: c.detail })),
@@ -422,7 +491,7 @@ export function buildNationwidePreflightJson(report: NationwidePreflightReport):
 
 export function renderNationwidePreflightMarkdown(report: NationwidePreflightReport, generatedAtIso: string): string {
   const lines: string[] = [];
-  lines.push(`# Nationwide readiness preflight — ${report.date}`);
+  lines.push(`# Nationwide readiness preflight — ${report.date} — target mode: ${report.targetMode}`);
   lines.push('');
   lines.push(`Generated: ${generatedAtIso}`);
   lines.push('');
@@ -433,7 +502,13 @@ export function renderNationwidePreflightMarkdown(report: NationwidePreflightRep
   lines.push('');
   lines.push(`## Verdict: ${report.verdict}`);
   lines.push('');
-  lines.push(`External checks source: \`${report.externalChecksSource}\``);
+  lines.push(`- Target mode: \`${report.targetMode}\``);
+  lines.push(`- Pre-ingestion workload state: \`${report.preIngestionWorkloadState}\``);
+  lines.push(`- Stored workload required: \`${report.storedWorkloadRequired}\``);
+  lines.push(
+    `- Expected write boundary: ${report.expectedWriteBoundary.length > 0 ? report.expectedWriteBoundary.map((w) => `\`${w}\``).join(', ') : 'none (no provider calls in this mode)'}`,
+  );
+  lines.push(`- External checks source: \`${report.externalChecksSource}\``);
   lines.push('');
   lines.push('| Check | Status | Evidence | Detail |');
   lines.push('| --- | --- | --- | --- |');

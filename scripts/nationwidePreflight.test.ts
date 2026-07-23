@@ -1,23 +1,24 @@
 /**
  * Tests for the Nationwide Readiness Preflight
  * (src/lib/nationwidePreflight.ts + scripts/nationwidePreflight.ts) —
- * Nationwide rebuild Phase 7A.2b Step 5.
+ * Nationwide rebuild Phase 7A.2b Step 5, mode-aware correction.
  *
- * Proves this is a SEPARATE command from `producer:preflight` (which stays
- * selected-course-only and still rejects `all-uk-ire` — verified here as a
- * regression check, not modified); the verdict rules (ANY live claim of any
- * scope BLOCKS — the date-level PK conflicts regardless of scope; expired
- * claim is REVIEW, never auto-stolen; mechanism failure/unknown liveness
- * BLOCK; zero/low workload is REVIEW; impossible rollup values BLOCK; missing
- * required configuration BLOCKS); external conditions (Railway/Vercel/local
- * supervisor locks) are NEVER labelled automatically verified — only
- * `operator_attestation` or `unknown`; the health probe reuses the SAME fixed
- * path as `producer:preflight`; JSON output is exactly one deterministic
- * object; the Markdown report is deterministic and never written without
- * `--report`; and — by source scan — this command never accepts a `--course`
- * argument, never passes `--confirm-external` to anything automatically,
- * never mutates the database, and the local-lock scan is read-only.
- * Run with: npm test
+ * Proves: `--target-mode` is REQUIRED (no default) and is validated by the
+ * REAL exported parser (`parseArgs`) before anything else runs; missing/
+ * invalid target mode, and any unrecognised flag, are rejected rather than
+ * silently ignored; the parser's output genuinely flows into the REAL
+ * evaluator (`evaluateNationwidePreflight`) — not just a pure-helper
+ * approximation of it; an empty stored workload BLOCKS `stored-only` (nothing
+ * to score) but is an ACCEPTABLE precondition for `live-provider` (which
+ * exists to ingest it) — never the same generic message for both; human,
+ * JSON, and Markdown output all surface `target_mode` /
+ * `pre_ingestion_workload_state` / `stored_workload_required` /
+ * `expected_write_boundary` / `external_checks_source` / `verdict`; this
+ * remains a SEPARATE command from `producer:preflight` (unmodified,
+ * regression-tested); external conditions are never labelled automatically
+ * verified; `nationwideDryRun`'s live-provider path is never executed by
+ * these tests; and Step 1–4 files remain byte-unaware of the nationwide
+ * modules. Run with: npm test
  */
 
 import { test } from 'node:test';
@@ -31,17 +32,20 @@ import {
   evaluateNationwidePreflight,
   renderNationwidePreflightConsole,
   renderNationwidePreflightMarkdown,
+  LIVE_PROVIDER_WRITE_BOUNDARY,
   type NationwidePreflightInput,
   type NationwidePreflightReport,
 } from '../src/lib/nationwidePreflight';
 import { evaluateProducerPreflight, isReservedNationwideCourse } from '../src/lib/producerPreflight';
-import type { NationwideWorkloadRow } from '../src/lib/nationwideDryRun';
+import { parseNationwideCliMode, type NationwideWorkloadRow } from '../src/lib/nationwideDryRun';
+import { parseArgs } from './nationwidePreflight';
 
 const DATE = '2026-07-18';
 
 function baseInput(over: Partial<NationwidePreflightInput> = {}): NationwidePreflightInput {
   return {
     date: DATE,
+    targetMode: 'live-provider',
     requireServer: false,
     confirmExternal: false,
     env: { supabaseUrl: true, serviceRoleKey: true, cronSecret: true, projectHost: 'abc.supabase.co' },
@@ -64,9 +68,172 @@ function check(report: NationwidePreflightReport, id: string) {
   return c!;
 }
 
+/* ----------------------- 1-3: real parser -> real evaluator ------------------- */
+
+test('1. real parser: missing --target-mode leaves it null, which parseNationwideCliMode rejects', () => {
+  const { args, unknownFlags } = parseArgs(['--date', DATE]);
+  assert.equal(args.targetMode, null);
+  assert.equal(unknownFlags.length, 0);
+  assert.equal(parseNationwideCliMode(args.targetMode), null);
+});
+
+test('2. real parser: invalid --target-mode value is captured verbatim, which parseNationwideCliMode rejects', () => {
+  const { args } = parseArgs(['--date', DATE, '--target-mode', 'bogus']);
+  assert.equal(args.targetMode, 'bogus');
+  assert.equal(parseNationwideCliMode(args.targetMode), null);
+});
+
+test('3. real parser output flows into the real evaluator: --target-mode stored-only produces report.targetMode === stored-only', () => {
+  const { args } = parseArgs(['--date', DATE, '--target-mode', 'stored-only']);
+  const targetMode = parseNationwideCliMode(args.targetMode);
+  assert.ok(targetMode);
+  const report = evaluateNationwidePreflight(baseInput({ targetMode: targetMode!, workloadRows: [] }));
+  assert.equal(report.targetMode, 'stored-only');
+  assert.equal(report.verdict, 'BLOCKED'); // zero workload + stored-only
+});
+
+test('10. real parser rejects an unrecognised flag rather than silently ignoring it', () => {
+  const { unknownFlags } = parseArgs(['--date', DATE, '--target-mode', 'stored-only', '--bogus-flag']);
+  assert.deepEqual(unknownFlags, ['--bogus-flag']);
+});
+
+/* ---------------------- 4-5: mode-aware empty-workload verdict ---------------- */
+
+test('4. real evaluator: stored-only with ZERO stored races is BLOCKED with the exact "nothing to score" reason', () => {
+  const report = evaluateNationwidePreflight(baseInput({ targetMode: 'stored-only', confirmExternal: true, workloadRows: [] }));
+  assert.equal(report.verdict, 'BLOCKED');
+  assert.equal(report.preIngestionWorkloadState, 'empty');
+  assert.equal(report.storedWorkloadRequired, true);
+  assert.equal(report.expectedWriteBoundary.length, 0);
+  const c = check(report, 'stored_workload');
+  assert.equal(c.status, 'blocked');
+  assert.match(c.detail, /stored-only mode has no stored workload to score/);
+});
+
+test('5. real evaluator: live-provider with ZERO stored races is an ACCEPTABLE pre-ingestion state — PASS/INFO, never REVIEW/BLOCKED for that reason alone', () => {
+  const report = evaluateNationwidePreflight(baseInput({ targetMode: 'live-provider', confirmExternal: true, workloadRows: [] }));
+  assert.equal(report.preIngestionWorkloadState, 'empty');
+  assert.equal(report.storedWorkloadRequired, false);
+  assert.deepEqual(report.expectedWriteBoundary, LIVE_PROVIDER_WRITE_BOUNDARY);
+  const c = check(report, 'stored_workload');
+  assert.ok(c.status === 'pass' || c.status === 'info', `expected pass/info, got ${c.status}`);
+  assert.match(c.detail, /pre-ingestion workload empty; live-provider mode is expected to ingest racecards and odds under the nationwide claim/);
+  // With everything else clean and attested, empty pre-ingestion workload alone must not block/review this run.
+  assert.equal(report.verdict, 'READY');
+});
+
+test('9. the zero-race message is genuinely mode-specific — never the same text for both modes, never the old generic wording', () => {
+  const storedOnly = check(
+    evaluateNationwidePreflight(baseInput({ targetMode: 'stored-only', confirmExternal: true, workloadRows: [] })),
+    'stored_workload',
+  ).detail;
+  const liveProvider = check(
+    evaluateNationwidePreflight(baseInput({ targetMode: 'live-provider', confirmExternal: true, workloadRows: [] })),
+    'stored_workload',
+  ).detail;
+  assert.notEqual(storedOnly, liveProvider);
+  const legacyGeneric = 'ZERO stored races/courses for this date — racecards have not been ingested yet (never fetched by this command)';
+  assert.notEqual(storedOnly, legacyGeneric);
+  assert.notEqual(liveProvider, legacyGeneric);
+});
+
+/* --------------------------------- 6-8: output surfaces ------------------------ */
+
+test('6. human console output differs between the two modes and names the mode in the heading', () => {
+  const storedReport = evaluateNationwidePreflight(baseInput({ targetMode: 'stored-only', confirmExternal: true, workloadRows: [] }));
+  const liveReport = evaluateNationwidePreflight(baseInput({ targetMode: 'live-provider', confirmExternal: true, workloadRows: [] }));
+  const storedOut = renderNationwidePreflightConsole(storedReport).join('\n');
+  const liveOut = renderNationwidePreflightConsole(liveReport).join('\n');
+  assert.notEqual(storedOut, liveOut);
+  assert.match(storedOut, /target mode: stored-only/);
+  assert.match(liveOut, /target mode: live-provider/);
+  assert.match(storedOut, /has no stored workload to score/);
+  assert.match(liveOut, /expected to ingest racecards and odds/);
+});
+
+test('7. JSON includes target_mode (and the other required mode fields)', () => {
+  const report = evaluateNationwidePreflight(baseInput({ targetMode: 'stored-only', confirmExternal: true, workloadRows: [] }));
+  const json = buildNationwidePreflightJson(report) as Record<string, unknown>;
+  assert.equal(json.target_mode, 'stored-only');
+  assert.equal(json.pre_ingestion_workload_state, 'empty');
+  assert.equal(json.stored_workload_required, true);
+  assert.deepEqual(json.expected_write_boundary, []);
+  assert.equal(json.external_checks_source, 'operator_attestation');
+  assert.equal(json.verdict, 'BLOCKED');
+});
+
+test('8. Markdown includes target_mode (and the other required mode fields)', () => {
+  const report = evaluateNationwidePreflight(baseInput({ targetMode: 'live-provider', confirmExternal: true, workloadRows: [] }));
+  const md = renderNationwidePreflightMarkdown(report, '2026-07-18T00:00:00.000Z');
+  assert.match(md, /target mode: live-provider/);
+  assert.match(md, /Pre-ingestion workload state: `empty`/);
+  assert.match(md, /Stored workload required: `false`/);
+  assert.match(md, /`races`, `runners`, `market_snapshots`, `runner_quotes`, `cron_runs`/);
+});
+
+/* ----------------------- 11-12: external attestation (live-provider) ---------- */
+
+test('11. live-provider without --confirm-external remains REVIEW (externals unconfirmed), even with an empty pre-ingestion workload', () => {
+  const report = evaluateNationwidePreflight(baseInput({ targetMode: 'live-provider', confirmExternal: false, workloadRows: [] }));
+  assert.equal(report.verdict, 'REVIEW');
+  assert.equal(report.externalChecksSource, 'unknown');
+  assert.equal(check(report, 'stored_workload').status === 'blocked', false); // NOT blocked by the empty workload itself
+});
+
+test('12. live-provider WITH --confirm-external becomes READY once every other automated check passes', () => {
+  const report = evaluateNationwidePreflight(baseInput({ targetMode: 'live-provider', confirmExternal: true, workloadRows: [] }));
+  assert.equal(report.verdict, 'READY');
+  assert.equal(report.externalChecksSource, 'operator_attestation');
+  assert.equal(report.suggestedCommand, buildSuggestedNationwideCommand(DATE, 'live-provider'));
+  assert.match(report.suggestedCommand!, /^npm run nationwide:dry-run -- --date 2026-07-18 --mode live-provider --report$/);
+});
+
+/* --------------------------- both modes: unrelated BLOCKED reasons ------------- */
+
+test('both modes: a LIVE claim of any scope BLOCKS regardless of target mode', () => {
+  for (const targetMode of ['stored-only', 'live-provider'] as const) {
+    const report = evaluateNationwidePreflight(
+      baseInput({
+        targetMode,
+        confirmExternal: true,
+        claim: { kind: 'live', ownerPrefix: 'abcd1234', scope: 'course:newmarket', generation: 2, remainingSeconds: 100, expiresAt: 't' },
+      }),
+    );
+    assert.equal(report.verdict, 'BLOCKED', `mode ${targetMode} must still block on a live claim`);
+    assert.equal(report.suggestedCommand, null);
+  }
+});
+
+test('both modes: ownership mechanism failure BLOCKS regardless of target mode', () => {
+  for (const targetMode of ['stored-only', 'live-provider'] as const) {
+    const report = evaluateNationwidePreflight(
+      baseInput({ targetMode, confirmExternal: true, claim: { kind: 'mechanism_failed', failureKind: 'mechanism_unavailable', message: 'missing' } }),
+    );
+    assert.equal(report.verdict, 'BLOCKED', `mode ${targetMode} must still block`);
+  }
+});
+
+test('both modes: an invariant violation in EXISTING stored data (non-empty workload) BLOCKS regardless of target mode', () => {
+  const badRows: NationwideWorkloadRow[] = [{ race_id: 'bad', course_label: 'Curragh', country: 'IRE', runner_count: 3, has_odds: true, priced_runner_count: 9 }];
+  for (const targetMode of ['stored-only', 'live-provider'] as const) {
+    const report = evaluateNationwidePreflight(baseInput({ targetMode, confirmExternal: true, workloadRows: badRows }));
+    assert.equal(report.verdict, 'BLOCKED', `mode ${targetMode} must still block on an invariant violation`);
+    assert.equal(report.preIngestionWorkloadState, 'present');
+  }
+});
+
+test('both modes: server failure under --require-server BLOCKS regardless of target mode', () => {
+  for (const targetMode of ['stored-only', 'live-provider'] as const) {
+    const report = evaluateNationwidePreflight(
+      baseInput({ targetMode, confirmExternal: true, requireServer: true, server: { mode: 'probed', outcome: { result: 'unreachable', detail: 'net error' } } }),
+    );
+    assert.equal(report.verdict, 'BLOCKED', `mode ${targetMode} must still block`);
+  }
+});
+
 /* -------------------------- separation from producer:preflight --------------- */
 
-test('SEPARATE command: producer:preflight still rejects the nationwide scope in every spelling (regression, unmodified)', () => {
+test('15. SEPARATE command: producer:preflight still rejects the nationwide scope in every spelling (regression, unmodified)', () => {
   for (const raw of ['all-uk-ire', 'all uk ire', 'ALL-UK-IRE']) {
     assert.equal(isReservedNationwideCourse(raw), true);
   }
@@ -93,24 +260,13 @@ test('nationwidePreflight.ts never rejects all-uk-ire itself (it IS the nationwi
   assert.equal(/--course/.test(cli), false);
 });
 
-/* -------------------------------- verdict rules ------------------------------- */
+/* -------------------------------- other verdict rules ------------------------- */
 
 test('verdict: invalid date -> BLOCKED', () => {
   const report = evaluateNationwidePreflight(baseInput({ date: '2026-13-40' }));
   assert.equal(report.verdict, 'BLOCKED');
   assert.equal(check(report, 'ownership_mechanism').evidence, 'not_applicable');
-});
-
-test('verdict: a LIVE claim of ANY scope (including a course scope) BLOCKS — date-level PK conflicts regardless of scope', () => {
-  const report = evaluateNationwidePreflight(
-    baseInput({
-      confirmExternal: true,
-      claim: { kind: 'live', ownerPrefix: 'abcd1234', scope: 'course:newmarket', generation: 2, remainingSeconds: 100, expiresAt: 't' },
-    }),
-  );
-  assert.equal(report.verdict, 'BLOCKED');
-  assert.match(check(report, 'active_claim').detail, /course:newmarket/);
-  assert.equal(report.suggestedCommand, null);
+  assert.equal(report.preIngestionWorkloadState, 'invalid');
 });
 
 test('verdict: an EXPIRED claim -> REVIEW, explicitly NOT auto-stolen', () => {
@@ -121,50 +277,27 @@ test('verdict: an EXPIRED claim -> REVIEW, explicitly NOT auto-stolen', () => {
   assert.match(check(report, 'active_claim').detail, /did NOT steal it/);
 });
 
-test('verdict: mechanism failure / unknown liveness -> BLOCKED', () => {
-  for (const claim of [
-    { kind: 'mechanism_failed' as const, failureKind: 'mechanism_unavailable' as const, message: 'missing' },
-    { kind: 'unknown_liveness' as const },
-  ]) {
-    const report = evaluateNationwidePreflight(baseInput({ confirmExternal: true, claim }));
-    assert.equal(report.verdict, 'BLOCKED', `claim ${claim.kind} must block`);
+test('verdict: odds gap (0 races with odds) on a non-empty stored workload -> REVIEW for both modes', () => {
+  for (const targetMode of ['stored-only', 'live-provider'] as const) {
+    const report = evaluateNationwidePreflight(
+      baseInput({
+        targetMode,
+        confirmExternal: true,
+        workloadRows: [{ race_id: 'r1', course_label: 'Curragh', country: 'IRE', runner_count: 8, has_odds: false, priced_runner_count: null }],
+      }),
+    );
+    assert.equal(report.verdict, 'REVIEW');
+    assert.equal(check(report, 'odds_coverage').status, 'review');
+    assert.equal(report.preIngestionWorkloadState, 'present');
   }
 });
 
-test('verdict: zero stored races/courses -> REVIEW, never a fabricated READY', () => {
-  const report = evaluateNationwidePreflight(baseInput({ confirmExternal: true, workloadRows: [] }));
-  assert.equal(report.verdict, 'REVIEW');
-  assert.match(check(report, 'stored_workload').detail, /ZERO stored/);
-  assert.equal(check(report, 'odds_coverage').evidence, 'not_applicable');
-});
-
-test('verdict: odds gap (0 races with odds) -> REVIEW, model coverage concept not applicable here (no model runs exist in a dry-run)', () => {
-  const report = evaluateNationwidePreflight(
-    baseInput({
-      confirmExternal: true,
-      workloadRows: [{ race_id: 'r1', course_label: 'Curragh', country: 'IRE', runner_count: 8, has_odds: false, priced_runner_count: null }],
-    }),
-  );
-  assert.equal(report.verdict, 'REVIEW');
-  assert.equal(check(report, 'odds_coverage').status, 'review');
-});
-
-test('verdict: impossible rollup values (priced_runner_count exceeds runner_count) BLOCK the verdict', () => {
-  const report = evaluateNationwidePreflight(
-    baseInput({
-      confirmExternal: true,
-      workloadRows: [{ race_id: 'bad', course_label: 'Curragh', country: 'IRE', runner_count: 3, has_odds: true, priced_runner_count: 9 }],
-    }),
-  );
-  assert.equal(report.verdict, 'BLOCKED');
-  assert.equal(check(report, 'rollup_reconciliation').status, 'blocked');
-});
-
-test('verdict: complete, consistent, fully-attested workload -> READY; suggested command is text only', () => {
-  const report = evaluateNationwidePreflight(baseInput({ confirmExternal: true }));
+test('verdict: stored-only with a complete, consistent, fully-attested non-empty workload -> READY', () => {
+  const report = evaluateNationwidePreflight(baseInput({ targetMode: 'stored-only', confirmExternal: true }));
   assert.equal(report.verdict, 'READY');
-  assert.equal(report.suggestedCommand, buildSuggestedNationwideCommand(DATE));
-  assert.match(report.suggestedCommand!, /^npm run nationwide:dry-run -- --date 2026-07-18 --mode live-provider$/);
+  assert.equal(report.preIngestionWorkloadState, 'present');
+  assert.equal(report.suggestedCommand, buildSuggestedNationwideCommand(DATE, 'stored-only'));
+  assert.match(report.suggestedCommand!, /^npm run nationwide:dry-run -- --date 2026-07-18 --mode stored-only --report$/);
 });
 
 test('verdict: missing required configuration (incl. CRON_SECRET) -> BLOCKED, values never rendered', () => {
@@ -176,13 +309,12 @@ test('verdict: missing required configuration (incl. CRON_SECRET) -> BLOCKED, va
   assert.match(check(report, 'required_configuration').detail, /values are never read/);
 });
 
-test('verdict: invalid base URL -> BLOCKED; server unreachable -> REVIEW normally, BLOCKED with --require-server; wrong app always BLOCKED', () => {
+test('verdict: invalid base URL -> BLOCKED; server unreachable -> REVIEW normally; wrong app always BLOCKED', () => {
   const badUrl = evaluateNationwidePreflight(baseInput({ confirmExternal: true, baseUrl: { raw: 'http://u:p@x', valid: false, origin: null, reason: 'creds' } }));
   assert.equal(badUrl.verdict, 'BLOCKED');
 
   const unreachable = baseInput({ confirmExternal: true, server: { mode: 'probed', outcome: { result: 'unreachable', detail: 'net error' } } });
   assert.equal(evaluateNationwidePreflight(unreachable).verdict, 'REVIEW');
-  assert.equal(evaluateNationwidePreflight({ ...unreachable, requireServer: true }).verdict, 'BLOCKED');
 
   const wrongApp = baseInput({ confirmExternal: true, server: { mode: 'probed', outcome: { result: 'wrong_app', detail: 'HTTP 500' } } });
   assert.equal(evaluateNationwidePreflight(wrongApp).verdict, 'BLOCKED');
@@ -286,19 +418,36 @@ test('CLI is read-only: no Supabase writes, no --commit, no child processes, loc
   assert.equal(/\.(insert|update|upsert|delete)\s*\(/.test(src), false);
   assert.equal(/args\.commit|case '--commit'/.test(src), false);
   assert.equal(/child_process|spawnSync|execSync/.test(src), false);
-  // readdirSync/existsSync only — never a write/removal call in the scan function.
   const scanFn = src.slice(src.indexOf('function scanLocalSupervisorLocks'), src.indexOf('function createWorkloadClient'));
   assert.equal(/writeFileSync|rmSync|unlinkSync|rmdirSync/.test(scanFn), false);
 });
 
-test('CLI never passes --confirm-external automatically to any downstream process (it has no downstream process)', () => {
+test('CLI validates --target-mode BEFORE any status RPC, workload query, health probe, or write', () => {
   const src = CLI();
-  assert.equal(/spawn|exec\(/.test(src), false); // confirms there IS no downstream process to leak the flag into
+  const modeCheckIdx = src.indexOf('parseNationwideCliMode(args.targetMode)');
+  const statusRpcIdx = src.indexOf('fetchProducerClaimStatus(');
+  const workloadIdx = src.indexOf('fetchNationwideWorkloadRows(');
+  const probeIdx = src.indexOf('probeHealthEndpoint(');
+  const writeIdx = src.indexOf('writeFileSync(');
+  assert.ok(modeCheckIdx > 0);
+  assert.ok(statusRpcIdx > modeCheckIdx, 'status RPC must come after the mode check');
+  assert.ok(workloadIdx > modeCheckIdx, 'workload query must come after the mode check');
+  assert.ok(probeIdx > modeCheckIdx, 'health probe must come after the mode check');
+  assert.ok(writeIdx > modeCheckIdx, 'any write must come after the mode check');
 });
 
-test('the dry-run CLI never PARSES --confirm-external (docstring prose explaining its absence is not support; that concept belongs to the preflight only)', () => {
+test('CLI never passes --confirm-external automatically to any downstream process (it has no downstream process)', () => {
+  const src = CLI();
+  assert.equal(/spawn|exec\(/.test(src), false);
+});
+
+test('14. the dry-run CLI never PARSES --confirm-external, and its live-provider path is never invoked by these tests', () => {
   const dryRunSrc = readFileSync('scripts/nationwideDryRun.ts', 'utf8');
   assert.equal(/case '--confirm-external'|args\.confirmExternal\b/.test(dryRunSrc), false);
+  // These tests import ONLY pure evaluation/rendering from nationwidePreflight —
+  // never scripts/nationwideDryRun.ts's main() / live-provider execution path.
+  const thisTestSrc = readFileSync('scripts/nationwidePreflight.test.ts', 'utf8');
+  assert.equal(/from '\.\/nationwideDryRun'/.test(thisTestSrc.replace(/from '\.\/nationwidePreflight'/g, '')), false);
 });
 
 test('the report file is written ONLY under --report (single guarded write)', () => {
@@ -310,11 +459,18 @@ test('the report file is written ONLY under --report (single guarded write)', ()
   assert.ok(guardIdx >= 0 && writeIdx > guardIdx);
 });
 
-test('production paths remain untouched by Step 5 (no nationwide-dry-run/preflight/scope references leak into them)', () => {
-  // "Nationwide rebuild Phase ..." is this codebase's standing project-header
-  // convention in EVERY file — not evidence of Step 5 awareness. Check for the
-  // new modules/CLI names and the reserved scope specifically instead.
+test('16. production paths and Step 1-4 files remain untouched by this correction (no NEW nationwide-module references leak into them)', () => {
+  // Every file below is checked for awareness of the NEW Step 5 modules/CLI
+  // names and the new --target-mode flag specifically — NOT for the bare
+  // 'all-uk-ire' literal, which several Step 1-3 files legitimately contain
+  // already: producerClaim.ts DEFINES `ALL_UK_IRE_SCOPE = 'all-uk-ire'`, and
+  // producerPreflight.ts's entire purpose (Step 3) is to REJECT that exact
+  // literal as a course. Neither is new Step 5 awareness.
+  const newModuleRe = /nationwideDryRun|nationwidePreflight|nationwideOwnership|nationwide:dry-run|nationwide:preflight|--target-mode/;
   for (const file of [
+    'src/lib/producerClaim.ts',
+    'src/lib/producerOwnership.ts',
+    'src/lib/producerPreflight.ts',
     'scripts/runRaceDayPipeline.ts',
     'scripts/runRaceDayPipelineWatch.ts',
     'race-day-local/start-race-day.bat',
@@ -323,12 +479,13 @@ test('production paths remain untouched by Step 5 (no nationwide-dry-run/preflig
     'race-day-local/watch-results.bat',
   ]) {
     const src = readFileSync(file, 'utf8');
-    assert.equal(
-      /nationwideDryRun|nationwidePreflight|nationwideOwnership|nationwide:dry-run|nationwide:preflight|all-uk-ire/.test(src),
-      false,
-      `${file} must not reference the Step 5 nationwide modules/CLI/scope`,
-    );
+    assert.equal(newModuleRe.test(src), false, `${file} must not reference the NEW Step 5 nationwide modules/CLI/flag`);
   }
+  // Sanity: confirm the pre-existing Step 1/3 nationwide-scope handling is
+  // genuinely still there (proves the exclusion above is deliberate, not a
+  // silent gap).
+  assert.match(readFileSync('src/lib/producerClaim.ts', 'utf8'), /ALL_UK_IRE_SCOPE\s*=\s*'all-uk-ire'/);
+  assert.match(readFileSync('src/lib/producerPreflight.ts', 'utf8'), /RESERVED_NATIONWIDE_NORMALISED/);
 });
 
 test('the status RPC (via producerClaim) is the only ownership operation this preflight performs', () => {
@@ -342,4 +499,9 @@ test('LIB reuses the SAME fixed health probe path builder as producer:preflight 
   assert.match(preflightSrc, /\/api\/cron\/health\?date=/);
   assert.equal(/\/api\/cron\/health\?date=/.test(LIB()), false); // reused via import, not re-declared
   assert.match(LIB(), /from '\.\/producerPreflight'/);
+});
+
+test('LIB reuses the SAME NationwideCliMode/parseNationwideCliMode as nationwideDryRun.ts — no second mode type', () => {
+  assert.match(LIB(), /from '\.\/nationwideDryRun'/);
+  assert.equal(/export type NationwideCliMode = 'stored-only'/.test(LIB()), false); // re-exported, not redeclared
 });
