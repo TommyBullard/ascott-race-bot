@@ -232,26 +232,35 @@ test('pipeline wrapper: is a THIN launcher — runs the Node helper synchronousl
   assert.equal(/^:loop\b|goto loop/m.test(PIPELINE), false, 'no cmd retry loop in the thin launcher (owned by the helper)');
 });
 
-test('pipeline wrapper + helper: launches npm.cmd via %ComSpec% cmd.exe (NOT a direct .cmd spawn, which throws EINVAL on modern Node); never a .ps1 command; no execution-policy change/bypass', () => {
+test('helper launches the watcher as a NATIVE node child (process.execPath + tsx loader) — no npm/cmd.exe/ComSpec/PowerShell/shell in the long-running chain', () => {
   for (const src of [...ALL_BATS, HELPER]) {
-    // A quoted/command-position `.ps1` (prose may say "never the .ps1 shim"
-    // without quoting it — that is documentation, not an invocation).
     assert.equal(/['"]npm\.ps1['"]|npm\.ps1\s/i.test(src), false, 'no npm.ps1 command');
     assert.equal(/Set-ExecutionPolicy/i.test(src), false, 'no execution-policy change');
     assert.equal(/ExecutionPolicy\s+Bypass/i.test(src), false, 'no execution-policy bypass');
   }
-  // The EINVAL fix: the helper resolves %ComSpec% and runs cmd.exe /d /s /c
-  // "<inner>", with windowsVerbatimArguments so the command line is passed
-  // through unescaped. It must NOT spawn a .cmd file directly.
-  assert.match(HELPER, /process\.env\.ComSpec \|\| process\.env\.COMSPEC \|\| 'cmd\.exe'/);
-  assert.match(HELPER, /'\/d', '\/s', '\/c'/);
-  assert.match(HELPER, /windowsVerbatimArguments: true/);
-  assert.match(HELPER, /npm\.cmd run pipeline:watch/);
-  // No direct `.cmd`/`.bat` executable handed to spawn (the thing that broke).
-  assert.equal(/spawn(Fn)?\(\s*['"][^'"]*\.(cmd|bat)['"]/i.test(HELPER), false, 'never spawn a .cmd/.bat directly');
-  assert.equal(/runWatcherProcess\(spawn, 'npm\.cmd'/.test(HELPER), false, 'the watcher is launched via cmd.exe, not npm.cmd directly');
-  // Still no shell:true (we build the exact command line ourselves).
+  // POSITIVE: the executable is process.execPath and the args are an argv array.
+  assert.match(HELPER, /runWatcherProcess\(\s*\r?\n?\s*spawn,\s*\r?\n?\s*process\.execPath/);
+  assert.match(HELPER, /'--import',\s*\r?\n?\s*loaderUrl/);
   assert.match(HELPER, /shell: false/);
+  assert.match(HELPER, /detached: false/);
+  // NEGATIVE: none of the removed shims appear as an INVOCATION in the helper.
+  // (The header comment explains what they were and why they are gone; these
+  // scans target command/executable positions, not that prose.)
+  assert.equal(/spawn(Fn)?\(\s*['"][^'"]*\.(cmd|bat)['"]/i.test(HELPER), false, 'never spawn a .cmd/.bat');
+  assert.equal(/process\.env\.ComSpec|process\.env\.COMSPEC/.test(HELPER), false, 'ComSpec is no longer consulted');
+  assert.equal(/windowsVerbatimArguments/.test(HELPER), false, 'no verbatim command-line building remains');
+  assert.equal(/shell:\s*true/.test(HELPER), false, 'never shell:true');
+  assert.equal(/['"]cmd\.exe['"]|['"]powershell['"]|['"]pwsh['"]/i.test(HELPER), false, 'no shell executable literal');
+  assert.equal(/'npm(\.cmd)?'/.test(HELPER), false, 'npm is not an executable here');
+});
+
+test('helper resolves tsx through package resolution (no hardcoded node_modules path) and fails closed as 86', () => {
+  assert.match(HELPER, /require\.resolve\('tsx'\)/);
+  assert.match(HELPER, /pathToFileURL\(require\.resolve\('tsx'\)\)\.href/);
+  assert.equal(/node_modules[\\/]tsx/.test(HELPER), false, 'no hardcoded node_modules path');
+  // A missing tsx (or missing watcher script) is a TERMINAL 86 config failure.
+  assert.match(HELPER, /could not resolve the tsx loader[\s\S]*?exit\(CONFIG_FAILURE_CODE\)/);
+  assert.match(HELPER, /watcher script not found[\s\S]*?exit\(CONFIG_FAILURE_CODE\)/);
 });
 
 test('helper: spawns non-detached with stdout/stderr piped-and-teed and stdin inherited (child stays in this console for Ctrl+C)', () => {
@@ -284,7 +293,7 @@ test('helper: exit-code policy — 0 graceful / 2 mechanism / 3 ownership / 86 c
   assert.match(HELPER, /stopped GRACEFULLY \(exit 0\)/);
   assert.match(HELPER, /OWNERSHIP refused or lost \(exit 3\)/);
   assert.match(HELPER, /mechanism unavailable\/uncertain \(exit 2\)/);
-  assert.match(HELPER, /npm\.cmd could not be executed/);
+  assert.match(HELPER, /the watcher could not be launched \(config failure, exit 86\)/);
   assert.match(HELPER, /Max \$\{MAX_RETRIES\} bounded retries reached/);
   // The policy codes short-circuit BEFORE any interrupt reasoning.
   assert.match(HELPER, /if \(code === 0\) return 'terminal_graceful';/);
@@ -315,8 +324,8 @@ test('watcher: emits the structured graceful marker only after a clean stop (no 
   assert.ok(finallyIdx > 0 && markerIdx > finallyIdx, 'marker must follow the release');
 });
 
-test('helper: is claim-exempt and provider/model-free — spawns ONLY pipeline:watch, touches no DB/claim/provider', () => {
-  assert.match(HELPER, /npm\.cmd run pipeline:watch/);
+test('helper: is claim-exempt and provider/model-free — launches ONLY the watcher script, touches no DB/claim/provider', () => {
+  assert.match(HELPER, /'scripts', 'runRaceDayPipelineWatch\.ts'/);
   // No other npm script, no claim/RPC/provider/model surface.
   assert.equal(/pipeline:day|lock:t-minus|results:auto|run:model|model:day/.test(HELPER), false);
   assert.equal(/producer_run_claims|producerClaim|producerOwnership|tryAcquire|heartbeat|releaseProducer|--op (claim|heartbeat|release)/i.test(HELPER), false);

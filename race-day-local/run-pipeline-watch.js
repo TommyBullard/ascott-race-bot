@@ -12,16 +12,25 @@
  * docs/LOCAL_RACE_DAY_SUPERVISOR.md.
  *
  * This helper is ONE long-lived Node process that owns the whole lifecycle:
- *   - it launches `npm.cmd run pipeline:watch ...` NON-DETACHED in the same
- *     console, so the watcher receives Ctrl+C DIRECTLY from the console and
- *     runs its own SIGINT `finally` release to completion (nothing kills it
- *     early). Since Node 18.20.2 / 20.12.2 (CVE-2024-27980) directly spawning
- *     the npm.cmd batch shim throws `EINVAL` — Node refuses to run a .cmd/.bat
- *     without a shell — so we invoke the Windows command processor EXPLICITLY
- *     via `%ComSpec%` (cmd.exe) `/d /s /c "npm.cmd …"` with
- *     `windowsVerbatimArguments: true` (we build the exact, safely-quoted
- *     command line ourselves). Still never `npm.ps1`, still no
- *     execution-policy change;
+ *   - it launches the watcher as a NATIVE node child — `process.execPath
+ *     --import <resolved tsx loader URL> scripts/runRaceDayPipelineWatch.ts
+ *     --date … --course … --interval-minutes 5 --commit` — with `shell:false`
+ *     and `detached:false`, so the watcher runs IN THAT SAME node process (the
+ *     tsx loader is in-process; verified: no grandchild) and receives Ctrl+C
+ *     DIRECTLY from the console, running its own SIGINT `finally` release to
+ *     completion with its stdio wired straight to us.
+ *
+ *     There is deliberately NO npm, npm.cmd, npm.ps1, cmd.exe/ComSpec,
+ *     PowerShell, shell execution or .cmd/.bat anywhere in this chain. Earlier
+ *     revisions used PowerShell + Tee-Object (which hard-killed the watcher on
+ *     Ctrl+C before its release could finish) and then cmd.exe via ComSpec
+ *     (needed because directly spawning the npm.cmd shim throws `EINVAL` since
+ *     Node 18.20.2/20.12.2, CVE-2024-27980) — but cmd.exe then sat in the
+ *     long-running signal path and its "Terminate batch job (Y/N)?" handling
+ *     tore down the child's output before the release/graceful markers reached
+ *     this helper. Going straight to node+tsx removes that whole class of
+ *     failure: the date/course are ARGV ELEMENTS, never command text, so no
+ *     quoting is involved at all;
  *   - it registers a SIGINT handler and DOES NOT exit on the first Ctrl+C —
  *     it just waits for the child to finish and emit PRODUCER_CLAIM_RELEASED;
  *   - it tees the child's stdout/stderr to BOTH the live console and an
@@ -47,6 +56,7 @@
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 /** Bounded-retry policy — mirrors src/lib/raceDayLauncher.ts (verified by test). */
 const MAX_RETRIES = 5;
@@ -54,9 +64,6 @@ const RETRY_DELAY_SECONDS = 60;
 
 /** Terminal wrapper-configuration exit code (npm.cmd unrunnable / bad log dir / bad args). */
 const CONFIG_FAILURE_CODE = 86;
-
-/** cmd.exe's "'x' is not recognized as an internal or external command" exit code. */
-const CMD_COMMAND_NOT_FOUND = 9009;
 
 /** The documented Windows-safe course charset (mirrors SAFE_COURSE_RE in raceDayLauncher.ts). */
 const SAFE_COURSE_RE = /^[A-Za-z0-9 '().-]+$/;
@@ -151,29 +158,48 @@ function validateArgs(argv) {
   return { ok: true, date, course, logdir };
 }
 
-/** Resolves the Windows command processor path from the environment. Pure-ish (reads env). */
-function comSpecPath() {
-  return process.env.ComSpec || process.env.COMSPEC || 'cmd.exe';
+/** The repository root — this helper lives in `<repo>/race-day-local/`. */
+function repoRoot() {
+  return path.resolve(__dirname, '..');
+}
+
+/** The watcher's TypeScript entrypoint: deterministic and repository-local. */
+function watcherScriptPath() {
+  return path.join(repoRoot(), 'scripts', 'runRaceDayPipelineWatch.ts');
 }
 
 /**
- * The inner command cmd.exe will run. The course is inner-double-quoted; its
- * safe charset (validated above) excludes the double-quote and cmd
- * metacharacters, so this is a single, unambiguous token. Pure.
+ * Resolves the INSTALLED tsx ESM loader through ordinary package resolution
+ * (`require.resolve('tsx')` — never a hardcoded node_modules path) and returns
+ * it as a `file:` URL, which is what `node --import` expects on Windows (it
+ * percent-encodes spaces in the repo path). Throws when tsx is not installed;
+ * the caller maps that to the terminal 86 configuration failure.
  */
-function buildWatcherNpmCommand(date, course) {
-  return `npm.cmd run pipeline:watch -- --date ${date} --course "${course}" --interval-minutes 5 --commit`;
+function resolveTsxLoaderUrl() {
+  return pathToFileURL(require.resolve('tsx')).href;
 }
 
 /**
- * The exact cmd.exe argument vector: `/d /s /c "<inner command>"`. `/s` strips
- * exactly the one outer quote pair and runs the remainder verbatim; `/d`
- * disables any AutoRun registry command. Used with
- * `windowsVerbatimArguments: true` so Node passes this line through unescaped —
- * avoiding the notorious cmd.exe argument-escaping minefield. Pure.
+ * The exact node argv for the watcher:
+ *   --import <tsx loader URL> <watcher.ts> --date D --course C --interval-minutes 5 --commit
+ *
+ * Passed as an ARGV ARRAY with shell:false, so the date and course are handed
+ * to the child as discrete arguments and can NEVER become executable command
+ * text — no quoting function is needed or used anywhere. Pure.
  */
-function buildComSpecArgs(date, course) {
-  return ['/d', '/s', '/c', `"${buildWatcherNpmCommand(date, course)}"`];
+function buildWatcherNodeArgs(loaderUrl, scriptPath, date, course) {
+  return [
+    '--import',
+    loaderUrl,
+    scriptPath,
+    '--date',
+    date,
+    '--course',
+    course,
+    '--interval-minutes',
+    '5',
+    '--commit',
+  ];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -182,11 +208,11 @@ function buildComSpecArgs(date, course) {
 
 /**
  * Spawns a child, tees stdout/stderr through `onData`, and resolves with the
- * child's real numeric exit code (or 86 on a spawn error / cmd's
- * command-not-found 9009). Never detaches. `spawnFn` is injectable for tests;
- * production passes node's spawn with cmd.exe (see main). `extraSpawnOpts`
- * merges into the spawn options (production sets
- * `windowsVerbatimArguments: true`). `onChild` receives the ChildProcess so the
+ * child's real numeric exit code (or 86 on a spawn error). Never detaches.
+ * `spawnFn` is injectable for tests; production passes node's spawn with
+ * `process.execPath` (see main). `extraSpawnOpts` merges into the spawn options
+ * (production sets `cwd` to the repository root so the watcher's own
+ * `.env.local` lookup resolves). `onChild` receives the ChildProcess so the
  * caller can force-kill on a second Ctrl+C.
  */
 function runWatcherProcess(spawnFn, command, args, onData, onChild, extraSpawnOpts) {
@@ -195,12 +221,15 @@ function runWatcherProcess(spawnFn, command, args, onData, onChild, extraSpawnOp
     const finish = (code) => {
       if (settled) return;
       settled = true;
-      resolve(code === CMD_COMMAND_NOT_FOUND ? CONFIG_FAILURE_CODE : code);
+      resolve(code);
     };
     let child;
     try {
       child = spawnFn(command, args, {
+        // shell:false + detached:false → a native child in THIS console process
+        // group: it receives Ctrl+C directly and its stdio stays wired to us.
         shell: false,
+        detached: false,
         stdio: ['inherit', 'pipe', 'pipe'],
         windowsHide: false,
         ...(extraSpawnOpts || {}),
@@ -306,8 +335,24 @@ async function main() {
     scan(d);
   };
 
-  const comSpec = comSpecPath();
-  const comSpecArgs = buildComSpecArgs(date, course);
+  // Resolve the tsx loader through package resolution. A missing/broken tsx is
+  // a TERMINAL configuration failure (86) — never graceful, never retried.
+  let loaderUrl;
+  try {
+    loaderUrl = resolveTsxLoaderUrl();
+  } catch (err) {
+    const why = err && err.message ? err.message : String(err);
+    process.stderr.write(`[helper] configuration error: could not resolve the tsx loader (${why}). Run npm install.\n`);
+    process.exit(CONFIG_FAILURE_CODE);
+    return;
+  }
+  const scriptPath = watcherScriptPath();
+  if (!fs.existsSync(scriptPath)) {
+    process.stderr.write(`[helper] configuration error: watcher script not found at ${scriptPath}\n`);
+    process.exit(CONFIG_FAILURE_CODE);
+    return;
+  }
+  const nodeArgs = buildWatcherNodeArgs(loaderUrl, scriptPath, date, course);
   let sigintCount = 0;
   let currentChild = null;
   const retryAbort = new AbortController();
@@ -340,16 +385,16 @@ async function main() {
     sawGracefulMarker = false;
     sawReleaseFailed = false;
 
-    emit(`[helper] pipeline:watch starting (interval 5 min, --commit) via ${comSpec}…`);
+    emit('[helper] pipeline:watch starting (interval 5 min, --commit) — native node + tsx loader, no shell…');
     const code = await runWatcherProcess(
       spawn,
-      comSpec,
-      comSpecArgs,
+      process.execPath,
+      nodeArgs,
       onData,
       (c) => {
         currentChild = c;
       },
-      { windowsVerbatimArguments: true },
+      { cwd: repoRoot() },
     );
     currentChild = null;
     emit(`[helper] pipeline:watch exited with code ${code}`);
@@ -393,7 +438,7 @@ async function main() {
       process.exit(2);
     }
     if (cls === 'terminal_config') {
-      emit('[helper] TERMINAL: npm.cmd could not be executed (config failure, exit 86). No pipeline work ran. Check the Node.js/npm installation and PATH. Not retrying.');
+      emit('[helper] TERMINAL: the watcher could not be launched (config failure, exit 86). No pipeline work ran. Check the Node.js/tsx installation (npm install). Not retrying.');
       process.exit(CONFIG_FAILURE_CODE);
     }
 
@@ -416,7 +461,6 @@ module.exports = {
   MAX_RETRIES,
   RETRY_DELAY_SECONDS,
   CONFIG_FAILURE_CODE,
-  CMD_COMMAND_NOT_FOUND,
   SAFE_COURSE_RE,
   GRACEFUL_MARKER,
   RELEASE_FAILED_MARKER,
@@ -424,9 +468,10 @@ module.exports = {
   effectiveExitCode,
   isRetryable,
   validateArgs,
-  comSpecPath,
-  buildWatcherNpmCommand,
-  buildComSpecArgs,
+  repoRoot,
+  watcherScriptPath,
+  resolveTsxLoaderUrl,
+  buildWatcherNodeArgs,
   runWatcherProcess,
   interruptibleSleep,
 };

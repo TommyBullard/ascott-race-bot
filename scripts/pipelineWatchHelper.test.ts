@@ -19,9 +19,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import {
   classifyPipelineWatchExit,
@@ -33,7 +34,6 @@ interface HelperModule {
   MAX_RETRIES: number;
   RETRY_DELAY_SECONDS: number;
   CONFIG_FAILURE_CODE: number;
-  CMD_COMMAND_NOT_FOUND: number;
   SAFE_COURSE_RE: RegExp;
   GRACEFUL_MARKER: string;
   RELEASE_FAILED_MARKER: string;
@@ -44,9 +44,10 @@ interface HelperModule {
   effectiveExitCode: (classification: string, code: number) => number;
   isRetryable: (classification: string) => boolean;
   validateArgs: (argv: string[]) => { ok: boolean; date?: string; course?: string; logdir?: string; error?: string };
-  comSpecPath: () => string;
-  buildWatcherNpmCommand: (date: string, course: string) => string;
-  buildComSpecArgs: (date: string, course: string) => string[];
+  repoRoot: () => string;
+  watcherScriptPath: () => string;
+  resolveTsxLoaderUrl: () => string;
+  buildWatcherNodeArgs: (loaderUrl: string, scriptPath: string, date: string, course: string) => string[];
   runWatcherProcess: (
     spawnFn: typeof spawn,
     command: string,
@@ -177,16 +178,47 @@ test('validateArgs: rejects a course with cmd-unsafe characters (defense-in-dept
   assert.equal(helper.validateArgs(['2026-07-18', 'Down Royal', 'logs/x']).ok, true);
 });
 
-test('comSpecPath: resolves the Windows command processor and is never empty', () => {
-  const v = helper.comSpecPath();
-  assert.ok(typeof v === 'string' && v.length > 0);
-  if (process.env.ComSpec) assert.equal(v, process.env.ComSpec);
+test('tsx loader is resolved via package resolution (not a hardcoded node_modules path) and yields a file: URL', () => {
+  const url = helper.resolveTsxLoaderUrl();
+  assert.match(url, /^file:\/\/\//, 'node --import needs a file: URL on Windows');
+  assert.match(url, /tsx/);
+  // Same answer as ordinary package resolution from the repo.
+  assert.equal(url, pathToFileURL(requireCjs.resolve('tsx')).href);
 });
 
-test('buildComSpecArgs: cmd.exe /d /s /c "<inner>" with the course inner-double-quoted; inner runs npm.cmd pipeline:watch (NOT a direct .cmd spawn)', () => {
-  const inner = helper.buildWatcherNpmCommand('2026-07-18', 'Down Royal');
-  assert.equal(inner, 'npm.cmd run pipeline:watch -- --date 2026-07-18 --course "Down Royal" --interval-minutes 5 --commit');
-  assert.deepEqual(helper.buildComSpecArgs('2026-07-18', 'Down Royal'), ['/d', '/s', '/c', `"${inner}"`]);
+test('watcher script path is deterministic and repository-local; repoRoot is the repo (helper lives in race-day-local/)', () => {
+  const root = helper.repoRoot();
+  const script = helper.watcherScriptPath();
+  assert.equal(script, join(root, 'scripts', 'runRaceDayPipelineWatch.ts'));
+  assert.equal(existsSync(script), true, 'the watcher entrypoint must exist');
+  assert.equal(existsSync(join(root, 'package.json')), true, 'repoRoot must be the repository root');
+});
+
+test('buildWatcherNodeArgs: an ARGV ARRAY (--import <loader> <script.ts> …) — date/course are discrete args, never command text, no quoting', () => {
+  const args = helper.buildWatcherNodeArgs('file:///x/tsx/dist/loader.mjs', 'C:/repo/scripts/w.ts', '2026-07-18', 'Down Royal');
+  assert.deepEqual(args, [
+    '--import',
+    'file:///x/tsx/dist/loader.mjs',
+    'C:/repo/scripts/w.ts',
+    '--date',
+    '2026-07-18',
+    '--course',
+    'Down Royal',
+    '--interval-minutes',
+    '5',
+    '--commit',
+  ]);
+  // The course is ONE element — it is never embedded in a command string.
+  assert.equal(args.filter((a) => a === 'Down Royal').length, 1);
+  assert.equal(args.some((a) => a.includes('"')), false, 'no quoting is introduced anywhere');
+});
+
+test('a shell-metacharacter-looking course can never become executable text (argv array + charset guard)', () => {
+  // The charset guard rejects it up front …
+  assert.equal(helper.validateArgs(['2026-07-18', 'A & del x', 'logs/x']).ok, false);
+  // … and even if it were passed, it would still be a single argv element.
+  const args = helper.buildWatcherNodeArgs('file:///l.mjs', 'C:/s.ts', '2026-07-18', 'A & del x');
+  assert.equal(args[args.indexOf('--course') + 1], 'A & del x');
 });
 
 /* --------------------- fake-child integration (no npm/claims) ---------------- */
@@ -214,6 +246,13 @@ test('runWatcherProcess: streams a real child stdout+stderr to onData and resolv
   assert.equal(child!.killed === true, false); // resolved only after a clean exit, no orphan
 });
 
+test('runWatcherProcess: child exit codes 0, 2 and 3 propagate verbatim (policy codes are never rewritten)', async () => {
+  for (const expected of [0, 2, 3]) {
+    const code = await helper.runWatcherProcess(spawn, NODE, ['-e', `process.exit(${expected})`], () => {});
+    assert.equal(code, expected, `exit ${expected} must propagate`);
+  }
+});
+
 test('runWatcherProcess: a spawn error (unrunnable command) resolves to the 86 config-failure code, never a phantom 0', async () => {
   const seen: string[] = [];
   const code = await helper.runWatcherProcess(
@@ -226,10 +265,42 @@ test('runWatcherProcess: a spawn error (unrunnable command) resolves to the 86 c
   assert.equal(code, 86);
 });
 
-test('runWatcherProcess: a 9009 exit (cmd.exe "command not recognized" — e.g. npm.cmd missing) is mapped to the 86 config-failure code', async () => {
-  assert.equal(helper.CMD_COMMAND_NOT_FOUND, 9009);
-  const code = await helper.runWatcherProcess(spawn, NODE, ['-e', 'process.exit(9009)'], () => {});
-  assert.equal(code, 86);
+test('a harmless temporary TypeScript child runs through the SAME native node+tsx strategy, in ONE process, with argv intact', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pw-tsx-'));
+  const fixture = join(dir, 'fixture.ts');
+  writeFileSync(
+    fixture,
+    'const tag: string = "TSX_FIXTURE";\n' +
+      'process.stdout.write(`${tag} pid=${process.pid} argv=${JSON.stringify(process.argv.slice(2))}\\n`);\n' +
+      'process.exit(0);\n',
+    'utf8',
+  );
+  try {
+    const args = helper.buildWatcherNodeArgs(helper.resolveTsxLoaderUrl(), fixture, '2026-07-18', 'Down Royal');
+    let out = '';
+    let childPid: number | undefined;
+    const code = await helper.runWatcherProcess(
+      spawn,
+      NODE, // process.execPath — the production executable
+      args,
+      (d) => {
+        out += d.toString();
+      },
+      (c) => {
+        childPid = c.pid;
+      },
+    );
+    assert.equal(code, 0, 'TypeScript ran and exited 0 through the tsx loader');
+    assert.match(out, /TSX_FIXTURE/);
+    // The TS executed IN the spawned process — no intermediate shim/grandchild.
+    const inner = out.match(/pid=(\d+)/);
+    assert.ok(inner, 'fixture reported its pid');
+    assert.equal(Number(inner![1]), childPid, 'no extra process layer between helper and watcher');
+    // The spaced course survived as ONE argv element with no quoting.
+    assert.match(out, /"--course","Down Royal"/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /* --------------------------- interruptible retry sleep ----------------------- */

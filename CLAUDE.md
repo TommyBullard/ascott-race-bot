@@ -522,13 +522,21 @@ pipeline hard-killed the watcher's Node process mid-`await` of its release RPC
 capturing the exit code. `watch-pipeline.bat` is now a **thin launcher** that
 runs a single long-lived Node helper `race-day-local/run-pipeline-watch.js`
 (plain CommonJS, run by `node` — fewest console-attached intermediaries). The
-helper launches `npm.cmd run pipeline:watch` through `%ComSpec%` cmd.exe
-(`/d /s /c "npm.cmd …"`, `windowsVerbatimArguments: true` with a
-safely-quoted command line) — a direct `spawn('npm.cmd', …, {shell:false})`
-throws `EINVAL` on Node ≥18.20.2/20.12.2 (CVE-2024-27980), the live failure
-this corrected; still never `npm.ps1`, no execution-policy change,
-**non-detached**, so the watcher receives Ctrl+C directly and runs its own
-`finally` release to completion. It tees stdout/stderr to the console AND an
+helper launches the watcher as a **native node child**: `process.execPath
+--import <require.resolve('tsx') as a file URL> scripts/runRaceDayPipelineWatch.ts
+--date … --course … --interval-minutes 5 --commit`, `shell:false`,
+`detached:false`. The tsx loader runs in-process so that node.exe IS the
+watcher (verified: no grandchild), and date/course are argv elements that can
+never become command text (no quoting anywhere). There is deliberately NO npm,
+npm.cmd, npm.ps1, cmd.exe/ComSpec, PowerShell or shell in the long-running
+chain: PowerShell+Tee-Object hard-killed the watcher on Ctrl+C, and the
+interim ComSpec/cmd.exe form (needed because Node refuses to spawn a `.cmd`
+directly since CVE-2024-27980) put cmd.exe in the signal path, where its
+"Terminate batch job (Y/N)?" handling tore down the child's output before the
+release/graceful markers arrived — reporting a clean stop as unclean. A tsx
+that cannot be resolved fails closed as terminal 86. **Non-detached**, so the
+watcher receives Ctrl+C directly and runs its own `finally` release to
+completion. It tees stdout/stderr to the console AND an
 append-only UTF-8 `pipeline-watch.log` (single writer — no mixed encoding),
 **does not exit on the first Ctrl+C** (it awaits the watcher's graceful exit),
 force-stops only on a second Ctrl+C, captures the child's real exit code, and

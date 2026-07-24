@@ -127,12 +127,26 @@ messages below come from the Node helper `run-pipeline-watch.js` (see below):
 
 `watch-pipeline.bat` is now a **thin launcher**: it runs the Node helper
 `race-day-local/run-pipeline-watch.js`, which owns the whole watcher lifecycle
-as one long-lived process. The helper launches `npm.cmd run pipeline:watch`
-through `%ComSpec%` cmd.exe (`/d /s /c "npm.cmd …"` with a safely-quoted
-command line) — a direct `spawn('npm.cmd', …)` throws `EINVAL` on current Node
-for Windows, so the command processor is invoked explicitly; still never
-`npm.ps1`, and **non-detached** so the watcher shares this console — and tees
-its output to the console and an append-only, UTF-8 `pipeline-watch.log`. On **Ctrl+C**, Windows delivers the
+as one long-lived process. The helper launches the watcher as a **native node
+child** — `process.execPath --import <resolved tsx loader> scripts/runRaceDayPipelineWatch.ts
+--date … --course … --interval-minutes 5 --commit` — with `shell:false` and
+`detached:false`. The tsx loader runs in-process, so that spawned node.exe *is*
+the watcher (verified: no grandchild), it shares this console, and its stdio is
+wired straight to the helper, which tees output to the console and an
+append-only, UTF-8 `pipeline-watch.log`.
+
+There is deliberately **no npm, npm.cmd, cmd.exe/ComSpec, PowerShell or shell**
+in the long-running chain. Earlier revisions used PowerShell + `Tee-Object`
+(hard-killed the watcher on Ctrl+C) and then cmd.exe via ComSpec (needed because
+Node refuses to spawn a `.cmd` directly since CVE-2024-27980) — but cmd.exe then
+sat in the signal path and its "Terminate batch job (Y/N)?" handling tore down
+the child's output *before* the release and graceful markers reached the helper,
+so a clean stop was reported as unclean. Going straight to node + tsx removes
+that layer. The date and course are passed as **argv array elements**, so they
+can never become executable command text and no quoting is involved anywhere.
+The tsx loader is located through ordinary package resolution
+(`require.resolve('tsx')`), never a hardcoded path; if it cannot be resolved the
+helper fails closed with the terminal config code 86. On **Ctrl+C**, Windows delivers the
 event to the whole console group: the watcher receives it directly and runs its
 own `finally` release (emitting `PRODUCER_CLAIM_RELEASED`) before finishing; the
 helper **does not exit on the first Ctrl+C** — it waits for that graceful exit,
