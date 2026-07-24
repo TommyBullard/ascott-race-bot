@@ -604,6 +604,31 @@ external checks. Neither command supports `--commit`; reports are optional
 disabled: no supervisor, no cron/scheduling, no Railway/Vercel change, no
 migration change.
 
+**Phase 7A.2b write-boundary evidence pack (IMPLEMENTED —
+src/lib/nationwideWriteBoundaryAudit.ts,
+`npm run audit:nationwide-write-boundary -- --date YYYY-MM-DD --label
+before|after [--report] [--json]`, plus the read-only
+`audit:nationwide-write-boundary:compare`; docs/NATIONWIDE_WRITE_BOUNDARY_EVIDENCE.md):**
+STRICTLY SELECT-only before/after evidence proving a future attended nationwide
+`live-provider` dry-run wrote ZERO forbidden persistence. Its only operations
+are SELECT queries plus one read-only `producer_claim_status` RPC; there is no
+`--commit` flag, no provider call, no model execution, no lock/result creation,
+and no claim acquire/heartbeat/release anywhere (the compare command opens no
+database at all). Categories carry their REAL table and verified date-scoping:
+one-hop `race_id` for runners/snapshots/model_runs/recommendations/
+locked_race_decisions (ALL horizons)/ml_training_examples/genai_commentary,
+two-hop `model_runner_scores -> model_runs.race_id` and `runner_quotes ->
+market_snapshots.race_id`, `races.status='result'` for settled and
+`runners.finish_pos not null` for finish positions. `cron_runs` has NO race
+relationship in this schema, so it is scoped to the UTC calendar day and
+reported as a DIFFERENT semantic, never as race-scoped. A missing table,
+permission denial, failed query or unscopable table is NEVER collapsed to zero
+and can never support a PASS; an unreadable `races` query degrades the whole
+snapshot to FAIL rather than showing zeros; a forbidden-category DECREASE fails
+too (a read-only run must not delete either); allowed ingestion may grow freely.
+Error text is redacted to a short code+message (credential-shaped fragments
+replaced) and owner ids appear only as an 8-char prefix.
+
 **Still pending:** the remaining Phase 7A steps (route-level claim
 enforcement) and all of Phase 7B. Hardened per
 an independent Producer Ownership Safety Review; the migration remains

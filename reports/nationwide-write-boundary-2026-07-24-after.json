@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "date": "2026-07-24",
+  "label": "after",
+  "generated_at": "2026-07-24T13:06:11.211Z",
+  "read_only": true,
+  "database_mutated": false,
+  "scope": "all-uk-ire",
+  "external_provider_calls": "none",
+  "claim_operation": "status_only",
+  "claim": {
+    "status": "absent",
+    "scope": null,
+    "generation": null,
+    "owner_prefix": null
+  },
+  "stored_courses": {
+    "status": "counted",
+    "count": 8
+  },
+  "categories": [
+    {
+      "id": "stored_races",
+      "label": "stored races",
+      "kind": "allowed",
+      "table": "races",
+      "relationship": "races.meeting_date = <date> (direct)",
+      "mandatory": false,
+      "status": "counted",
+      "count": 55
+    },
+    {
+      "id": "stored_runners",
+      "label": "stored runners",
+      "kind": "allowed",
+      "table": "runners",
+      "relationship": "runners.race_id -> races.meeting_date = <date>",
+      "mandatory": false,
+      "status": "counted",
+      "count": 587
+    },
+    {
+      "id": "market_snapshots",
+      "label": "market snapshots",
+      "kind": "allowed",
+      "table": "market_snapshots",
+      "relationship": "market_snapshots.race_id -> races.meeting_date = <date>",
+      "mandatory": false,
+      "status": "counted",
+      "count": 110
+    },
+    {
+      "id": "runner_quotes",
+      "label": "runner quotes",
+      "kind": "allowed",
+      "table": "runner_quotes",
+      "relationship": "runner_quotes.snapshot_id -> market_snapshots.race_id -> races.meeting_date = <date>",
+      "mandatory": false,
+      "status": "counted",
+      "count": 1060
+    },
+    {
+      "id": "cron_telemetry",
+      "label": "cron/provider telemetry",
+      "kind": "allowed",
+      "table": "cron_runs",
+      "relationship": "cron_runs.finished_at within the UTC calendar day of <date> — NOT a race relationship (cron_runs has no race_id/meeting_date)",
+      "mandatory": false,
+      "status": "counted",
+      "count": 7
+    },
+    {
+      "id": "model_runs",
+      "label": "persisted model runs",
+      "kind": "forbidden",
+      "table": "model_runs",
+      "relationship": "model_runs.race_id -> races.meeting_date = <date>",
+      "mandatory": true,
+      "status": "counted",
+      "count": 0
+    },
+    {
+      "id": "model_runner_scores",
+      "label": "persisted model runner scores",
+      "kind": "forbidden",
+      "table": "model_runner_scores",
+      "relationship": "model_runner_scores.model_run_id -> model_runs.race_id -> races.meeting_date = <date>",
+      "mandatory": true,
+      "status": "counted",
+      "count": 0,
+      "detail": "no date-scoped parent rows exist, so no child rows can exist"
+    },
+    {
+      "id": "recommendations",
+      "label": "persisted recommendations",
+      "kind": "forbidden",
+      "table": "recommendations",
+      "relationship": "recommendations.race_id -> races.meeting_date = <date> (direct hop; the table also carries model_run_id)",
+      "mandatory": true,
+      "status": "counted",
+      "count": 0
+    },
+    {
+      "id": "locked_race_decisions",
+      "label": "locked decision rows",
+      "kind": "forbidden",
+      "table": "locked_race_decisions",
+      "relationship": "locked_race_decisions.race_id -> races.meeting_date = <date> (ALL horizons, not just minutes_before = 5 — a research capture is still forbidden persistence)",
+      "mandatory": true,
+      "status": "counted",
+      "count": 0
+    },
+    {
+      "id": "settled_races",
+      "label": "settled races",
+      "kind": "forbidden",
+      "table": "races",
+      "relationship": "races.meeting_date = <date> AND lower(races.status) = 'result'",
+      "mandatory": true,
+      "status": "counted",
+      "count": 0
+    },
+    {
+      "id": "runner_finish_positions",
+      "label": "runners with a finish position",
+      "kind": "forbidden",
+      "table": "runners",
+      "relationship": "runners.race_id -> races.meeting_date = <date> AND runners.finish_pos IS NOT NULL",
+      "mandatory": true,
+      "status": "counted",
+      "count": 0
+    },
+    {
+      "id": "training_examples",
+      "label": "persisted training capture rows",
+      "kind": "forbidden",
+      "table": "ml_training_examples",
+      "relationship": "ml_training_examples.race_id -> races.meeting_date = <date>",
+      "mandatory": false,
+      "status": "counted",
+      "count": 0
+    },
+    {
+      "id": "genai_artifacts",
+      "label": "persisted GenAI commentary rows",
+      "kind": "forbidden",
+      "table": "genai_commentary",
+      "relationship": "genai_commentary.race_id -> races.meeting_date = <date> (race_id is nullable; unlinked rows are unscopable)",
+      "mandatory": false,
+      "status": "counted",
+      "count": 0
+    }
+  ],
+  "warnings": [
+    "cron_runs has no race_id/meeting_date in this schema; its count is scoped to the UTC calendar day of the date, which is a different semantic from a race meeting date",
+    "genai_commentary.race_id is nullable; rows with no race link cannot be date-scoped and are not counted"
+  ],
+  "invariant_violations": [],
+  "unavailable_categories": [],
+  "verdict": "OK",
+  "statement": "This evidence command performed SELECT-only reads plus a read-only producer claim status check. It changed nothing: no database row was inserted, updated or deleted, no provider route was called, no model was run, no recommendation/lock/result was created, and no producer claim was acquired, renewed, released or stolen."
+}

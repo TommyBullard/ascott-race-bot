@@ -59,6 +59,8 @@
     "report:locked": "tsx scripts/lockedReport.ts",
     "audit:nationwide": "tsx scripts/nationwideAudit.ts",
     "timing:nationwide": "tsx scripts/nationwideTiming.ts",
+    "audit:nationwide-write-boundary": "tsx scripts/nationwideWriteBoundaryAudit.ts",
+    "audit:nationwide-write-boundary:compare": "tsx scripts/nationwideWriteBoundaryCompare.ts",
     "producer:claim-check": "tsx scripts/producerClaimCheck.ts",
     "producer:preflight": "tsx scripts/producerPreflight.ts",
     "race-day:launch-check": "tsx scripts/raceDayLaunchCheck.ts",
