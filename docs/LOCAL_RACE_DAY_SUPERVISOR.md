@@ -118,27 +118,57 @@ messages below come from the Node helper `run-pipeline-watch.js` (see below):
 | `TERMINAL: producer OWNERSHIP refused or lost (exit 3)` | Another producer holds/took the date's claim | `npm run producer:claim-check -- --date <date>`; stop the other producer or wait for its TTL, then re-run the launcher |
 | `TERMINAL: claim mechanism unavailable/uncertain (exit 2)` | Fail-closed — Supabase/RPC problem | Investigate connectivity; nothing ran after the failure |
 | `TERMINAL: npm.cmd could not be executed (config failure, exit 86)` | Configuration failure — npm.cmd/log dir/args, so no pipeline work ran at all | Check the Node.js/npm installation and PATH; never reported as graceful |
+| `stopped GRACEFULLY after Ctrl+C … exit 1 … normalised to an effective 0` | One Ctrl+C, watcher confirmed clean shutdown + claim release; the shell reported non-zero (see below) | Nothing — this is the normal Ctrl+C outcome |
+| `TERMINAL: interrupted by Ctrl+C but clean shutdown was NOT confirmed` | Ctrl+C, but no `WATCH_STOPPED_GRACEFULLY` (and/or the release failed) | **Check the claim**: `npm run producer:claim-check -- --date <date>`; it may still be held until TTL |
+| `TERMINAL: force-stopped by operator — a SECOND Ctrl+C was received` | You pressed Ctrl+C twice | Expected; an un-released claim TTL-expires |
 | `bounded retry n/5 in 60s` | Generic crash (no Ctrl+C) | It retries at most 5 times, then stays visibly DEGRADED; a Ctrl+C is never retried |
 
 ### Graceful Ctrl+C — how the wrapper works
 
 `watch-pipeline.bat` is now a **thin launcher**: it runs the Node helper
 `race-day-local/run-pipeline-watch.js`, which owns the whole watcher lifecycle
-as one long-lived process. The helper spawns `npm.cmd run pipeline:watch`
-(explicit `npm.cmd`, never `npm.ps1`; `shell:false`; **non-detached**, so the
-watcher shares this console) and tees its output to the console and an
-append-only, UTF-8 `pipeline-watch.log`. On **Ctrl+C**, Windows delivers the
+as one long-lived process. The helper launches `npm.cmd run pipeline:watch`
+through `%ComSpec%` cmd.exe (`/d /s /c "npm.cmd …"` with a safely-quoted
+command line) — a direct `spawn('npm.cmd', …)` throws `EINVAL` on current Node
+for Windows, so the command processor is invoked explicitly; still never
+`npm.ps1`, and **non-detached** so the watcher shares this console — and tees
+its output to the console and an append-only, UTF-8 `pipeline-watch.log`. On **Ctrl+C**, Windows delivers the
 event to the whole console group: the watcher receives it directly and runs its
-own `finally` release (emitting `PRODUCER_CLAIM_RELEASED`) before exiting 0; the
+own `finally` release (emitting `PRODUCER_CLAIM_RELEASED`) before finishing; the
 helper **does not exit on the first Ctrl+C** — it waits for that graceful exit,
-then prints `stopped GRACEFULLY` and propagates exit 0. A **second Ctrl+C** is
-an explicit force-stop (any un-released claim then TTL-expires). This replaced
-the earlier cmd + PowerShell `Tee-Object` chain, which was hard-killed on Ctrl+C
-before the watcher's async release could complete. No `Set-ExecutionPolicy`
-change or bypass is used anywhere; `chcp 65001` keeps the launcher/wrapper
-console UTF-8. If cmd shows "Terminate batch job (Y/N)?" after the helper has
-already printed GRACEFUL, it is harmless — the release and exit code are already
-done.
+then prints `stopped GRACEFULLY`. A **second Ctrl+C** is an explicit force-stop
+(any un-released claim then TTL-expires). This replaced the earlier cmd +
+PowerShell `Tee-Object` chain, which was hard-killed on Ctrl+C before the
+watcher's async release could complete. No `Set-ExecutionPolicy` change or
+bypass is used anywhere; `chcp 65001` keeps the launcher/wrapper console UTF-8.
+
+#### Observed Windows quirk: exit 1 after a *clean* Ctrl+C
+
+**Measured in the attended drill:** a single Ctrl+C shuts the watcher down
+perfectly — `PRODUCER_CLAIM_RELEASED` is emitted, `Watch finished after N
+cycle(s).` prints, and a later `producer:claim-check` shows `unclaimed` — yet
+**npm/cmd.exe still report exit code 1** to the helper (Windows treats the
+console interrupt as a failed command; answering `N` to "Terminate batch job
+(Y/N)?" does not change it). A naive wrapper therefore mislabels a clean stop as
+a crash or a force-stop.
+
+The helper resolves this with **structured evidence, not text guessing**. It
+normalises the shell's non-zero code to an **effective exit 0** only when *all*
+of these hold:
+
+1. exactly **one** Ctrl+C reached the helper (a second one is always a genuine
+   force-stop);
+2. the watcher printed the structured marker **`WATCH_STOPPED_GRACEFULLY`** —
+   emitted only after the `finally` release completes and only when no error
+   exit code was set (an ownership/mechanism stop never emits it); and
+3. the stream contains **no `PRODUCER_CLAIM_RELEASE_FAILED`** event.
+
+If a Ctrl+C happened but that evidence is missing, the helper keeps the
+non-zero code and says so (`clean shutdown was NOT confirmed`) so you can check
+the claim. Classification runs on the child's `close` event, after all output
+has drained, so the marker can never be missed. If cmd shows "Terminate batch
+job (Y/N)?" after the helper has already printed GRACEFUL, it is harmless — the
+release and the verdict are already done.
 
 Other cases:
 

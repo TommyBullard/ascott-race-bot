@@ -232,16 +232,25 @@ test('pipeline wrapper: is a THIN launcher — runs the Node helper synchronousl
   assert.equal(/^:loop\b|goto loop/m.test(PIPELINE), false, 'no cmd retry loop in the thin launcher (owned by the helper)');
 });
 
-test('pipeline wrapper + helper: npm is only ever the npm.cmd shim (never a .ps1 command), and no execution-policy change/bypass anywhere', () => {
+test('pipeline wrapper + helper: launches npm.cmd via %ComSpec% cmd.exe (NOT a direct .cmd spawn, which throws EINVAL on modern Node); never a .ps1 command; no execution-policy change/bypass', () => {
   for (const src of [...ALL_BATS, HELPER]) {
-    // A quoted/command-position `.ps1` (the header prose says "never the .ps1
-    // shim" without quoting it — that is documentation, not an invocation).
+    // A quoted/command-position `.ps1` (prose may say "never the .ps1 shim"
+    // without quoting it — that is documentation, not an invocation).
     assert.equal(/['"]npm\.ps1['"]|npm\.ps1\s/i.test(src), false, 'no npm.ps1 command');
     assert.equal(/Set-ExecutionPolicy/i.test(src), false, 'no execution-policy change');
     assert.equal(/ExecutionPolicy\s+Bypass/i.test(src), false, 'no execution-policy bypass');
   }
-  // POSITIVE proof: the helper spawns the watcher via the npm.cmd shim, shell:false.
-  assert.match(HELPER, /runWatcherProcess\(spawn, 'npm\.cmd'/);
+  // The EINVAL fix: the helper resolves %ComSpec% and runs cmd.exe /d /s /c
+  // "<inner>", with windowsVerbatimArguments so the command line is passed
+  // through unescaped. It must NOT spawn a .cmd file directly.
+  assert.match(HELPER, /process\.env\.ComSpec \|\| process\.env\.COMSPEC \|\| 'cmd\.exe'/);
+  assert.match(HELPER, /'\/d', '\/s', '\/c'/);
+  assert.match(HELPER, /windowsVerbatimArguments: true/);
+  assert.match(HELPER, /npm\.cmd run pipeline:watch/);
+  // No direct `.cmd`/`.bat` executable handed to spawn (the thing that broke).
+  assert.equal(/spawn(Fn)?\(\s*['"][^'"]*\.(cmd|bat)['"]/i.test(HELPER), false, 'never spawn a .cmd/.bat directly');
+  assert.equal(/runWatcherProcess\(spawn, 'npm\.cmd'/.test(HELPER), false, 'the watcher is launched via cmd.exe, not npm.cmd directly');
+  // Still no shell:true (we build the exact command line ourselves).
   assert.match(HELPER, /shell: false/);
 });
 
@@ -271,18 +280,43 @@ test('helper: first SIGINT WAITS (never process.exit, never kills the child); a 
   assert.match(elseBlock, /currentChild\.kill\(\)/);
 });
 
-test('helper: exit-code policy — 0 graceful / 2 mechanism / 3 ownership / 86 config are terminal; generic non-zero is bounded-retried; SIGINT is never retried', () => {
+test('helper: exit-code policy — 0 graceful / 2 mechanism / 3 ownership / 86 config are terminal; generic non-zero is bounded-retried; an interrupt is never retried', () => {
   assert.match(HELPER, /stopped GRACEFULLY \(exit 0\)/);
   assert.match(HELPER, /OWNERSHIP refused or lost \(exit 3\)/);
   assert.match(HELPER, /mechanism unavailable\/uncertain \(exit 2\)/);
   assert.match(HELPER, /npm\.cmd could not be executed/);
   assert.match(HELPER, /Max \$\{MAX_RETRIES\} bounded retries reached/);
-  // Once a Ctrl+C is seen the classification can only be terminal (never 'retryable').
-  assert.match(HELPER, /if \(sigintReceived\) return code === 0 \? 'terminal_graceful' : 'terminal_forced'/);
+  // The policy codes short-circuit BEFORE any interrupt reasoning.
+  assert.match(HELPER, /if \(code === 0\) return 'terminal_graceful';/);
+  assert.match(HELPER, /if \(code === CONFIG_FAILURE_CODE\) return 'terminal_config';/);
+});
+
+test('helper: "force-stopped" is reachable ONLY via a SECOND interrupt; a single Ctrl+C with confirmed clean shutdown normalises to graceful', () => {
+  // The live defect was labelling npm/cmd.exe's post-Ctrl+C exit 1 a force-stop.
+  assert.match(HELPER, /if \(secondInterrupt\) return 'terminal_forced';/);
+  assert.match(HELPER, /if \(firstInterrupt && gracefulConfirmed\) return 'terminal_graceful_normalised';/);
+  assert.match(HELPER, /if \(firstInterrupt\) return 'terminal_interrupted_unclean';/);
+  // The operator-facing message only claims a force-stop for a second Ctrl+C.
+  assert.match(HELPER, /force-stopped by operator — a SECOND Ctrl\+C was received/);
+  // Evidence is structured markers, not prose matching.
+  assert.match(HELPER, /const GRACEFUL_MARKER = 'WATCH_STOPPED_GRACEFULLY'/);
+  assert.match(HELPER, /const RELEASE_FAILED_MARKER = 'PRODUCER_CLAIM_RELEASE_FAILED'/);
+  assert.match(HELPER, /gracefulConfirmed: sawGracefulMarker && !sawReleaseFailed/);
+  // Classification must happen only after all output drained ('close', not 'exit').
+  assert.match(HELPER, /child\.on\('close'/);
+});
+
+test('watcher: emits the structured graceful marker only after a clean stop (no error exit code set)', () => {
+  const watcher = readFileSync('scripts/runRaceDayPipelineWatch.ts', 'utf8');
+  assert.match(watcher, /if \(!process\.exitCode\) \{\s*\r?\n\s*console\.log\('WATCH_STOPPED_GRACEFULLY'\);/);
+  // It sits AFTER the finally that releases the claim, so it proves shutdown completed.
+  const finallyIdx = watcher.indexOf('await releaseProducerOwnership(');
+  const markerIdx = watcher.indexOf("console.log('WATCH_STOPPED_GRACEFULLY')");
+  assert.ok(finallyIdx > 0 && markerIdx > finallyIdx, 'marker must follow the release');
 });
 
 test('helper: is claim-exempt and provider/model-free — spawns ONLY pipeline:watch, touches no DB/claim/provider', () => {
-  assert.match(HELPER, /'run', 'pipeline:watch'/);
+  assert.match(HELPER, /npm\.cmd run pipeline:watch/);
   // No other npm script, no claim/RPC/provider/model surface.
   assert.equal(/pipeline:day|lock:t-minus|results:auto|run:model|model:day/.test(HELPER), false);
   assert.equal(/producer_run_claims|producerClaim|producerOwnership|tryAcquire|heartbeat|releaseProducer|--op (claim|heartbeat|release)/i.test(HELPER), false);

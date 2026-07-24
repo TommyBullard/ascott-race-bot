@@ -316,6 +316,21 @@ async function main(): Promise<void> {
     await releaseProducerOwnership(ownership.state, heartbeat);
   }
   console.log(`\nWatch finished after ${completed} cycle(s).`);
+  // Structured, greppable terminal marker: the watch loop stopped AND the
+  // shutdown path (heartbeat stop + owner-scoped release) completed without an
+  // error exit code being set. Emitted ONLY on a clean stop (Ctrl+C / --until /
+  // --max-cycles); an ownership-loss or mechanism stop sets process.exitCode
+  // first and is therefore never labelled graceful here.
+  //
+  // WHY: on Windows a single console Ctrl+C makes npm/cmd.exe report a non-zero
+  // exit (observed: 1) even when this process shut down cleanly and released its
+  // claim. The wrapper helper (race-day-local/run-pipeline-watch.js) uses THIS
+  // marker — plus the absence of PRODUCER_CLAIM_RELEASE_FAILED and the fact that
+  // only ONE interrupt was seen — as the evidence to normalise that shell exit
+  // code to an effective 0. See docs/LOCAL_RACE_DAY_SUPERVISOR.md.
+  if (!process.exitCode) {
+    console.log('WATCH_STOPPED_GRACEFULLY');
+  }
 }
 
 main().catch((err) => {

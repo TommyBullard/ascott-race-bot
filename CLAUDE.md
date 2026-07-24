@@ -522,9 +522,13 @@ pipeline hard-killed the watcher's Node process mid-`await` of its release RPC
 capturing the exit code. `watch-pipeline.bat` is now a **thin launcher** that
 runs a single long-lived Node helper `race-day-local/run-pipeline-watch.js`
 (plain CommonJS, run by `node` — fewest console-attached intermediaries). The
-helper spawns `npm.cmd run pipeline:watch` (never `npm.ps1`; `shell:false`;
+helper launches `npm.cmd run pipeline:watch` through `%ComSpec%` cmd.exe
+(`/d /s /c "npm.cmd …"`, `windowsVerbatimArguments: true` with a
+safely-quoted command line) — a direct `spawn('npm.cmd', …, {shell:false})`
+throws `EINVAL` on Node ≥18.20.2/20.12.2 (CVE-2024-27980), the live failure
+this corrected; still never `npm.ps1`, no execution-policy change,
 **non-detached**, so the watcher receives Ctrl+C directly and runs its own
-`finally` release to completion), tees stdout/stderr to the console AND an
+`finally` release to completion. It tees stdout/stderr to the console AND an
 append-only UTF-8 `pipeline-watch.log` (single writer — no mixed encoding),
 **does not exit on the first Ctrl+C** (it awaits the watcher's graceful exit),
 force-stops only on a second Ctrl+C, captures the child's real exit code, and
@@ -533,9 +537,23 @@ all terminal; generic non-zero bounded-retry ≤5 at 60s; a Ctrl+C is never
 retried), reuse-verified against `classifyPipelineWatchExit` +
 `MAX_PIPELINE_WATCH_RETRIES`/`PIPELINE_WATCH_RETRY_DELAY_SECONDS` in
 `src/lib/raceDayLauncher.ts`. The helper touches no DB/claim/provider/model
-(pipeline:watch still owns and releases the claim); `pipeline:watch` TS was
-proven correct and left unchanged. `watch-locks.bat`/`watch-results.bat`
-remain byte-identical.
+(pipeline:watch still owns and releases the claim). `watch-locks.bat`/
+`watch-results.bat` remain byte-identical. **Graceful-exit normalisation
+(attended-drill-driven):** a single Ctrl+C shuts the watcher down cleanly
+(claim released, final status unclaimed) but Windows still makes npm/cmd.exe
+report exit 1, which the wrapper initially mislabelled "force-stopped by
+operator". The watcher now prints a structured terminal marker
+`WATCH_STOPPED_GRACEFULLY` after its release `finally`, emitted ONLY when no
+error exit code was set (an ownership/mechanism stop never emits it — its
+only change; no interval/claim/provider/model logic touched). The helper
+tracks first vs SECOND interrupt separately and normalises a non-zero shell
+code to an effective 0 ONLY when all three hold: exactly one Ctrl+C, the
+marker was seen, and no `PRODUCER_CLAIM_RELEASE_FAILED` appeared. "Force-
+stopped" is now reachable ONLY via a second Ctrl+C; an interrupt without
+confirmed clean shutdown stays visibly non-zero (`clean shutdown was NOT
+confirmed`, prompting a claim check); an exit 1 with no Ctrl+C remains an
+ordinary bounded-retry crash. Classification runs on the child's `close`
+event so the marker can never be missed by a race with `exit`.
 
 **Phase 7A.2b Step 5 (IMPLEMENTED — nationwide preflight + ownership-aware
 dry-run; src/lib/nationwideOwnership.ts, src/lib/nationwideDryRun.ts,
