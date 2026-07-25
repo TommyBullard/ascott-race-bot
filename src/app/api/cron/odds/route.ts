@@ -19,7 +19,8 @@
  * (course + off-time) and normalised horse name; unmatched entities are skipped,
  * never guessed.
  *
- * AUTH: optional `CRON_SECRET` bearer (Vercel Cron sends it).
+ * AUTH: FAIL-CLOSED `CRON_SECRET` bearer (Vercel Cron sends it). An absent or
+ * blank secret refuses every request; the route is never open.
  *
  * ALTERNATIVE: `/v1/racecards/standard` also bundles a "Betfair Exchange" price
  * per runner (raceSync.bundledBetfairPrice) with no cross-provider matching;
@@ -35,16 +36,19 @@ import {
   formatCronErrorLog,
 } from '@/lib/cronDiagnostics';
 import { recordCronRun, buildCronRunRecord } from '@/lib/cronHeartbeat';
+import { describeCronAuthFailure, requireCronSecret } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 export async function GET(request: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    if (request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  // Fail-closed auth BEFORE anything else, so an unauthorized caller reaches no
+  // provider and no write.
+  const auth = requireCronSecret(request.headers.get('authorization'), process.env.CRON_SECRET);
+  if (auth !== 'authorized') {
+    const refusal = describeCronAuthFailure(auth);
+    if (refusal.logLine) console.error(refusal.logLine);
+    return NextResponse.json(refusal.body, { status: refusal.status });
   }
 
   const { searchParams } = new URL(request.url);

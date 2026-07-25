@@ -9,8 +9,9 @@
  * and never downgraded; only runners missing by name are inserted. Running
  * twice in a day does not duplicate.
  *
- * AUTH: if `CRON_SECRET` is set, callers must send `Authorization: Bearer
- * <CRON_SECRET>` (Vercel Cron does this). Reads RACING_API_USER / RACING_API_KEY.
+ * AUTH: FAIL-CLOSED. Callers MUST send `Authorization: Bearer <CRON_SECRET>`
+ * (Vercel Cron does this). If `CRON_SECRET` is not configured the route refuses
+ * every request — it is never open. Reads RACING_API_USER / RACING_API_KEY.
  *
  * NOTE: this pipeline does NOT populate `tipster_selections`; the model runs
  * market-only until tips are supplied separately.
@@ -24,16 +25,19 @@ import {
   formatCronErrorLog,
 } from '@/lib/cronDiagnostics';
 import { recordCronRun, buildCronRunRecord } from '@/lib/cronHeartbeat';
+import { describeCronAuthFailure, requireCronSecret } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 export async function GET(request: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    if (request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  // Fail-closed auth BEFORE anything else, so an unauthorized caller reaches no
+  // provider and no write.
+  const auth = requireCronSecret(request.headers.get('authorization'), process.env.CRON_SECRET);
+  if (auth !== 'authorized') {
+    const refusal = describeCronAuthFailure(auth);
+    if (refusal.logLine) console.error(refusal.logLine);
+    return NextResponse.json(refusal.body, { status: refusal.status });
   }
 
   const day = new URL(request.url).searchParams.get('day');

@@ -13,7 +13,8 @@
  * settlement has written `status='result'` first. Idempotent: a watermark skips
  * already-captured races; `?recapture=1` re-captures CORRECTED results.
  *
- * AUTH: optional `CRON_SECRET` bearer. DAY/DATE via `?day=` / `?date=`.
+ * AUTH: FAIL-CLOSED `CRON_SECRET` bearer — an absent or blank secret refuses
+ * every request. DAY/DATE via `?day=` / `?date=`.
  *
  * SHADOW / DECISION-SUPPORT ONLY: it writes the `ml_training_examples` table and
  * nothing else; it never changes probability, EV, staking, ranking, or any
@@ -26,17 +27,20 @@ import { captureTrainingExamples } from '@/lib/mlCapture';
 import { resolveCronMeetingDate } from '@/lib/cronDate';
 import { buildCronErrorDiagnostic, formatCronErrorLog } from '@/lib/cronDiagnostics';
 import { recordCronRun, buildCronRunRecord } from '@/lib/cronHeartbeat';
+import { describeCronAuthFailure, requireCronSecret } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 export async function GET(request: NextRequest) {
   const startedAt = new Date();
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    if (request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  // Fail-closed auth BEFORE anything else, so an unauthorized caller reaches no
+  // training-capture write.
+  const auth = requireCronSecret(request.headers.get('authorization'), process.env.CRON_SECRET);
+  if (auth !== 'authorized') {
+    const refusal = describeCronAuthFailure(auth);
+    if (refusal.logLine) console.error(refusal.logLine);
+    return NextResponse.json(refusal.body, { status: refusal.status });
   }
 
   const { searchParams } = new URL(request.url);

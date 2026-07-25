@@ -13,7 +13,8 @@
  * MATCHING: results are matched to our races on (course + off-time) and to our
  * runners on normalised horse name; unmatched entities are skipped.
  *
- * AUTH: optional `CRON_SECRET` bearer (Vercel Cron sends it). Reads
+ * AUTH: FAIL-CLOSED `CRON_SECRET` bearer (Vercel Cron sends it). An absent or
+ * blank secret refuses every request — settlement is never open. Reads
  * RACING_API_USER / RACING_API_KEY.
  *
  * NOTE: the model re-run is MARKET-ONLY — this pipeline never writes
@@ -28,16 +29,19 @@ import {
   formatCronErrorLog,
 } from '@/lib/cronDiagnostics';
 import { recordCronRun, buildCronRunRecord } from '@/lib/cronHeartbeat';
+import { describeCronAuthFailure, requireCronSecret } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 export async function GET(request: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    if (request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  // Fail-closed auth BEFORE anything else, so an unauthorized caller reaches no
+  // provider, no settlement write, and no model re-run.
+  const auth = requireCronSecret(request.headers.get('authorization'), process.env.CRON_SECRET);
+  if (auth !== 'authorized') {
+    const refusal = describeCronAuthFailure(auth);
+    if (refusal.logLine) console.error(refusal.logLine);
+    return NextResponse.json(refusal.body, { status: refusal.status });
   }
 
   const startedAt = new Date();

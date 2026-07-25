@@ -11,9 +11,9 @@
  * primary key and resolves each entity to a stable canonical name, so running
  * twice in the same day overwrites the same rows rather than duplicating them.
  *
- * AUTH: if `CRON_SECRET` is set, callers must send `Authorization: Bearer
- * <CRON_SECRET>` (Vercel Cron does this automatically). If it is unset, the
- * route is open (handy for manual local triggering).
+ * AUTH: FAIL-CLOSED. Callers MUST send `Authorization: Bearer <CRON_SECRET>`
+ * (Vercel Cron does this automatically). If `CRON_SECRET` is not configured the
+ * route refuses every request — it is never open, not even locally.
  *
  * SCOPE: optional query params `maxTrainers` / `maxJockeys` cap how many
  * entities are fetched (defaults are conservative to fit the serverless time
@@ -29,6 +29,7 @@ import {
   formatCronErrorLog,
 } from '@/lib/cronDiagnostics';
 import { recordCronRun, buildCronRunRecord } from '@/lib/cronHeartbeat';
+import { describeCronAuthFailure, requireCronSecret } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 // The analysis fan-out makes several throttled requests; give it headroom.
@@ -46,12 +47,13 @@ function parseCap(value: string | null, fallback: number): number {
 }
 
 export async function GET(request: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const authHeader = request.headers.get('authorization');
-    if (authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  // Fail-closed auth BEFORE anything else, so an unauthorized caller reaches no
+  // provider and no tipster write.
+  const auth = requireCronSecret(request.headers.get('authorization'), process.env.CRON_SECRET);
+  if (auth !== 'authorized') {
+    const refusal = describeCronAuthFailure(auth);
+    if (refusal.logLine) console.error(refusal.logLine);
+    return NextResponse.json(refusal.body, { status: refusal.status });
   }
 
   const { searchParams } = new URL(request.url);

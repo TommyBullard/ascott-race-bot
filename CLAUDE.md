@@ -629,8 +629,26 @@ too (a read-only run must not delete either); allowed ingestion may grow freely.
 Error text is redacted to a short code+message (credential-shaped fragments
 replaced) and owner ids appear only as an 8-char prefix.
 
-**Still pending:** the remaining Phase 7A steps (route-level claim
-enforcement) and all of Phase 7B. Hardened per
+**Route-hardening Step A (IMPLEMENTED — src/lib/auth.ts, the six cron routes +
+POST /api/run-model, POST /api/settle):** the authentication half of route-level
+enforcement. `requireCronSecret` REPLACES the removed fail-open `isAuthorized`:
+a missing/blank `CRON_SECRET` now yields `not_configured` -> HTTP 503 (refused,
+never open), a wrong/absent bearer -> 401, only an exact `Bearer <secret>` ->
+authorized; refusal bodies are generic and secret-free (an operator log names
+the VARIABLE, never its value). Every write-capable route
+(racecards/odds/model/results/training-capture/tipster-discovery + run-model)
+calls it FIRST, before any provider/model/query work. `POST /api/settle` — an
+unauthenticated result-write — is now a permanent 410 stub (GET and POST, no
+request arg, zero imports beyond NextResponse, no DB/provider/settlement path),
+following the `/api/cron/recommendations` pattern; `import:results` and the
+authenticated `/api/cron/results` remain the only settlement paths. NOT in this
+step (deferred to after the second-date nationwide trial): ownership context
+verification (B/C) — no `producer_claim_status` route wiring, no migration/RPC
+change, no vercel.json/Railway change, `lock:t-minus`/`results:auto`/nationwide
+modules untouched.
+
+**Still pending:** the ownership-context half of route-level enforcement (B/C,
+after the second-date trial) and all of Phase 7B. Hardened per
 an independent Producer Ownership Safety Review; the migration remains
 UNAPPLIED to any database.
 

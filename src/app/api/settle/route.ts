@@ -1,47 +1,48 @@
 /**
- * API route: POST /api/settle?race_id=<id>&winning_runner_id=<id>
+ * API route: DISABLED — `/api/settle` is permanently gone (410).
  *
- * Records a race result (marks the winning runner `finish_pos = 1`) via
- * {@link settleRace}, then recomputes and returns the live model accuracy, so
- * the tracker updates as results come in. WRITES to the database (runners)
- * using the service-role client.
+ * This route used to accept `POST /api/settle?race_id=<id>&winning_runner_id=<id>`
+ * and write a finishing position through the service-role client. It had NO
+ * authentication of any kind, so anyone who could reach a deployment could
+ * declare any runner the winner of any race — fabricating the result record
+ * that accuracy, ROI, and locked-decision evaluation are all measured against.
  *
- * Responses:
- * - 200 { settled: SettleResult, accuracy: ModelAccuracy }
- * - 400 { error } when a query param is missing, or the runner is not in the race
- * - 500 { error } on unexpected failure
+ * It is now an inert stub, deliberately following the same shape as the
+ * disabled `/api/cron/recommendations` route: retained (rather than deleted) so
+ * any lingering bookmark, script, or webhook receives a clear, permanent signal
+ * instead of silently triggering a write.
+ *
+ * SETTLEMENT PATH (unchanged): results are settled by the audited, guarded
+ * workflows only — `npm run import:results` (manual CSV, documented in
+ * `docs/MANUAL_RESULTS_IMPORT.md`) and the authenticated `/api/cron/results`
+ * job. `npm run results:auto` remains a read-only audit that never writes. No
+ * replacement HTTP settlement endpoint exists or is planned.
+ *
+ * This file performs ZERO database access, ZERO provider calls, and imports NO
+ * settlement helper. Both handlers take no request argument, so they cannot
+ * read a race id, a runner id, a header, or a body. The response wording is
+ * generic: it discloses no key, environment value, owner id, internal command,
+ * or implementation detail.
+ *
+ * Decision-support only — this system never places a bet.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { settleRace, computeModelAccuracy } from '@/lib/raceData';
+import { NextResponse } from 'next/server';
 
-// Mutating and data-dependent, so never cache.
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: NextRequest) {
-  const raceId = request.nextUrl.searchParams.get('race_id');
-  const winningRunnerId = request.nextUrl.searchParams.get('winning_runner_id');
+/** The single, generic body returned for every method. */
+const GONE_BODY = {
+  error:
+    'This endpoint has been removed. Race results are settled only through the ' +
+    'audited operator workflow; there is no HTTP settlement endpoint.',
+} as const;
 
-  if (!raceId || !winningRunnerId) {
-    return NextResponse.json(
-      {
-        error:
-          'Missing required query parameters: race_id and winning_runner_id',
-      },
-      { status: 400 },
-    );
-  }
+/** A browser navigating here gets the same inert, non-writing 410. */
+export async function GET() {
+  return NextResponse.json(GONE_BODY, { status: 410 });
+}
 
-  try {
-    const settled = await settleRace(raceId, winningRunnerId);
-    // Recompute live so the response (and the next dashboard poll) reflects it.
-    const accuracy = await computeModelAccuracy();
-    return NextResponse.json({ settled, accuracy }, { status: 200 });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`settleRace failed for race ${raceId}:`, error);
-    // A "not in race" error is a bad-input (client) error, not a server fault.
-    const status = message.includes('is not in race') ? 400 : 500;
-    return NextResponse.json({ error: message }, { status });
-  }
+export async function POST() {
+  return NextResponse.json(GONE_BODY, { status: 410 });
 }

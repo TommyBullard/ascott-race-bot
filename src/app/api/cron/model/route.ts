@@ -14,7 +14,8 @@
  * MARKET-ONLY: never writes `tipster_selections`. Per-race isolated. Idempotent
  * (a re-score supersedes the prior current run; history is append-only).
  *
- * AUTH: optional `CRON_SECRET` bearer. DAY/DATE via `?day=` / `?date=`.
+ * AUTH: FAIL-CLOSED `CRON_SECRET` bearer — an absent or blank secret refuses
+ * every request. DAY/DATE via `?day=` / `?date=`.
  *
  * DECISION-SUPPORT ONLY: it computes + records model runs; it never places a bet.
  */
@@ -25,17 +26,20 @@ import { refreshModelForMeeting } from '@/lib/liveSync';
 import { resolveCronMeetingDate } from '@/lib/cronDate';
 import { buildCronErrorDiagnostic, formatCronErrorLog } from '@/lib/cronDiagnostics';
 import { recordCronRun, buildCronRunRecord } from '@/lib/cronHeartbeat';
+import { describeCronAuthFailure, requireCronSecret } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 export async function GET(request: NextRequest) {
   const startedAt = new Date();
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    if (request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  // Fail-closed auth BEFORE anything else, so an unauthorized caller reaches no
+  // model persistence.
+  const auth = requireCronSecret(request.headers.get('authorization'), process.env.CRON_SECRET);
+  if (auth !== 'authorized') {
+    const refusal = describeCronAuthFailure(auth);
+    if (refusal.logLine) console.error(refusal.logLine);
+    return NextResponse.json(refusal.body, { status: refusal.status });
   }
 
   const { searchParams } = new URL(request.url);

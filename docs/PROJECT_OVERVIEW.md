@@ -248,12 +248,19 @@ unset; bearer token required when set):
 
 **Other:**
 
-- `POST /api/settle` — record a race winner (write).
+- `POST /api/settle` — **disabled stub** (returns HTTP 410, GET and POST). It
+  was an unauthenticated result-write and is permanently removed. Results are
+  settled only by the audited operator workflow (`import:results` /
+  `MANUAL_RESULTS_IMPORT.md`) and the authenticated `/api/cron/results` job;
+  there is no HTTP settlement endpoint.
 - `GET /api/cron/recommendations` — **disabled stub** (returns HTTP 410); the
   model pipeline writes recommendations directly.
 
-Read routes never expose secrets and return generic 500s; write routes are
-gated and never fabricate data (unmatched entities are skipped).
+Read routes never expose secrets and return generic 500s. Every write-capable
+route is FAIL-CLOSED: it requires `Authorization: Bearer <CRON_SECRET>` and
+refuses all requests when `CRON_SECRET` is not configured (a missing secret can
+never make a write route public). Write routes never fabricate data (unmatched
+entities are skipped).
 
 ---
 
