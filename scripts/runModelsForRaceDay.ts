@@ -17,7 +17,16 @@
  *
  * REQUIRES SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in `.env.local` (or `.env`).
  * It does NOT call Betfair / the Racing API and never places a bet.
+ *
+ * OWNERSHIP (Slice 4a): on the `--commit` path only, it performs ONE read-only,
+ * FAIL-CLOSED foreign-claim check for the requested date before the model loop.
+ * If a live producer owns the date — or ownership cannot be verified — it
+ * REFUSES before the first model operation and exits non-zero. Dry-run never
+ * queries claim status. It never acquires, heartbeats, releases, or steals a
+ * claim, and never repeats the status read per race.
  */
+
+import { fileURLToPath } from 'node:url';
 
 import { supabaseAdmin } from '../src/lib/supabaseAdmin';
 import { runModelForRace } from '../src/lib/runModelForRace';
@@ -29,6 +38,11 @@ import {
   formatModelDaySummary,
   type MeetingRace,
 } from '../src/lib/modelDayRun';
+import {
+  assertDirectModelClaimClear,
+  formatDirectModelRefusal,
+  type DirectModelClaimDecision,
+} from '../src/lib/directModelClaimCheck';
 
 const RACES_TABLE = 'races';
 const RACE_MEETING_DATE_COLUMN = 'meeting_date';
@@ -45,7 +59,7 @@ function loadEnv(): void {
   }
 }
 
-interface RaceRow {
+export interface RaceRow {
   id: string;
   course: string | null;
   off_time: string | null;
@@ -53,95 +67,132 @@ interface RaceRow {
   status: string | null;
 }
 
-async function main(): Promise<void> {
-  const args = parseModelDayArgs(process.argv.slice(2));
-
-  if (!args.date) {
-    console.error(
-      'Usage: npm run model:day -- --date YYYY-MM-DD [--course <name>] [--commit]\n' +
-        '(dry run by default; pass --commit to write model runs).',
-    );
-    process.exitCode = 1;
-    return;
-  }
-
-  loadEnv();
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.error('Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY in .env.local (or .env).');
-    process.exitCode = 1;
-    return;
-  }
-
-  // Select the day's races (id + course/time for filtering + display).
-  const { data, error } = await supabaseAdmin
+/** Read-only fetch of a meeting's races. SELECT-only. */
+export async function fetchRaceRows(
+  date: string,
+  client: { from: typeof supabaseAdmin.from } = supabaseAdmin,
+): Promise<RaceRow[]> {
+  const { data, error } = await client
     .from(RACES_TABLE)
     .select('id, course, off_time, race_name, status')
-    .eq(RACE_MEETING_DATE_COLUMN, args.date);
+    .eq(RACE_MEETING_DATE_COLUMN, date);
   if (error) {
-    throw new Error(`races lookup failed for ${args.date}: ${error.message}`);
+    throw new Error(`races lookup failed for ${date}: ${error.message}`);
   }
-
-  // Filter to the optional course (normalised) + order by off time (shared with
-  // the Phase 3C pipeline via modelDayRun).
-  const rows = ((data ?? []) as RaceRow[]).map((r) => ({
+  return ((data ?? []) as RaceRow[]).map((r) => ({
     id: String(r.id),
     course: r.course,
     off_time: r.off_time,
     race_name: r.race_name,
     status: r.status,
   }));
+}
+
+type ModelDayOutcome = Awaited<ReturnType<typeof runModelForMeetingRaces>>[number];
+type OnOutcome = (race: MeetingRace, outcome: ModelDayOutcome) => void;
+
+/** Injected side effects, so the CLI flow is unit-testable without I/O. */
+export interface ModelDayCliDeps {
+  fetchRaces: (date: string) => Promise<RaceRow[]>;
+  /** Read-only foreign-claim check (commit path only). */
+  assertClaimClear: (date: string) => Promise<DirectModelClaimDecision>;
+  /** Runs the shared model-day loop; injected so tests need no real model. */
+  runMeeting: (races: MeetingRace[], onOutcome: OnOutcome) => Promise<ModelDayOutcome[]>;
+  log: (message: string) => void;
+  errorLog: (message: string) => void;
+}
+
+/**
+ * The CLI flow. Order is fixed: parse -> fetch races -> (dry-run lists & stops,
+ * NO claim query) -> (commit) foreign-claim check ONCE -> only if allowed, run
+ * the shared model loop. Returns the process exit code; never calls
+ * process.exit.
+ */
+export async function runModelDayCli(argv: readonly string[], deps: ModelDayCliDeps): Promise<number> {
+  const args = parseModelDayArgs(argv);
+
+  if (!args.date) {
+    deps.errorLog(
+      'Usage: npm run model:day -- --date YYYY-MM-DD [--course <name>] [--commit]\n' +
+        '(dry run by default; pass --commit to write model runs).',
+    );
+    return 1;
+  }
+
+  const rows = await deps.fetchRaces(args.date);
   const races = prepareMeetingRaces(rows, args.course);
 
   const scope = `${args.date}${args.course ? ` course~"${args.course}"` : ''}`;
-  console.log(
-    `Run model for race day — ${args.commit ? 'COMMIT' : 'DRY RUN'} — ${scope}\n`,
-  );
+  deps.log(`Run model for race day — ${args.commit ? 'COMMIT' : 'DRY RUN'} — ${scope}\n`);
 
   if (races.length === 0) {
-    console.log('No races match the given date/course.');
-    return;
+    deps.log('No races match the given date/course.');
+    return 0;
   }
 
-  // DRY RUN: list what would run, write nothing.
+  // DRY RUN: list what would run, write nothing, and never query claim status.
   if (!args.commit) {
-    console.log(`${races.length} race(s) would be run:`);
+    deps.log(`${races.length} race(s) would be run:`);
     for (const r of races) {
-      const time = r.off_time ? new Date(r.off_time).toISOString().slice(11, 16) : '\u2014';
-      console.log(`  ${time}  ${r.course ?? '\u2014'}  ${r.race_name ?? ''}  (${r.id})`);
+      const time = r.off_time ? new Date(r.off_time).toISOString().slice(11, 16) : '—';
+      deps.log(`  ${time}  ${r.course ?? '—'}  ${r.race_name ?? ''}  (${r.id})`);
     }
-    console.log('\n(dry run) No model runs written. Re-run with --commit to run the model.');
-    return;
+    deps.log('\n(dry run) No model runs written. Re-run with --commit to run the model.');
+    return 0;
   }
 
-  // COMMIT: run the model per race (shared loop), logging each outcome.
-  const outcomes = await runModelForMeetingRaces(
-    races,
-    runModelForRace,
-    (race: MeetingRace, o) => {
-      if (o.status === 'run') {
-        console.log(`  run     ${race.id}  scored=${o.scored} recommended=${o.recommended}`);
-      } else if (o.status === 'skipped') {
-        const why =
-          o.skipReason === 'POST_OFF'
-            ? 'post-off: race already started'
-            : o.skipReason === 'RESULTED'
-              ? 'resulted: race already settled'
-              : 'no priced runners / market snapshot';
-        console.log(`  skipped ${race.id}  (${why})`);
-      } else {
-        console.error(`  FAILED  ${race.id}  ${o.error}`);
-      }
-    },
-  );
+  // COMMIT: one read-only, fail-closed foreign-claim check BEFORE the loop.
+  const decision = await deps.assertClaimClear(args.date);
+  if (!decision.allow) {
+    deps.errorLog(formatDirectModelRefusal(args.date, decision));
+    return 1;
+  }
+
+  // Allowed: run the model per race via the shared loop (unchanged).
+  const outcomes = await deps.runMeeting(races, (race: MeetingRace, o: ModelDayOutcome) => {
+    if (o.status === 'run') {
+      deps.log(`  run     ${race.id}  scored=${o.scored} recommended=${o.recommended}`);
+    } else if (o.status === 'skipped') {
+      const why =
+        o.skipReason === 'POST_OFF'
+          ? 'post-off: race already started'
+          : o.skipReason === 'RESULTED'
+            ? 'resulted: race already settled'
+            : 'no priced runners / market snapshot';
+      deps.log(`  skipped ${race.id}  (${why})`);
+    } else {
+      deps.errorLog(`  FAILED  ${race.id}  ${o.error}`);
+    }
+  });
 
   const summary = summarizeModelDayOutcomes(outcomes);
-  console.log('\nSummary:');
-  for (const line of formatModelDaySummary(summary)) console.log(line);
+  deps.log('\nSummary:');
+  for (const line of formatModelDaySummary(summary)) deps.log(line);
 
-  if (summary.failures > 0) process.exitCode = 1;
+  return summary.failures > 0 ? 1 : 0;
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : String(err));
-  process.exitCode = 1;
-});
+async function main(): Promise<void> {
+  loadEnv();
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY in .env.local (or .env).');
+    process.exit(1);
+  }
+  const exitCode = await runModelDayCli(process.argv.slice(2), {
+    fetchRaces: (date) => fetchRaceRows(date),
+    assertClaimClear: (date) => assertDirectModelClaimClear(date),
+    runMeeting: (races, onOutcome) => runModelForMeetingRaces(races, runModelForRace, onOutcome),
+    log: (message) => console.log(message),
+    errorLog: (message) => console.error(message),
+  });
+  process.exit(exitCode);
+}
+
+// Run only when invoked directly (never when imported by a test).
+const isEntrypoint = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1];
+if (isEntrypoint) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  });
+}
