@@ -405,8 +405,10 @@ still make provider/model calls WITHOUT consulting it: direct
 `/api/cron/odds`, `/api/cron/model`, `/api/cron/results`,
 `/api/cron/tipster-discovery`) and `POST /api/run-model` — including the
 vercel.json platform crons if a Vercel deployment is live — plus
-`npm run run:model` / `model:day`, and `results:auto`. Those are
-operationally restricted until a future route-level enforcement phase.
+`npm run run:model` / `model:day`, and `results:auto`. **(SUPERSEDED — route-level
+enforcement Steps B/C + Slice 4a are now implemented: under `enforce`, the
+guarded routes reject context-less calls and the direct model CLIs refuse an
+owned date. See "Route-hardening Steps B/C + Slice 4a" below.)**
 By policy: `lock:t-minus` stays OUTSIDE this claim (no provider calls;
 insert-only; `unique(race_id, minutes_before)`; commit-windowed — a
 duplicate run is harmless, while a claim-induced miss of an official lock
@@ -437,13 +439,12 @@ secret-free events (`PRODUCER_CLAIM_ACQUIRED/REFUSED/STOLEN`,
 only date/scope/8-char-owner-prefix/generation/classification/expiry/mode/
 stage. This TRANSITIVELY gates `race-day:refresh-today`, the documented
 Railway `pipeline-refresh` job, and both local-supervisor pipeline paths
-(none of those files changed). Known remaining bypasses (route-level
-enforcement is a future hardening phase, operationally restricted until
-then): direct `CRON_SECRET` calls to `/api/cron/racecards|odds|model|results`
-and `/api/run-model`, vercel.json platform crons if a Vercel deployment is
-live, and `run:model`/`model:day`. `lock:t-minus` and `results:auto` remain
-deliberately OUTSIDE the claim (test-enforced). Nationwide execution remains
-disabled.
+(none of those files changed). **(SUPERSEDED by Route-hardening Steps B/C +
+Slice 4a — see below: those direct `CRON_SECRET` calls to guarded routes are now
+rejected under `enforce`, and `run:model`/`model:day --commit` refuse an owned
+date via a read-only foreign-claim check.)** `lock:t-minus` and `results:auto`
+remain deliberately OUTSIDE the claim (test-enforced). Nationwide execution
+remains disabled.
 
 **Phase 7A.2b Step 3 (IMPLEMENTED — Producer Readiness Preflight;
 src/lib/producerPreflight.ts, `npm run producer:preflight -- --date YYYY-MM-DD
@@ -647,10 +648,40 @@ verification (B/C) — no `producer_claim_status` route wiring, no migration/RPC
 change, no vercel.json/Railway change, `lock:t-minus`/`results:auto`/nationwide
 modules untouched.
 
-**Still pending:** the ownership-context half of route-level enforcement (B/C,
-after the second-date trial) and all of Phase 7B. Hardened per
-an independent Producer Ownership Safety Review; the migration remains
-UNAPPLIED to any database.
+**Route-hardening Steps B/C + Slice 4a (IMPLEMENTED — src/lib/ownershipContext.ts,
+src/lib/routeOwnershipGuard.ts, src/lib/ownershipPropagation.ts,
+src/lib/directModelClaimCheck.ts; see docs/OWNERSHIP_ENFORCEMENT.md):** the
+ownership-context half of route-level enforcement is now complete, so the
+"future route-level enforcement phase" and "still able to bypass the claim"
+wording in the Step 2/Step 4 blocks above is **SUPERSEDED**. Slice 1 defines a
+strict five-field wire context (`v/date/owner/generation/scope`, no `mode`, no
+secret). Slice 2's guard verifies the `x-producer-ownership` header on the six
+write-capable routes (racecards/odds/model/results/training-capture +
+POST /api/run-model) AFTER Step A auth and BEFORE any provider/model/write;
+enforcement mode defaults to `enforce` (missing/blank/unknown all fail closed to
+`enforce`); `warn` permits ONLY an absent context (malformed/conflicting/expired/
+unverifiable still fail closed); `off` is emergency-only. Slice 3 propagates the
+context from the claim-holding orchestrators (`pipeline:day`, `pipeline:watch`,
+nationwide live-provider dry-run) through the single `createCallCron` seam to
+racecards + odds (the only routes those orchestrators call; the model runs
+in-process). Under `enforce`, direct `CRON_SECRET`-only calls to guarded routes
+are REJECTED, not a bypass; `cron/model`, `cron/results`, `cron/training-capture`
+and `POST /api/run-model` have no context-supplying caller yet and stay
+fail-closed. Slice 4a makes the direct model CLIs `run:model` and
+`model:day --commit` perform a read-only, fail-closed foreign-claim refusal
+(live/uncertain claim → refuse; absent/expired → allow; never acquire/steal;
+`model:day` dry-run does not check). Exempt by policy (documented, honest —
+route-level ownership does NOT eliminate all duplicate-work risk): `lock:t-minus`
+(insert-only, unique-constrained, commit-windowed), `results:auto` (read-only),
+`import:results` (audited manual settlement), `tipster-discovery` (spans
+today+tomorrow), and read-only routes/audits/reports. Behavioural code is frozen;
+context-less `vercel.json` platform crons would be rejected under `enforce`
+(Vercel not live — do not edit vercel.json). No deployment has occurred.
+
+**Still pending:** all of Phase 7B (and any future work to give
+`cron/model`/`cron/results`/`cron/training-capture` a context-supplying caller).
+Hardened per an independent Producer Ownership Safety Review; the migration
+remains UNAPPLIED to any database.
 
 **Security/consistency pass (IMPLEMENTED, still unapplied):** all four
 functions explicitly `revoke all ... from public, anon, authenticated` BEFORE

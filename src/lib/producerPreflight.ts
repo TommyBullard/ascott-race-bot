@@ -654,17 +654,22 @@ export function evaluateProducerPreflight(input: PreflightInput): ProducerPrefli
     },
   );
 
-  // 12. bypass entry points (static knowledge; informational) -------------------
+  // 12. ownership boundary (static knowledge; informational) --------------------
   checks.push({
     id: 'bypass_entry_points',
-    label: 'bypass entry points',
+    label: 'ownership boundary',
     status: 'info',
     evidence: 'automatically_verified',
     detail:
-      'gated: pipeline:day, pipeline:watch (and transitively race-day:refresh-today). ' +
-      'exempt by policy: lock:t-minus, results:auto, read-only audits/reports. ' +
-      'still able to bypass the claim (operational restrictions — do not use during an owned day): ' +
-      'direct CRON_SECRET calls to /api/cron/racecards|odds|model|results, POST /api/run-model, run:model, model:day.',
+      'Under enforce (the default): the guarded routes /api/cron/racecards|odds|model|results|training-capture and ' +
+      'POST /api/run-model require a valid ownership context — direct CRON_SECRET-only calls are rejected (no longer a ' +
+      'claim bypass). Context is propagated by the claim-holding orchestrators pipeline:day and pipeline:watch (and ' +
+      'transitively race-day:refresh-today) to racecards + odds; the model runs in-process. cron/model, cron/results, ' +
+      'cron/training-capture and run-model have no context-supplying caller yet, so they stay fail-closed under enforce. ' +
+      'Direct model CLIs run:model and model:day --commit use a read-only foreign-claim refusal (never acquire/steal). ' +
+      'Exempt by policy: lock:t-minus, results:auto, import:results, tipster-discovery (spans today+tomorrow), and ' +
+      'read-only audits/reports. Context-less vercel.json platform crons would be rejected under enforce. ' +
+      'Warn permits only an absent context; off is emergency-only.',
   });
 
   // Verdict --------------------------------------------------------------------

@@ -393,17 +393,21 @@ export function evaluateNationwidePreflight(input: NationwidePreflightInput): Na
     },
   );
 
-  // 12. bypass entry points (static; informational; never affects the verdict).
+  // 12. ownership boundary (static; informational; never affects the verdict).
   checks.push({
     id: 'bypass_entry_points',
-    label: 'bypass entry points',
+    label: 'ownership boundary',
     status: 'info',
     evidence: 'automatically_verified',
     detail:
-      'gated by this preflight: nationwide:dry-run only. Still able to bypass ANY producer claim (operational ' +
-      'restrictions — do not use while a nationwide claim is held): direct CRON_SECRET calls to ' +
-      '/api/cron/racecards|odds|model|results, POST /api/run-model, run:model, model:day, and any selected-course ' +
-      'pipeline:day/pipeline:watch launch for this date (it will be refused by the claim, but its attempt still costs an RPC).',
+      'Under enforce (the default): the guarded routes /api/cron/racecards|odds|model|results|training-capture and ' +
+      'POST /api/run-model require a valid ownership context — direct CRON_SECRET-only calls are rejected. This preflight ' +
+      'gates nationwide:dry-run; the nationwide live-provider dry-run propagates all-uk-ire context to racecards + odds. ' +
+      'cron/model, cron/results, cron/training-capture and run-model have no context-supplying caller yet and stay ' +
+      'fail-closed. Direct model CLIs run:model and model:day --commit use a read-only foreign-claim refusal. ' +
+      'Exempt by policy: lock:t-minus, results:auto, import:results, tipster-discovery, read-only audits/reports. ' +
+      'A selected-course pipeline:day/pipeline:watch for this date is refused by the day-level claim. ' +
+      'Warn permits only an absent context; off is emergency-only.',
   });
 
   const verdict: PreflightVerdict = checks.some((c) => c.status === 'blocked')

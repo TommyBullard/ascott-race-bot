@@ -395,14 +395,18 @@ test('verdict: invalid date / missing course → BLOCKED, downstream checks not_
   assert.equal(noCourse.verdict, 'BLOCKED');
 });
 
-test('bypass entry points are always listed (gated / exempt / bypasses) and never affect the verdict', () => {
+test('ownership boundary is always listed (guarded / propagated / exempt) and never affects the verdict', () => {
   const report = evaluateProducerPreflight(baseInput({ confirmExternal: true }));
   const c = check(report, 'bypass_entry_points');
   assert.equal(c.status, 'info');
-  assert.match(c.detail, /pipeline:day, pipeline:watch/);
+  assert.match(c.detail, /pipeline:day and pipeline:watch/);
   assert.match(c.detail, /lock:t-minus, results:auto/);
   assert.match(c.detail, /run-model/);
-  assert.match(c.detail, /operational restrictions/);
+  // Slice 4b wording: guarded routes require context under enforce — direct
+  // CRON_SECRET-only calls are NO LONGER described as unconditional bypasses.
+  assert.match(c.detail, /require a valid ownership context/);
+  assert.match(c.detail, /direct CRON_SECRET-only calls are rejected/);
+  assert.doesNotMatch(c.detail, /still able to bypass the claim/);
 });
 
 test('course normalisation is reused: "Royal Ascot" produces scope course:ascot', () => {

@@ -688,11 +688,12 @@ test('51. Slice 3: createCallCron propagates ownership; auth + call semantics pr
 
 test('52. nationwide + producer-claim + write-boundary modules are unchanged', () => {
   const normalize = (s: string): string => s.replace(/\r\n/g, '\n');
+  // nationwidePreflight.ts is deliberately EXCLUDED: Slice 4b edits its ownership-
+  // boundary wording only (behaviour unchanged — see ownershipEnforcementDocs.test).
   for (const f of [
     'src/lib/producerOwnership.ts',
     'src/lib/producerClaim.ts',
     'src/lib/nationwideOwnership.ts',
-    'src/lib/nationwidePreflight.ts',
     'src/lib/nationwideWriteBoundaryAudit.ts',
   ]) {
     const committed = execFileSync('git', ['show', `HEAD:${f}`], { encoding: 'utf8' });
@@ -706,12 +707,13 @@ test('53. lock:t-minus and results:auto remain claim-free and guard-free', () =>
   }
 });
 
-test('54. migrations, vercel.json, and Railway docs are byte-identical to HEAD', () => {
+test('54. migrations and vercel.json are byte-identical to HEAD', () => {
   const normalize = (s: string): string => s.replace(/\r\n/g, '\n');
+  // The RAILWAY doc is documentation (Slice 4b edits its wording) — asserted in
+  // ownershipEnforcementDocs.test, not here.
   for (const f of [
     'supabase/migrations/20260711000000_producer_run_claims.sql',
     'vercel.json',
-    'docs/RAILWAY_RACE_DAY_AUTOMATION.md',
   ]) {
     const committed = execFileSync('git', ['show', `HEAD:${f}`], { encoding: 'utf8' });
     assert.equal(normalize(src(f)), normalize(committed), `${f} changed`);

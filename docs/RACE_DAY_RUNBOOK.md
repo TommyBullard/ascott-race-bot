@@ -17,6 +17,16 @@ use `npm.cmd` if `npm` is blocked. If `CRON_SECRET` is set, add
 `-H "Authorization: Bearer <CRON_SECRET>"` to the `curl` calls below (never paste
 the secret into shared output).
 
+> **Ownership enforcement (route-hardening Slices 1–4a).** The write-capable
+> cron/model routes now default to `enforce`: a claim-holding pipeline
+> (`pipeline:day` / `pipeline:watch`) propagates its ownership context to the
+> racecards and odds calls it makes, and a **context-less** `CRON_SECRET`-only
+> `curl` to a guarded route is **rejected (403)** under `enforce`. The direct
+> model CLIs `run:model` and `model:day --commit` **refuse** to write when a live
+> producer already owns the target date. Prefer running the model through the
+> owning pipeline; do not steal or manually release a live claim. Full details:
+> [OWNERSHIP_ENFORCEMENT.md](OWNERSHIP_ENFORCEMENT.md).
+
 ---
 
 ## 0. Quick map

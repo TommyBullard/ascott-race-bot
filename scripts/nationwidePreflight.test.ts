@@ -356,12 +356,15 @@ test('local supervisor.lock signals: presence is strong automated evidence (REVI
   assert.equal(check(absentUnconfirmed, 'local_supervisor_locks').evidence, 'unknown');
 });
 
-test('bypass entry points are always listed and never affect the verdict', () => {
+test('ownership boundary is always listed and never affects the verdict', () => {
   const report = evaluateNationwidePreflight(baseInput({ confirmExternal: true }));
   const c = check(report, 'bypass_entry_points');
   assert.equal(c.status, 'info');
   assert.match(c.detail, /run-model/);
-  assert.match(c.detail, /operational/);
+  // Slice 4b wording: guarded routes require context under enforce.
+  assert.match(c.detail, /require a valid ownership context/);
+  assert.match(c.detail, /direct CRON_SECRET-only calls are rejected/);
+  assert.doesNotMatch(c.detail, /Still able to bypass ANY producer claim/);
 });
 
 /* --------------------------------- output safety ------------------------------ */

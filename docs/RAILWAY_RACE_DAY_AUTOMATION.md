@@ -9,6 +9,17 @@
 > Responsible use only — not betting advice.
 > [GamCare](https://www.gamcare.org.uk) · [BeGambleAware](https://www.begambleaware.org).
 
+**Ownership enforcement note.** The guarded cron/model routes default to
+`enforce` (see [OWNERSHIP_ENFORCEMENT.md](OWNERSHIP_ENFORCEMENT.md)). The Railway
+`pipeline-refresh` job runs `race-day:refresh-today` → `pipeline:day`, which
+**acquires the day-level producer claim and propagates ownership context** to the
+racecards/odds routes — so it works under `enforce`. By contrast, the
+`vercel.json` platform cron declarations call the routes **directly with no
+ownership context**, so they would be **rejected under `enforce`**; those are
+currently inactive (Vercel not live). **Do not edit `vercel.json`** as part of
+ownership work. Deploy Slice 2 (route verification) and Slice 3 (propagation)
+**together**, and re-check Railway/Vercel state before any deployment.
+
 ## What this gives you
 
 The operator no longer hand-runs `npm run pipeline:day -- --date … --course Ascot --commit`.

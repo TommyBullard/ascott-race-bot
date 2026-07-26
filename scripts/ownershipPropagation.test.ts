@@ -419,7 +419,8 @@ test('55-59. Slice 1/2 wire+guard+routes+auth+migration+deploy files are byte-id
     'src/app/api/run-model/route.ts',
     'supabase/migrations/20260711000000_producer_run_claims.sql',
     'vercel.json',
-    'docs/RAILWAY_RACE_DAY_AUTOMATION.md',
+    // NOTE: docs/RAILWAY_RACE_DAY_AUTOMATION.md is documentation edited by Slice
+    // 4b (wording only); its content is asserted in ownershipEnforcementDocs.test.
   ]) {
     const committed = execFileSync('git', ['show', `HEAD:${f}`], { encoding: 'utf8' });
     assert.equal(normalize(src(f)), normalize(committed), `${f} changed`);

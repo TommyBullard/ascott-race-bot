@@ -336,10 +336,12 @@ test('no migration, Railway, or Vercel configuration changed', () => {
   // A word-scan would false-positive on the migration's own comment prose, so
   // compare against git HEAD directly instead.
   const normalize = (s: string): string => s.replace(/\r\n/g, '\n');
+  // Migration + vercel.json remain byte-identical (config, never touched). The
+  // RAILWAY doc is documentation, not configuration — Slice 4b edits its wording
+  // only (see ownershipEnforcementDocs.test), so it is not asserted here.
   for (const file of [
     'supabase/migrations/20260711000000_producer_run_claims.sql',
     'vercel.json',
-    'docs/RAILWAY_RACE_DAY_AUTOMATION.md',
   ]) {
     const committed = execFileSync('git', ['show', `HEAD:${file}`], { encoding: 'utf8' });
     assert.equal(normalize(src(file)), normalize(committed), `${file} differs from HEAD`);
