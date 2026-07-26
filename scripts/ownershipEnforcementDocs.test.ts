@@ -177,15 +177,15 @@ test('27. attended verification is explicitly NOT executed automatically', () =>
 test('28-30. runbook requires repo cleanliness, pre-run claim absence, and final claim absence', () => {
   const doc = OWN_DOC();
   assert.match(doc, /Repository clean & reviewed/);
-  assert.match(doc, /No producer active/);
+  assert.match(doc, /Date initially unclaimed/);
   assert.match(doc, /Final claim status absent/);
 });
 
-test('31-33. runbook includes context-less 403, stale-generation 409, and direct-CLI refusal', () => {
+test('31-33. runbook includes context-less 403, foreign/stale 409, and direct-CLI refusal', () => {
   const doc = OWN_DOC();
-  assert.match(doc, /Context-less call rejected.*403/s);
-  assert.match(doc, /wrong-generation context rejected.*409/s);
-  assert.match(doc, /Direct model CLIs refuse an owned date/);
+  assert.match(doc, /Context-less call → 403/);
+  assert.match(doc, /Foreign \/ stale context → 409/);
+  assert.match(doc, /Direct model CLIs refuse/);
 });
 
 test('34-36. runbook keeps lock/results unchanged, no nationwide persistence, no deployment', () => {
@@ -200,6 +200,99 @@ test('runbook separates the three verification tiers', () => {
   assert.match(doc, /Offline automated verification/);
   assert.match(doc, /Attended local integration verification/);
   assert.match(doc, /Future deployment verification/);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Runbook ordering correction (one long-lived watcher owns the whole phase)  */
+/* -------------------------------------------------------------------------- */
+
+/** The runbook section only, so ordering assertions ignore the architecture prose. */
+function runbookSection(): string {
+  const doc = OWN_DOC();
+  const start = doc.indexOf('## Attended local verification runbook');
+  assert.ok(start > 0, 'runbook section present');
+  return doc.slice(start);
+}
+
+test('RB1. the runbook holds the claim with a WATCHER, not one-shot pipeline:day', () => {
+  const rb = runbookSection();
+  // A watcher (long-lived) is started; pipeline:day (one-shot) is only named to
+  // explain WHY it must not be used to hold the claim.
+  assert.match(rb, /watch-pipeline\.bat <date> "<course>" "<logdir>"/);
+  assert.match(rb, /Start exactly one selected-course watcher/);
+  assert.match(rb, /pipeline:day` is one-shot and[\s>]*\*\*releases its claim when it finishes\*\*/);
+  // The claim-holding step is the watcher, never a `pipeline:day --commit` run.
+  assert.doesNotMatch(rb, /Run one attended selected-course `pipeline:day --commit/);
+});
+
+test('RB2. the live claim is confirmed BEFORE the refusal tests', () => {
+  const rb = runbookSection();
+  const liveAt = rb.indexOf('Claim is live.');
+  const ctxLessAt = rb.indexOf('Context-less call → 403');
+  const staleAt = rb.indexOf('Foreign / stale context → 409');
+  assert.ok(liveAt > 0 && ctxLessAt > liveAt, 'live check precedes 403 test');
+  assert.ok(staleAt > liveAt, 'live check precedes 409 test');
+});
+
+test('RB3. all refusal tests occur WHILE the watcher still owns the date (before shutdown)', () => {
+  const rb = runbookSection();
+  const ctxLessAt = rb.indexOf('Context-less call → 403');
+  const staleAt = rb.indexOf('Foreign / stale context → 409');
+  const cliAt = rb.indexOf('Direct model CLIs refuse');
+  const stopAt = rb.indexOf('Stop the watcher');
+  for (const [name, at] of [['403', ctxLessAt], ['409', staleAt], ['CLI', cliAt]] as const) {
+    assert.ok(at > 0 && at < stopAt, `${name} refusal test must precede watcher shutdown`);
+  }
+  // Each refusal step is explicitly marked as running while the watcher owns the date.
+  assert.equal((rb.match(/\(watcher still owns the date\)/g) ?? []).length >= 3, true);
+});
+
+test('RB4. direct-model-CLI refusal runs while the claim is live and gets a race_id read-only', () => {
+  const rb = runbookSection();
+  assert.match(rb, /model:day -- --date <date> --course "<course>" --dry-run.*lists/s);
+  assert.match(rb, /run:model -- <race_id>` → refuses/);
+  assert.match(rb, /--commit` → refuses/);
+  assert.match(rb, /non-zero refusal before any\s*\n?\s*model work/);
+});
+
+test('RB5. exactly ONE Ctrl+C during the waiting state, with a warning against a second', () => {
+  const rb = runbookSection();
+  assert.match(rb, /press \*\*Ctrl\+C once\*\* while it is in its inter-cycle\s*\n?\s*wait/);
+  assert.match(rb, /Do \*\*not\*\* press it twice/);
+});
+
+test('RB6. graceful release markers + terminal graceful + no retry are required', () => {
+  const rb = runbookSection();
+  assert.match(rb, /PRODUCER_CLAIM_RELEASED/);
+  assert.match(rb, /WATCH_STOPPED_GRACEFULLY/);
+  assert.match(rb, /terminal graceful/);
+  assert.match(rb, /no bounded-retry/);
+});
+
+test('RB7. final claim absence is checked AFTER shutdown, and no lingering process remains', () => {
+  const rb = runbookSection();
+  const releaseAt = rb.indexOf('Require a graceful release');
+  const absentAt = rb.indexOf('Final claim status absent');
+  const noProcAt = rb.indexOf('No helper/watcher process remains');
+  assert.ok(releaseAt > 0 && absentAt > releaseAt, 'absence check follows the release');
+  assert.ok(noProcAt > absentAt, 'no-lingering-process check follows absence');
+});
+
+test('RB8. the runbook never advises manually releasing the live claim', () => {
+  const rb = runbookSection();
+  assert.match(rb, /Never manually release the live claim/);
+  assert.match(rb, /do \*\*not\*\* manually release the claim/);
+  // The only "force-release" mentions are prohibitions ("do not force-release").
+  for (const m of rb.match(/force-release/g) ?? []) void m;
+  assert.doesNotMatch(rb, /(?<!not )force-release it and/i); // no positive "force-release it and proceed"
+});
+
+test('RB9. the PowerShell 403/409 handling note is present (expected refusal is not a failure)', () => {
+  const rb = runbookSection();
+  assert.match(rb, /an expected 403\/409 is NOT a script failure/i);
+  assert.match(rb, /\$_\.Exception\.Response\.StatusCode\.value__/);
+  // The note tells the operator NOT to echo the secret variable.
+  assert.match(rb, /never.*\$sec/i);
 });
 
 /* -------------------------------------------------------------------------- */
@@ -242,7 +335,7 @@ test('25-26. no doc suggests weakening the guard, stealing, or manually releasin
   }
   // The primary doc explicitly forbids it.
   assert.match(OWN_DOC(), /stealing, deleting, or manually releasing a live claim/i);
-  assert.match(OWN_DOC(), /Never manually release a live claim/i);
+  assert.match(OWN_DOC(), /Never manually release the live claim/i);
   assert.match(OWN_DOC(), /Do not weaken the guard/);
 });
 
