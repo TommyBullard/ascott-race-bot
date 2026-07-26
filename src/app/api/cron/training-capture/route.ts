@@ -28,6 +28,7 @@ import { resolveCronMeetingDate } from '@/lib/cronDate';
 import { buildCronErrorDiagnostic, formatCronErrorLog } from '@/lib/cronDiagnostics';
 import { recordCronRun, buildCronRunRecord } from '@/lib/cronHeartbeat';
 import { describeCronAuthFailure, requireCronSecret } from '@/lib/auth';
+import { enforceRouteOwnership, staticEffectiveDate } from '@/lib/routeOwnershipGuard';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -49,6 +50,10 @@ export async function GET(request: NextRequest) {
     date: searchParams.get('date'),
   });
   const force = searchParams.get('recapture') === '1';
+
+  // Ownership gate: after Step A auth, before any training-capture write.
+  const gate = await enforceRouteOwnership(request, 'cron/training-capture', staticEffectiveDate(resolved.meetingDate));
+  if (!gate.proceed) return gate.response;
 
   try {
     const summary = await captureTrainingExamples(resolved.meetingDate, { force });

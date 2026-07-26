@@ -25,15 +25,39 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { runModelForRace } from '@/lib/runModelForRace';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { describeCronAuthFailure, requireCronSecret } from '@/lib/auth';
+import { enforceRouteOwnership, type EffectiveDate } from '@/lib/routeOwnershipGuard';
 
 // Mutating, query-param driven, and data-dependent, so never cache.
 export const dynamic = 'force-dynamic';
 
+/**
+ * Read-only resolution of a race's meeting date, used ONLY by the ownership
+ * guard and ONLY when a valid context was supplied. It is a single SELECT, no
+ * write, and its result is never returned to the caller. A missing race id, a
+ * lookup error, or an absent meeting_date all resolve to `{ ok: false }` so the
+ * guard fails closed (503) rather than run the model on an unverifiable date.
+ */
+function resolveRaceMeetingDate(raceId: string | null): () => Promise<EffectiveDate> {
+  return async () => {
+    if (!raceId) return { ok: false };
+    const { data, error } = await supabaseAdmin
+      .from('races')
+      .select('meeting_date')
+      .eq('id', raceId)
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return { ok: false };
+    const meetingDate = (data as { meeting_date?: string | null }).meeting_date;
+    if (!meetingDate) return { ok: false };
+    return { ok: true, date: String(meetingDate).slice(0, 10) };
+  };
+}
+
 export async function POST(request: NextRequest) {
-  // Gate the DB-mutating run behind a FAIL-CLOSED CRON_SECRET check, mirroring
-  // the cron routes. Checked first so an unauthorized caller reaches no model
-  // execution and learns nothing about the request handling.
+  // Step A FIRST: fail-closed CRON_SECRET. An unauthorized caller reaches no
+  // ownership query, no race lookup, and no model execution.
   const auth = requireCronSecret(request.headers.get('authorization'), process.env.CRON_SECRET);
   if (auth !== 'authorized') {
     const refusal = describeCronAuthFailure(auth);
@@ -41,7 +65,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(refusal.body, { status: refusal.status });
   }
 
-  const raceId = request.nextUrl.searchParams.get('race_id');
+  const raceId = new URL(request.url).searchParams.get('race_id');
+
+  // Ownership gate: the race->meeting_date lookup runs LAZILY inside the guard,
+  // only when a valid context was supplied (absent/off skip it entirely), and
+  // always before any model execution.
+  const gate = await enforceRouteOwnership(request, 'api/run-model', resolveRaceMeetingDate(raceId));
+  if (!gate.proceed) return gate.response;
 
   if (!raceId) {
     return NextResponse.json(

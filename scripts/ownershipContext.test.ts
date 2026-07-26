@@ -500,8 +500,11 @@ test('49. the module performs no I/O', () => {
   assert.doesNotMatch(LIB_SRC, /console\./);
 });
 
-test('50. no production file imports ownershipContext yet (inert)', () => {
+test('50. ownershipContext is consumed ONLY by the Slice 2 route guard (no other production importer)', () => {
+  // Slice 1 was inert; Slice 2 wires it into the route ownership guard exactly
+  // once. Any OTHER production importer would be unexpected.
   const roots = ['src/lib', 'src/app', 'scripts'];
+  const ALLOWED_IMPORTERS = ['src/lib/routeOwnershipGuard.ts'];
   const offenders: string[] = [];
   const walk = (dir: string): void => {
     for (const entry of readdirSyncSafe(dir)) {
@@ -509,6 +512,7 @@ test('50. no production file imports ownershipContext yet (inert)', () => {
       if (entry.isDirectory()) walk(full);
       else if (entry.isFile() && /\.tsx?$/.test(entry.name) && !entry.name.endsWith('.test.ts')) {
         if (full.endsWith('src/lib/ownershipContext.ts')) continue;
+        if (ALLOWED_IMPORTERS.some((a) => full.endsWith(a))) continue;
         if (/from '[^']*ownershipContext'|from "[^"]*ownershipContext"/.test(readFileSync(full, 'utf8'))) {
           offenders.push(full);
         }
@@ -516,7 +520,7 @@ test('50. no production file imports ownershipContext yet (inert)', () => {
     }
   };
   for (const r of roots) walk(r);
-  assert.deepEqual(offenders, [], `ownershipContext is imported by: ${offenders.join(', ')}`);
+  assert.deepEqual(offenders, [], `ownershipContext is imported by unexpected files: ${offenders.join(', ')}`);
 });
 
 test('51-53. the header/version constants and validity helper are stable', () => {

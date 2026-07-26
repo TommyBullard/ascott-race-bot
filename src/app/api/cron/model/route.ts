@@ -27,6 +27,7 @@ import { resolveCronMeetingDate } from '@/lib/cronDate';
 import { buildCronErrorDiagnostic, formatCronErrorLog } from '@/lib/cronDiagnostics';
 import { recordCronRun, buildCronRunRecord } from '@/lib/cronHeartbeat';
 import { describeCronAuthFailure, requireCronSecret } from '@/lib/auth';
+import { enforceRouteOwnership, staticEffectiveDate } from '@/lib/routeOwnershipGuard';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -47,6 +48,10 @@ export async function GET(request: NextRequest) {
     day: searchParams.get('day'),
     date: searchParams.get('date'),
   });
+
+  // Ownership gate: after Step A auth, before any model persistence.
+  const gate = await enforceRouteOwnership(request, 'cron/model', staticEffectiveDate(resolved.meetingDate));
+  if (!gate.proceed) return gate.response;
 
   try {
     const summary = await refreshModelForMeeting(resolved.meetingDate);

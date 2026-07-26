@@ -20,12 +20,14 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { syncRacecards } from '@/lib/liveSync';
+import { resolveCronMeetingDate } from '@/lib/cronDate';
 import {
   buildCronErrorDiagnostic,
   formatCronErrorLog,
 } from '@/lib/cronDiagnostics';
 import { recordCronRun, buildCronRunRecord } from '@/lib/cronHeartbeat';
 import { describeCronAuthFailure, requireCronSecret } from '@/lib/auth';
+import { enforceRouteOwnership, staticEffectiveDate } from '@/lib/routeOwnershipGuard';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -42,6 +44,17 @@ export async function GET(request: NextRequest) {
 
   const day = new URL(request.url).searchParams.get('day');
   const dayParam = day === 'tomorrow' ? 'tomorrow' : 'today';
+
+  // Ownership gate: after Step A auth, before any provider call or write. The
+  // guard date is derived from the ALREADY-coerced dayParam using the same UTC
+  // today/tomorrow semantics syncRacecards uses internally — never invented.
+  const gate = await enforceRouteOwnership(
+    request,
+    'cron/racecards',
+    staticEffectiveDate(resolveCronMeetingDate({ day: dayParam }).meetingDate),
+  );
+  if (!gate.proceed) return gate.response;
+
   const startedAt = new Date();
 
   try {

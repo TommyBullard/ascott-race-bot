@@ -37,6 +37,7 @@ import {
 } from '@/lib/cronDiagnostics';
 import { recordCronRun, buildCronRunRecord } from '@/lib/cronHeartbeat';
 import { describeCronAuthFailure, requireCronSecret } from '@/lib/auth';
+import { enforceRouteOwnership, staticEffectiveDate } from '@/lib/routeOwnershipGuard';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -56,6 +57,10 @@ export async function GET(request: NextRequest) {
     day: searchParams.get('day'),
     date: searchParams.get('date'),
   });
+
+  // Ownership gate: after Step A auth, before any provider call or write.
+  const gate = await enforceRouteOwnership(request, 'cron/odds', staticEffectiveDate(resolved.meetingDate));
+  if (!gate.proceed) return gate.response;
 
   const startedAt = new Date();
   try {

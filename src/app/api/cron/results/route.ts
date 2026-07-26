@@ -24,12 +24,14 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { syncResults } from '@/lib/liveSync';
+import { resolveCronMeetingDate } from '@/lib/cronDate';
 import {
   buildCronErrorDiagnostic,
   formatCronErrorLog,
 } from '@/lib/cronDiagnostics';
 import { recordCronRun, buildCronRunRecord } from '@/lib/cronHeartbeat';
 import { describeCronAuthFailure, requireCronSecret } from '@/lib/auth';
+import { enforceRouteOwnership, staticEffectiveDate } from '@/lib/routeOwnershipGuard';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -43,6 +45,16 @@ export async function GET(request: NextRequest) {
     if (refusal.logLine) console.error(refusal.logLine);
     return NextResponse.json(refusal.body, { status: refusal.status });
   }
+
+  // Ownership gate: after Step A auth, before any provider call, settlement
+  // write, or model re-run. syncResults is pinned to today UTC internally, so
+  // the guard date uses the same today-UTC rule via resolveCronMeetingDate({}).
+  const gate = await enforceRouteOwnership(
+    request,
+    'cron/results',
+    staticEffectiveDate(resolveCronMeetingDate({}).meetingDate),
+  );
+  if (!gate.proceed) return gate.response;
 
   const startedAt = new Date();
   try {
