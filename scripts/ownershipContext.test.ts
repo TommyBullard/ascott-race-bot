@@ -500,11 +500,12 @@ test('49. the module performs no I/O', () => {
   assert.doesNotMatch(LIB_SRC, /console\./);
 });
 
-test('50. ownershipContext is consumed ONLY by the Slice 2 route guard (no other production importer)', () => {
-  // Slice 1 was inert; Slice 2 wires it into the route ownership guard exactly
-  // once. Any OTHER production importer would be unexpected.
+test('50. ownershipContext is consumed ONLY by the ownership guard + propagation lib (no other production importer)', () => {
+  // Slice 1 was inert; Slice 2 wires it into the route ownership guard; Slice 3
+  // wires it into the propagation lib. Any OTHER production importer is
+  // unexpected.
   const roots = ['src/lib', 'src/app', 'scripts'];
-  const ALLOWED_IMPORTERS = ['src/lib/routeOwnershipGuard.ts'];
+  const ALLOWED_IMPORTERS = ['src/lib/routeOwnershipGuard.ts', 'src/lib/ownershipPropagation.ts'];
   const offenders: string[] = [];
   const walk = (dir: string): void => {
     for (const entry of readdirSyncSafe(dir)) {

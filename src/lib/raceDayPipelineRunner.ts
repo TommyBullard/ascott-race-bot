@@ -31,6 +31,12 @@ import {
   type RunOneRace,
 } from './modelDayRun';
 import { supabaseAdmin } from './supabaseAdmin';
+import {
+  OWNERSHIP_CONTEXT_HEADER,
+  OwnershipPropagationError,
+  buildOwnershipHeader,
+  type OwnershipContextSource,
+} from './ownershipPropagation';
 
 const RACES_TABLE = 'races';
 const RACE_MEETING_DATE_COLUMN = 'meeting_date';
@@ -207,11 +213,45 @@ export async function runPipelineCommitCycle(
  * Builds the real cron caller: GET with the CRON_SECRET bearer (read from the
  * environment at call time; never logged). The route is "ok" only when the HTTP
  * status is ok AND the body's `ok` flag (when present) is true.
+ *
+ * OWNERSHIP PROPAGATION (Slice 3): when `getOwnershipSource` is supplied, the
+ * caller's CURRENT ownership state is read immediately before EACH call and its
+ * ownership proof is attached as the `x-producer-ownership` header. This is
+ * FAIL-CLOSED:
+ *   - no callback           -> no ownership header; behave exactly as before
+ *     (for callers that deliberately do not participate in producer ownership);
+ *   - callback -> undefined -> a supplied mechanism that cannot provide
+ *     ownership: FAIL locally BEFORE fetch (throw), never an anonymous request;
+ *   - callback -> believed + valid source -> build + serialize + attach + fetch;
+ *   - callback -> not-believed / malformed source -> FAIL locally BEFORE fetch
+ *     (throw); the request is never downgraded to a context-less one.
+ * The context is rebuilt per call (no cached serialized context), so a stale or
+ * lost proof is never reused. The throw surfaces through each caller's existing
+ * per-stage try/catch (selected-course) or try/finally (nationwide), so cleanup
+ * and stage-failure semantics are unchanged.
  */
-export function createCallCron(): (url: string) => Promise<CronCallResult> {
+export function createCallCron(
+  getOwnershipSource?: () => OwnershipContextSource | undefined,
+): (url: string) => Promise<CronCallResult> {
   return async (url: string) => {
     const secret = process.env.CRON_SECRET;
     const headers: Record<string, string> = secret ? { Authorization: `Bearer ${secret}` } : {};
+
+    if (getOwnershipSource) {
+      const source = getOwnershipSource();
+      if (source === undefined) {
+        // A participating caller whose ownership source is unavailable: refuse
+        // locally rather than send an anonymous request.
+        throw new OwnershipPropagationError('source_unavailable');
+      }
+      const built = buildOwnershipHeader(source);
+      if (!built.ok) {
+        // Not believed / malformed: refuse locally, before any fetch.
+        throw new OwnershipPropagationError(built.reason);
+      }
+      headers[OWNERSHIP_CONTEXT_HEADER] = built.header;
+    }
+
     const res = await fetch(url, { method: 'GET', headers });
     let body: unknown = null;
     try {
@@ -223,16 +263,6 @@ export function createCallCron(): (url: string) => Promise<CronCallResult> {
       body && typeof body === 'object' && 'ok' in (body as Record<string, unknown>)
         ? (body as { ok?: unknown }).ok === true
         : res.ok;
-    // --- TEMP DIAGNOSTICS (remove after debugging "racecards: failed") ---
-    // res.status is only visible here (CronCallResult hides it). Print the HTTP
-    // status + raw body for any failing cron call so the underlying reason shows.
-    if (!(res.ok && okFlag)) {
-      console.error(
-        `[TEMP-DIAG callCron] ${url} -> HTTP ${res.status} ${res.statusText} ` +
-          `(res.ok=${res.ok} okFlag=${okFlag}) body=${JSON.stringify(body)}`,
-      );
-    }
-    // --- END TEMP DIAGNOSTICS ---
     return { ok: res.ok && okFlag, body };
   };
 }

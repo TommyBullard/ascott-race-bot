@@ -665,17 +665,25 @@ test('50. ownershipContext.ts and auth.ts are unchanged by Slice 2', () => {
   }
 });
 
-test('51. createCallCron / raceDayPipelineRunner / orchestrators are unchanged', () => {
-  const normalize = (s: string): string => s.replace(/\r\n/g, '\n');
-  for (const f of [
-    'src/lib/raceDayPipelineRunner.ts',
-    'scripts/runRaceDayPipeline.ts',
-    'scripts/runRaceDayPipelineWatch.ts',
-    'scripts/nationwideDryRun.ts',
-  ]) {
-    const committed = execFileSync('git', ['show', `HEAD:${f}`], { encoding: 'utf8' });
-    assert.equal(normalize(src(f)), normalize(committed), `${f} changed`);
-  }
+test('51. Slice 3: createCallCron propagates ownership; auth + call semantics preserved', () => {
+  // NOTE: Slice 3 intentionally supersedes the Slice-2 "orchestrators unchanged"
+  // assertion — these four files are Slice 3's legitimate propagation targets.
+  // Assert the propagation contract instead of byte-equality.
+  const runner = src('src/lib/raceDayPipelineRunner.ts');
+  // createCallCron accepts an ownership-source callback and attaches the header.
+  assert.match(runner, /createCallCron\(\s*\n?\s*getOwnershipSource\?/);
+  assert.match(runner, /buildOwnershipHeader\(/);
+  assert.match(runner, /headers\[OWNERSHIP_CONTEXT_HEADER\]\s*=/);
+  // The Bearer auth is preserved exactly.
+  assert.match(runner, /Authorization: `Bearer \$\{secret\}`/);
+  // The TEMP-DIAG raw cron-body logging block is gone FROM createCallCron.
+  const seam = runner.slice(runner.indexOf('export function createCallCron'));
+  assert.doesNotMatch(seam, /TEMP-DIAG callCron/);
+  assert.doesNotMatch(seam, /body=\$\{JSON\.stringify\(body\)\}/);
+  // The three claim-holding call sites pass their live state as a source.
+  assert.match(src('scripts/runRaceDayPipeline.ts'), /createCallCron\(\(\)\s*=>\s*ownership\.state\)/);
+  assert.match(src('scripts/runRaceDayPipelineWatch.ts'), /createCallCron\(\(\)\s*=>\s*ownership\.state\)/);
+  assert.match(src('scripts/nationwideDryRun.ts'), /createCallCron\(\(\)\s*=>\s*state\)/);
 });
 
 test('52. nationwide + producer-claim + write-boundary modules are unchanged', () => {

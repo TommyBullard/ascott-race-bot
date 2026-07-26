@@ -191,7 +191,11 @@ async function main(): Promise<void> {
 
   const deps: PipelineRunnerDeps = guardPipelineDeps(
     {
-      callCron: createCallCron(),
+      // Propagate the ownership proof: the CURRENT state is read immediately
+      // before each protected racecards/odds call, so every cycle (and every
+      // later cycle after a heartbeat) sends the live owner/generation, and a
+      // confirmed/uncertain loss fails closed before the request.
+      callCron: createCallCron(() => ownership.state),
       fetchRaceRows: createFetchRaceRows(),
       runOneRace: runModelForRace,
     },

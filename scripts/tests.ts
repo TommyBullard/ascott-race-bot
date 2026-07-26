@@ -108,6 +108,7 @@ import './nationwideWriteBoundaryAudit.test';
 import './routeAuthHardening.test';
 import './ownershipContext.test';
 import './routeOwnershipGuard.test';
+import './ownershipPropagation.test';
 import './autoResults.test';
 import './freeResultsMatch.test';
 import './todayResultsSettlement.test';

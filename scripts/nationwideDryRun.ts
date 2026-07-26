@@ -304,7 +304,11 @@ async function main(): Promise<void> {
     if (mode === 'live-provider') {
       const now = new Date();
       const baseUrl = args.baseUrl.replace(/\/+$/, '');
-      const callCron = createCallCron();
+      // Propagate the nationwide (all-uk-ire) ownership proof: the CURRENT state
+      // is read immediately before each protected racecards/odds call, so an
+      // ownership loss fails closed before the request rather than sending an
+      // anonymous one.
+      const callCron = createCallCron(() => state);
 
       // Verify BEFORE racecards.
       await heartbeat.beatNow();

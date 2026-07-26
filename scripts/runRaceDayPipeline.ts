@@ -163,7 +163,9 @@ async function main(): Promise<void> {
     // is gated on the ownership belief.
     const deps: PipelineRunnerDeps = guardPipelineDeps(
       {
-        callCron: createCallCron(),
+        // Propagate the ownership proof: the CURRENT state is read immediately
+        // before each protected racecards/odds call (fail-closed if lost).
+        callCron: createCallCron(() => ownership.state),
         fetchRaceRows: createFetchRaceRows(),
         runOneRace: runModelForRace,
       },
