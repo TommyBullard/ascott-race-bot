@@ -106,6 +106,7 @@ import './nationwideDryRun.test';
 import './nationwidePreflight.test';
 import './nationwideWriteBoundaryAudit.test';
 import './routeAuthHardening.test';
+import './ownershipContext.test';
 import './autoResults.test';
 import './freeResultsMatch.test';
 import './todayResultsSettlement.test';
