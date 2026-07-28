@@ -19,6 +19,7 @@ import {
   aggregatePreOffValidation,
   buildPreOffValidationJsonPath,
   buildPreOffValidationMarkdownPath,
+  canonicalLimitations,
   checkPreOffInvariants,
   courseSlug,
   isValidIsoDate,
@@ -368,6 +369,108 @@ test('28. a FAIL renders the invariant violations', () => {
 test('29. rendered output never claims winner prediction or a profit promise', () => {
   const md = renderPreOffValidationMarkdown(aggregatePreOffValidation(manyRaces(60), META));
   assert.doesNotMatch(md, /guaranteed|sure thing|profit promise|will win/i);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Presentation correction: diagnostic/official wording + NOT-MEASURED dedup  */
+/* -------------------------------------------------------------------------- */
+
+/** A thin fixture whose not_measured[] also carries the sample-based items. */
+const THIN = [race({ id: 'g0', runners: [{ model: 0.5, market: 0.5 }], winnerIdx: 0, pickIdx: 0 })];
+
+test('P1. Markdown heading says DIAGNOSTIC, not official', () => {
+  const md = renderPreOffValidationMarkdown(aggregatePreOffValidation(manyRaces(60), META));
+  assert.match(md, /## Diagnostic pre-off decision performance/);
+  assert.doesNotMatch(md, /## Decision performance \(official/);
+  assert.doesNotMatch(md, /official pre-off rank-1 picks/i);
+});
+
+test('P2. console never calls the diagnostic decisions official (only the locked layer is "official")', () => {
+  const con = renderPreOffValidationConsole(aggregatePreOffValidation(manyRaces(60), META)).join('\n');
+  for (const l of con.split('\n').filter((x) => /official/i.test(x))) {
+    assert.match(l, /lock/i, `a console line mentioning "official" must be about the locked layer: ${l}`);
+  }
+});
+
+test('P3. JSON layer labels are unambiguous (diagnostic; official layer separate & NOT MEASURED)', () => {
+  const r = aggregatePreOffValidation(manyRaces(60), META);
+  assert.equal(r.layer, 'diagnostic');
+  assert.equal(r.official_locked_layer.measured, false);
+  assert.ok('decision_performance' in r);
+  assert.equal('official_decision_performance' in (r as unknown as Record<string, unknown>), false);
+});
+
+test('P4. official locked history is explicitly separate in the output', () => {
+  const md = renderPreOffValidationMarkdown(aggregatePreOffValidation(manyRaces(60), META));
+  assert.match(md, /Official locked-decision layer/);
+  assert.match(md, /report:locked/);
+  assert.match(md, /NOT official locked decisions/);
+});
+
+test('P5. each logical NOT MEASURED item appears EXACTLY ONCE in Markdown; distinct preserved', () => {
+  const md = renderPreOffValidationMarkdown(aggregatePreOffValidation(THIN, META));
+  const section = md.slice(md.indexOf('## Layers / dimensions NOT MEASURED'), md.indexOf('## Descriptive signals'));
+  const once = (re: RegExp) => assert.equal((section.match(re) ?? []).length, 1, `${re} should appear once`);
+  for (const re of [
+    /Official locked-decision layer/,
+    /\*\*Each-way\*\*/,
+    /Chronological drawdown/,
+    /Segmentation by handicap/,
+    /Segmentation by field size/,
+    /Segmentation by country/,
+    /market-baseline ROI/i,
+  ]) once(re);
+  // The combined handicap/field-size/country duplicate string is NOT re-rendered.
+  assert.doesNotMatch(section, /segmentation by handicap \/ field-size \/ country/i);
+  // Distinct sample-based limitation preserved for a thin sample.
+  assert.match(section, /model calibration reliability/);
+  assert.match(section, /decision-quality description/);
+});
+
+test('P6. each logical NOT MEASURED item appears EXACTLY ONCE in console', () => {
+  const con = renderPreOffValidationConsole(aggregatePreOffValidation(THIN, META)).join('\n');
+  for (const re of [/Official locked-decision layer/, /Each-way:/, /Chronological drawdown/, /Segmentation by handicap/, /market-baseline ROI/i]) {
+    assert.equal((con.match(re) ?? []).length, 1, `${re} should appear once in console`);
+  }
+  assert.doesNotMatch(con, /segmentation by handicap \/ field-size \/ country/i);
+});
+
+test('P7-P8. canonicalLimitations is deterministic, dedupes by logical dimension, preserves distinct', () => {
+  const r = aggregatePreOffValidation(THIN, META);
+  const a = canonicalLimitations(r);
+  assert.deepEqual(a, canonicalLimitations(r)); // deterministic
+  const labels = a.filter((x) => x.label).map((x) => x.label as string);
+  assert.deepEqual([...new Set(labels)].length, labels.length); // no duplicate labels
+  assert.ok(a.some((x) => /market-baseline ROI/i.test(x.detail))); // dynamic preserved
+  assert.ok(a.some((x) => /model calibration reliability/.test(x.detail)));
+  // Exactly one entry per logical dimension (6 typed + market ROI + 2 sample-based = 9 for a thin fixture).
+  assert.equal(a.length, 9);
+});
+
+test('P9-P10. Markdown and JSON remain deterministic', () => {
+  const races = manyRaces(60);
+  const r1 = aggregatePreOffValidation(races, META);
+  const r2 = aggregatePreOffValidation(races, META);
+  assert.equal(renderPreOffValidationMarkdown(r1), renderPreOffValidationMarkdown(r2));
+  assert.equal(JSON.stringify(r1), JSON.stringify(r2));
+});
+
+test('P11-P16. rendering does NOT mutate the object; metrics/verdict/coverage/ranking/calibration/segments unchanged', () => {
+  const r = aggregatePreOffValidation(manyRaces(120), META);
+  const before = JSON.stringify(r);
+  renderPreOffValidationMarkdown(r);
+  renderPreOffValidationConsole(r);
+  assert.equal(JSON.stringify(r), before); // object untouched by rendering
+  // JSON not_measured[] stays COMPLETE (still holds the pre-dedup canonical + combined strings).
+  assert.ok(r.not_measured.some((s) => /official locked/.test(s)));
+  assert.ok(r.not_measured.some((s) => /handicap \/ field-size \/ country/.test(s)));
+  // Metrics/verdict/coverage/ranking/calibration/segments are the known values.
+  assert.equal(r.verdict, 'PASS');
+  assert.equal(r.coverage.races_in_scope, 120);
+  assert.equal(r.model_calibration.n, 360);
+  assert.equal(r.market_baseline.calibration.n, 360);
+  assert.ok(r.ranking.model.top1 !== null && r.ranking.market.top1 !== null);
+  assert.deepEqual(r.segments.by_course.map((b) => b.label).sort(), ['Cork', 'Galway']);
 });
 
 /* -------------------------------------------------------------------------- */

@@ -63,7 +63,7 @@ primary read failure.
 | --- | --- |
 | **Coverage** | Races in scope, with a pre-off run, settled vs pending, no-pre-off-run, and read errors. |
 | **Ranking** | Winner top-1/2/3 accuracy for **model** and **market**, plus a top-1 agreement matrix (both / model-only / market-only / neither). Score ties resolved deterministically by runner id. |
-| **Decision performance** | `summarizeModelPerformance` on the official pre-off rank-1 picks: strike, ROI, P/L, no-bet, avg EV — at **stored** odds/stake only. |
+| **Decision performance** | `summarizeModelPerformance` on the **diagnostic** stored pre-off rank-1 recommendations (NOT official locked decisions): strike, ROI, P/L, no-bet, avg EV — at **stored** odds/stake only. |
 | **Model calibration** | `calibrateBinary(model_prob → won)`: Brier, log-loss, ECE, MCE, reliability bins. |
 | **Market baseline** | The same calibration on `market_prob`, plus market-favourite strike rate. Market ROI is **NOT MEASURED** (no tradeable stored price). |
 | **Segments** | Strike/ROI by confidence, course, odds band, and stored-EV sign. Small segments stay visible, flagged `(insufficient)`, never dropped. |

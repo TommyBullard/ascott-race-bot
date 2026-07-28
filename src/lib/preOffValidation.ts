@@ -625,6 +625,63 @@ function num(v: number | null): string {
   return v === null ? '—' : String(Math.round(v * 10000) / 10000);
 }
 
+/** One NOT-MEASURED limitation for rendering: an optional typed label + detail. */
+export interface CanonicalLimitation {
+  label: string | null;
+  detail: string;
+}
+
+/**
+ * Maps a free-text `not_measured` entry to a stable LOGICAL key, so a vaguer
+ * duplicate can be deduped against the canonical typed-block explanation. Pure.
+ */
+function classifyLimitation(nm: string): string {
+  const s = nm.toLowerCase();
+  if (s.includes('official locked')) return 'official_locked_layer';
+  if (s.includes('each-way')) return 'each_way';
+  if (s.includes('drawdown')) return 'chronological_drawdown';
+  if (s.includes('handicap') || s.includes('field-size') || s.includes('country')) return 'segmentation_umbrella';
+  if (s.includes('market-baseline roi')) return 'market_roi';
+  return nm; // unique by content (e.g. sample-based reliability / decision-quality)
+}
+
+/**
+ * The single, deterministic, DEDUPLICATED list of NOT-MEASURED limitations for
+ * rendering — each logical dimension exactly once, preferring the detailed
+ * typed-block explanation over any vaguer `not_measured` duplicate. It does NOT
+ * mutate the evidence object (the JSON `not_measured` array stays complete); it
+ * only canonicalises at the rendering boundary. Pure.
+ */
+export function canonicalLimitations(r: PreOffValidationReport): CanonicalLimitation[] {
+  const out: CanonicalLimitation[] = [];
+  const seen = new Set<string>();
+  const add = (key: string, label: string | null, detail: string): void => {
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ label, detail });
+  };
+  // Canonical typed dimensions first (most detailed), in a fixed order.
+  add('official_locked_layer', 'Official locked-decision layer', r.official_locked_layer.reason);
+  add('each_way', 'Each-way', r.each_way.reason);
+  add('chronological_drawdown', 'Chronological drawdown', r.chronological_drawdown.reason);
+  add('segmentation_handicap', 'Segmentation by handicap', r.segments.by_handicap.reason);
+  add('segmentation_field_size', 'Segmentation by field size', r.segments.by_field_size.reason);
+  add('segmentation_country', 'Segmentation by country', r.segments.by_country.reason);
+  // The combined handicap/field-size/country string in `not_measured` is a vaguer
+  // duplicate of the three specific blocks above — mark its umbrella key seen.
+  seen.add('segmentation_umbrella');
+  // Dynamic evidence-object limitations (market ROI, sample-based), deduped.
+  for (const nm of r.not_measured) add(classifyLimitation(nm), null, nm);
+  return out;
+}
+
+function renderLimitationMarkdown(l: CanonicalLimitation): string {
+  return l.label ? `- **${l.label}** — ${l.detail}.` : `- ${l.detail}`;
+}
+function renderLimitationConsole(l: CanonicalLimitation): string {
+  return l.label ? `  - ${l.label}: ${l.detail}` : `  - ${l.detail}`;
+}
+
 export function renderPreOffValidationConsole(r: PreOffValidationReport): string[] {
   const lines: string[] = [];
   lines.push(`Pre-off decision-support validation (DIAGNOSTIC layer) — ${r.from} to ${r.to} — ${r.course ?? 'all courses'}`);
@@ -652,8 +709,8 @@ export function renderPreOffValidationConsole(r: PreOffValidationReport): string
   lines.push('Descriptive signals (NOT gating the verdict):');
   for (const [k, val] of Object.entries(r.descriptive_signals)) lines.push(`  ${k.padEnd(26)} ${val}`);
   lines.push('');
-  lines.push('NOT MEASURED:');
-  for (const nm of r.not_measured) lines.push(`  - ${nm}`);
+  lines.push('NOT MEASURED (each logical dimension once):');
+  for (const lim of canonicalLimitations(r)) lines.push(renderLimitationConsole(lim));
   lines.push('');
   for (const note of r.notes) lines.push(note);
   return lines;
@@ -715,7 +772,9 @@ export function renderPreOffValidationMarkdown(r: PreOffValidationReport): strin
   L.push(`Top-1 agreement (n=${rk.agreement.races}): both ${rk.agreement.both}, model-only ${rk.agreement.model_only}, market-only ${rk.agreement.market_only}, neither ${rk.agreement.neither}. Ties resolved deterministically by runner id.`);
   L.push('');
   const d = r.decision_performance;
-  L.push('## Decision performance (official pre-off rank-1 picks)');
+  L.push('## Diagnostic pre-off decision performance');
+  L.push('');
+  L.push('_Stored diagnostic rank-1 recommendations (NOT official locked decisions — those come only from `locked_race_decisions` and are evaluated separately by `report:locked`)._');
   L.push('');
   L.push('| Settled | Winners | Strike | ROI | P/L | No-bet | Avg EV |');
   L.push('| --- | --- | --- | --- | --- | --- | --- |');
@@ -751,13 +810,9 @@ export function renderPreOffValidationMarkdown(r: PreOffValidationReport): strin
   L.push('');
   L.push('## Layers / dimensions NOT MEASURED');
   L.push('');
-  L.push(`- **Official locked-decision layer** — ${r.official_locked_layer.reason}.`);
-  L.push(`- **Each-way** — ${r.each_way.reason}.`);
-  L.push(`- **Chronological drawdown** — ${r.chronological_drawdown.reason}.`);
-  L.push(`- **Segmentation by handicap** — ${r.segments.by_handicap.reason}.`);
-  L.push(`- **Segmentation by field size** — ${r.segments.by_field_size.reason}.`);
-  L.push(`- **Segmentation by country** — ${r.segments.by_country.reason}.`);
-  for (const nm of r.not_measured) L.push(`- ${nm}`);
+  L.push('_Each logical limitation appears exactly once (the JSON `not_measured` array remains complete)._');
+  L.push('');
+  for (const lim of canonicalLimitations(r)) L.push(renderLimitationMarkdown(lim));
   L.push('');
   L.push('## Descriptive signals (NOT part of the verdict)');
   L.push('');
