@@ -142,3 +142,4 @@ import './tipsterSourceRegistry.test';
 import './tipsterWebDiscovery.test';
 import './tipsterManualReview.test';
 import './tipsterPublicConsensus.test';
+import './appShell.test';

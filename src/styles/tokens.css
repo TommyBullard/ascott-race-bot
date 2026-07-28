@@ -1,0 +1,849 @@
+/*
+ * Racing Bot — global design tokens and application shell styling.
+ *
+ * SLICE 1 SCOPE. This file establishes the visual foundation only. It is
+ * deliberately additive:
+ *
+ *   - It declares custom properties on :root.
+ *   - It adds two global ACCESSIBILITY base rules (focus-visible ring and a
+ *     reduced-motion guard). Both strictly improve existing pages.
+ *   - Every other rule is opt-in behind an `rb-` class.
+ *
+ * It intentionally sets NO background, font or colour on `html`/`body`, so the
+ * existing pages (which each render their own `<main>` and their own inline
+ * styles) render exactly as they did before this file existed. The application
+ * background is applied by `.rb-app`, which arrives when the shell is adopted.
+ *
+ * Neumorphism policy: the paired light/dark shadows here are DECORATIVE depth
+ * only. Every interactive element also carries a visible border and a text
+ * label, so shadow is never the sole affordance or the sole state indicator.
+ *
+ * Decision-support only. Nothing in this file expresses or implies a betting
+ * instruction.
+ */
+
+/* ========================================================================== *
+ * 1. Design tokens
+ * ========================================================================== */
+
+:root {
+  /* -- Colour: surfaces ---------------------------------------------------- */
+  --rb-bg-app: #e7ebf1;
+  --rb-surface-raised: #eef1f6;
+  --rb-surface-elevated: #f6f8fb;
+  --rb-surface-inset: #dde3ea;
+
+  /* -- Colour: text -------------------------------------------------------- */
+  --rb-text-primary: #12171f;
+  --rb-text-secondary: #3d4654;
+  --rb-text-muted: #59626f;
+
+  /* -- Colour: borders ----------------------------------------------------- *
+   * `--rb-border` is a decorative hairline for dividers and panel edges.
+   * `--rb-border-strong` bounds INTERACTIVE controls and clears the 3:1 that
+   * WCAG 2.1 SC 1.4.11 requires for a user-interface component boundary
+   * (3.30:1 on the raised surface, 3.12:1 on the application background).
+   */
+  --rb-border: #c2cad5;
+  --rb-border-strong: #7a8596;
+
+  /* -- Colour: semantic ---------------------------------------------------- */
+  --rb-accent-analytical: #14508f;
+  --rb-status-positive: #12693a;
+  --rb-status-warning: #7d5200;
+  --rb-status-failure: #a81f1c;
+  --rb-status-official: #533a95;
+  --rb-market-neutral: #59626f;
+  --rb-focus-ring: #0a5fc4;
+
+  /* -- Spacing scale ------------------------------------------------------- */
+  --rb-space-1: 4px;
+  --rb-space-2: 8px;
+  --rb-space-3: 12px;
+  --rb-space-4: 16px;
+  --rb-space-5: 24px;
+  --rb-space-6: 32px;
+  --rb-space-7: 48px;
+
+  /* -- Radii --------------------------------------------------------------- */
+  --rb-radius-control: 6px;
+  --rb-radius-card: 10px;
+  --rb-radius-panel: 14px;
+  --rb-radius-pill: 999px;
+
+  /* -- Shadows: paired light + dark for restrained neumorphic depth -------- */
+  --rb-shadow-raised:
+    -2px -2px 5px rgba(255, 255, 255, 0.9), 3px 3px 7px rgba(20, 28, 42, 0.13);
+  --rb-shadow-elevated:
+    -3px -3px 8px rgba(255, 255, 255, 0.95), 6px 8px 18px rgba(20, 28, 42, 0.16);
+  --rb-shadow-inset:
+    inset 2px 2px 5px rgba(20, 28, 42, 0.16), inset -2px -2px 5px rgba(255, 255, 255, 0.85);
+  --rb-shadow-focused: 0 0 0 3px rgba(10, 95, 196, 0.32);
+
+  /* -- Typography ---------------------------------------------------------- */
+  --rb-font-system:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --rb-text-meta: 11px;
+  --rb-text-label: 12px;
+  --rb-text-body: 14px;
+  --rb-text-section: 17px;
+  --rb-text-page: 24px;
+  --rb-leading-tight: 1.25;
+  --rb-leading-body: 1.55;
+  --rb-tracking-label: 0.06em;
+
+  /* -- Interaction --------------------------------------------------------- */
+  --rb-state-hover: rgba(20, 80, 143, 0.07);
+  --rb-state-selected: rgba(20, 80, 143, 0.12);
+  --rb-state-active: rgba(20, 80, 143, 0.18);
+  --rb-state-disabled-opacity: 0.55;
+  --rb-motion-fast: 120ms;
+  --rb-motion-base: 200ms;
+  --rb-motion-ease: cubic-bezier(0.2, 0, 0.2, 1);
+
+  /* -- Layout -------------------------------------------------------------- */
+  --rb-shell-max-width: 1280px;
+  --rb-touch-target-min: 44px;
+}
+
+/*
+ * Dark scheme. Values only — there is deliberately NO theme toggle in this
+ * slice. Neumorphic depth is reduced in dark mode because paired highlights
+ * read as haze on dark surfaces; borders carry more of the separation.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --rb-bg-app: #12161c;
+    --rb-surface-raised: #1a1f27;
+    --rb-surface-elevated: #222831;
+    --rb-surface-inset: #0e1218;
+
+    --rb-text-primary: #eef1f6;
+    --rb-text-secondary: #b9c2ce;
+    --rb-text-muted: #8d97a5;
+
+    --rb-border: #333c48;
+    /* 3.34:1 on the dark raised surface. */
+    --rb-border-strong: #647184;
+
+    --rb-accent-analytical: #74aaf0;
+    --rb-status-positive: #4cc07d;
+    --rb-status-warning: #d9a441;
+    --rb-status-failure: #f0736f;
+    --rb-status-official: #a992f0;
+    --rb-market-neutral: #8d97a5;
+    --rb-focus-ring: #7fb4ff;
+
+    --rb-shadow-raised:
+      -1px -1px 3px rgba(255, 255, 255, 0.04), 3px 3px 8px rgba(0, 0, 0, 0.55);
+    --rb-shadow-elevated:
+      -1px -1px 4px rgba(255, 255, 255, 0.05), 6px 8px 20px rgba(0, 0, 0, 0.62);
+    --rb-shadow-inset:
+      inset 2px 2px 5px rgba(0, 0, 0, 0.65), inset -1px -1px 3px rgba(255, 255, 255, 0.05);
+    --rb-shadow-focused: 0 0 0 3px rgba(127, 180, 255, 0.36);
+
+    --rb-state-hover: rgba(116, 170, 240, 0.1);
+    --rb-state-selected: rgba(116, 170, 240, 0.16);
+    --rb-state-active: rgba(116, 170, 240, 0.24);
+  }
+}
+
+/* ========================================================================== *
+ * 2. Global accessibility base
+ *
+ * These two rules apply document-wide on purpose. Both are additive
+ * improvements and neither changes layout, colour or type of existing content.
+ * ========================================================================== */
+
+/* Visible keyboard focus everywhere. Outlines are never removed. */
+:focus-visible {
+  outline: 2px solid var(--rb-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Respect a reduced-motion preference across the whole document. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ========================================================================== *
+ * 3. Utilities
+ * ========================================================================== */
+
+/* Screen-reader-only text that remains focusable when it needs to be. */
+.rb-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Aligned figures for any column of numbers. */
+.rb-tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Wide content scrolls inside its own container, never the page. */
+.rb-scroll-x {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/* ========================================================================== *
+ * 4. Application shell
+ * ========================================================================== */
+
+/*
+ * Border-box sizing, SCOPED to the shell.
+ *
+ * Deliberately not a global `*` reset. The existing pages style themselves with
+ * inline `content-box` measurements, and a document-wide reset would silently
+ * resize them; this file's contract is that nothing outside an `rb-` class
+ * changes. Scoping to `.rb-app` gives the shell correct sizing while the
+ * unmounted dashboard keeps rendering byte-for-byte as it does today.
+ *
+ * It is load-bearing, not cosmetic: `.rb-main` and `.rb-nav--primary` set
+ * `width: 100%` alongside horizontal padding, which under `content-box` would
+ * compute wider than their container and push content past the viewport edge.
+ */
+.rb-app,
+.rb-app *,
+.rb-app *::before,
+.rb-app *::after {
+  box-sizing: border-box;
+}
+
+/*
+ * No `overflow` is declared here, on purpose. Clipping one axis forces the
+ * other to compute to `auto`, which would turn the shell into a scroll
+ * container: `position: sticky` descendants would resolve against a scrollport
+ * that never scrolls, and wide analytical content and focus outlines would be
+ * clipped with no way to reach them. Border-box sizing above removes the
+ * accidental overflow that a clip would otherwise have concealed. Content that
+ * genuinely needs to scroll sideways opts in with `.rb-scroll-x`.
+ */
+.rb-app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--rb-bg-app);
+  color: var(--rb-text-primary);
+  font-family: var(--rb-font-system);
+  font-size: var(--rb-text-body);
+  line-height: var(--rb-leading-body);
+}
+
+/* -- Skip link: invisible until focused, then unmistakable ----------------- *
+ * Fixed, not absolute. An absolutely positioned link resolves against the
+ * initial containing block, so after the reader has scrolled it would slide
+ * back to the top of the DOCUMENT — off-screen at the moment it is focused.
+ * Fixed positions it against the viewport, so it is always visible on focus,
+ * and it cannot be clipped by any ancestor's overflow. The z-index clears the
+ * header and the fixed mobile bar (z-index 50).
+ */
+.rb-skip-link {
+  position: fixed;
+  left: var(--rb-space-3);
+  top: calc(-1 * var(--rb-space-7) - var(--rb-space-5));
+  z-index: 100;
+  display: inline-block;
+  padding: var(--rb-space-2) var(--rb-space-4);
+  background: var(--rb-surface-elevated);
+  color: var(--rb-accent-analytical);
+  font-family: var(--rb-font-system);
+  font-size: var(--rb-text-body);
+  font-weight: 600;
+  text-decoration: underline;
+  border: 1px solid var(--rb-border-strong);
+  border-radius: var(--rb-radius-control);
+  box-shadow: var(--rb-shadow-elevated);
+  transition: top var(--rb-motion-fast) var(--rb-motion-ease);
+}
+
+.rb-skip-link:focus {
+  top: var(--rb-space-3);
+}
+
+/* -- Header ---------------------------------------------------------------- */
+.rb-header {
+  background: var(--rb-surface-raised);
+  border-bottom: 1px solid var(--rb-border);
+  box-shadow: var(--rb-shadow-raised);
+}
+
+.rb-header__inner {
+  max-width: var(--rb-shell-max-width);
+  margin: 0 auto;
+  padding: var(--rb-space-3) var(--rb-space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--rb-space-4);
+  flex-wrap: wrap;
+}
+
+/* -- Identity: course-agnostic ------------------------------------------- */
+.rb-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--rb-space-3);
+  min-width: 0;
+}
+
+.rb-identity__mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: var(--rb-radius-pill);
+  background: var(--rb-surface-inset);
+  box-shadow: var(--rb-shadow-inset);
+  border: 1px solid var(--rb-border);
+  color: var(--rb-accent-analytical);
+  font-size: var(--rb-text-label);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.rb-identity__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rb-identity__name {
+  font-size: var(--rb-text-section);
+  font-weight: 650;
+  line-height: var(--rb-leading-tight);
+  letter-spacing: -0.01em;
+  color: var(--rb-text-primary);
+}
+
+.rb-identity__tagline {
+  font-size: var(--rb-text-meta);
+  font-weight: 500;
+  letter-spacing: var(--rb-tracking-label);
+  text-transform: uppercase;
+  color: var(--rb-text-muted);
+}
+
+/* -- Placeholder control channel ------------------------------------------ *
+ * Recessed slots reserving space for future search / date / scope controls.
+ * They are inert by construction: no input, no button, no handler. Each one
+ * states its own planned status in visible text so nothing looks operable.
+ */
+.rb-control-channel {
+  display: flex;
+  align-items: center;
+  gap: var(--rb-space-2);
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.rb-slot {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--rb-space-2);
+  padding: var(--rb-space-2) var(--rb-space-3);
+  min-height: 32px;
+  background: var(--rb-surface-inset);
+  border: 1px dashed var(--rb-border-strong);
+  border-radius: var(--rb-radius-control);
+  box-shadow: var(--rb-shadow-inset);
+}
+
+.rb-slot__label {
+  font-size: var(--rb-text-label);
+  font-weight: 600;
+  color: var(--rb-text-secondary);
+}
+
+.rb-slot__state {
+  font-size: var(--rb-text-meta);
+  font-weight: 600;
+  letter-spacing: var(--rb-tracking-label);
+  text-transform: uppercase;
+  color: var(--rb-text-muted);
+}
+
+/* ========================================================================== *
+ * 5. Navigation
+ * ========================================================================== */
+
+.rb-nav__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--rb-space-1);
+}
+
+/*
+ * Every navigation link carries a visible border and a text label. Depth is
+ * decorative; the border and the label are what identify it as a control, so
+ * the border uses the 3:1 interactive token rather than the hairline.
+ */
+.rb-nav__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rb-space-2);
+  padding: var(--rb-space-2) var(--rb-space-3);
+  border: 1px solid var(--rb-border-strong);
+  border-radius: var(--rb-radius-control);
+  background: var(--rb-surface-raised);
+  box-shadow: var(--rb-shadow-raised);
+  color: var(--rb-text-secondary);
+  font-size: var(--rb-text-body);
+  font-weight: 550;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background var(--rb-motion-fast) var(--rb-motion-ease),
+    color var(--rb-motion-fast) var(--rb-motion-ease),
+    box-shadow var(--rb-motion-fast) var(--rb-motion-ease);
+}
+
+.rb-nav__link:hover {
+  background: var(--rb-state-hover);
+  color: var(--rb-text-primary);
+}
+
+.rb-nav__link:active {
+  background: var(--rb-state-active);
+  box-shadow: var(--rb-shadow-inset);
+}
+
+/*
+ * Active route. Marked three ways so it never depends on colour alone:
+ * aria-current for assistive technology, a stronger border and inset depth,
+ * and a solid underline rule beneath the label.
+ */
+.rb-nav__link[aria-current='page'] {
+  background: var(--rb-state-selected);
+  border-color: var(--rb-border-strong);
+  box-shadow: var(--rb-shadow-inset);
+  color: var(--rb-accent-analytical);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+/* Planned destinations: not links, not focusable, never a 404. */
+.rb-nav__planned {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--rb-space-2);
+  padding: var(--rb-space-2) var(--rb-space-3);
+  border: 1px dashed var(--rb-border);
+  border-radius: var(--rb-radius-control);
+  color: var(--rb-text-muted);
+  font-size: var(--rb-text-body);
+  white-space: nowrap;
+  opacity: var(--rb-state-disabled-opacity);
+}
+
+.rb-nav__planned-tag {
+  font-size: var(--rb-text-meta);
+  font-weight: 600;
+  letter-spacing: var(--rb-tracking-label);
+  text-transform: uppercase;
+}
+
+/* -- Desktop / tablet primary navigation ---------------------------------- */
+.rb-nav--primary {
+  width: 100%;
+  max-width: var(--rb-shell-max-width);
+  margin: 0 auto;
+  padding: 0 var(--rb-space-4) var(--rb-space-3);
+}
+
+.rb-nav--primary .rb-nav__list {
+  flex-wrap: wrap;
+  gap: var(--rb-space-2);
+}
+
+/* -- Mobile bottom navigation --------------------------------------------- */
+.rb-nav--mobile {
+  display: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  background: var(--rb-surface-raised);
+  border-top: 1px solid var(--rb-border-strong);
+  box-shadow: var(--rb-shadow-elevated);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.rb-nav--mobile .rb-nav__list {
+  gap: 0;
+}
+
+.rb-nav--mobile .rb-nav__item {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.rb-nav--mobile .rb-nav__link {
+  width: 100%;
+  min-height: var(--rb-touch-target-min);
+  justify-content: center;
+  text-align: center;
+  border: 0;
+  /*
+   * Boundary policy in the bottom bar. Depth and fill are dropped here — a
+   * boxed control per target reads as clutter at this size — so separation is
+   * carried by the divider alone, which therefore uses the 3:1 interactive
+   * token rather than the decorative hairline. The top rail is reserved space,
+   * transparent until the destination is current, so marking the active item
+   * shifts no layout. The bar's own top border bounds the row, and the text
+   * label identifies each destination.
+   */
+  border-top: 3px solid transparent;
+  border-left: 1px solid var(--rb-border-strong);
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  font-size: var(--rb-text-label);
+  padding: var(--rb-space-2) var(--rb-space-1);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* No rail against the viewport edge. Colour, not width, so widths stay equal. */
+.rb-nav--mobile .rb-nav__item:first-child .rb-nav__link {
+  border-left-color: transparent;
+}
+
+.rb-nav--mobile .rb-nav__link[aria-current='page'] {
+  border-top-color: var(--rb-accent-analytical);
+  background: var(--rb-state-selected);
+  box-shadow: none;
+}
+
+/* ========================================================================== *
+ * 6. Main content region
+ * ========================================================================== */
+
+.rb-main {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: var(--rb-shell-max-width);
+  margin: 0 auto;
+  padding: var(--rb-space-5) var(--rb-space-4) var(--rb-space-7);
+  min-width: 0;
+}
+
+/* ========================================================================== *
+ * 7. Responsive structure
+ *
+ * Desktop  >= 1024px : full header navigation, planned destinations visible.
+ * Tablet   700-1023px: compact header navigation, planned destinations hidden.
+ * Mobile   < 700px   : header navigation hidden, bottom navigation shown.
+ * ========================================================================== */
+
+@media (max-width: 1023px) {
+  .rb-nav--primary .rb-nav__link {
+    padding: var(--rb-space-1) var(--rb-space-2);
+    font-size: var(--rb-text-label);
+  }
+
+  /*
+   * Hide the whole list item, not just the label inside it. Hiding only the
+   * label leaves an empty flex child that still consumes the list `gap`,
+   * trailing dead space after the last real destination.
+   */
+  .rb-nav--primary .rb-nav__item--planned {
+    display: none;
+  }
+
+  .rb-header__inner {
+    padding: var(--rb-space-3);
+    gap: var(--rb-space-3);
+  }
+
+  .rb-main {
+    padding: var(--rb-space-4) var(--rb-space-3) var(--rb-space-6);
+  }
+}
+
+@media (max-width: 699px) {
+  .rb-nav--primary {
+    display: none;
+  }
+
+  .rb-nav--mobile {
+    display: block;
+  }
+
+  .rb-control-channel {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .rb-slot {
+    flex: 1 1 auto;
+  }
+
+  /* Reserve room so the fixed bottom bar never covers content. */
+  .rb-main {
+    padding-bottom: calc(var(--rb-touch-target-min) + var(--rb-space-6) + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ========================================================================== *
+ * 8. Primitives
+ * ========================================================================== */
+
+/* -- Panel ----------------------------------------------------------------- */
+.rb-panel {
+  background: var(--rb-surface-raised);
+  border: 1px solid var(--rb-border);
+  border-radius: var(--rb-radius-panel);
+  box-shadow: var(--rb-shadow-raised);
+  padding: var(--rb-space-4);
+}
+
+/* -- Card ------------------------------------------------------------------ */
+.rb-card {
+  background: var(--rb-surface-elevated);
+  border: 1px solid var(--rb-border);
+  border-radius: var(--rb-radius-card);
+  box-shadow: var(--rb-shadow-raised);
+  padding: var(--rb-space-3) var(--rb-space-4);
+}
+
+/* -- Section header -------------------------------------------------------- */
+.rb-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rb-space-1);
+  padding-bottom: var(--rb-space-2);
+  margin-bottom: var(--rb-space-3);
+  border-bottom: 1px solid var(--rb-border);
+}
+
+.rb-section-header__eyebrow {
+  font-size: var(--rb-text-meta);
+  font-weight: 700;
+  letter-spacing: var(--rb-tracking-label);
+  text-transform: uppercase;
+  color: var(--rb-text-muted);
+}
+
+.rb-section-header__title {
+  margin: 0;
+  font-size: var(--rb-text-section);
+  font-weight: 650;
+  line-height: var(--rb-leading-tight);
+  letter-spacing: -0.01em;
+  color: var(--rb-text-primary);
+}
+
+.rb-section-header__description {
+  margin: 0;
+  font-size: var(--rb-text-label);
+  color: var(--rb-text-secondary);
+}
+
+/* -- Status badge ---------------------------------------------------------- *
+ * Tone sets colour; the glyph and the text label carry the same meaning
+ * independently, so status is never communicated by colour alone.
+ */
+.rb-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rb-space-1);
+  padding: 2px var(--rb-space-2);
+  border: 1px solid currentColor;
+  border-radius: var(--rb-radius-pill);
+  background: var(--rb-surface-elevated);
+  font-size: var(--rb-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.rb-badge__glyph {
+  font-size: var(--rb-text-label);
+  line-height: 1;
+}
+
+.rb-badge--neutral {
+  color: var(--rb-market-neutral);
+}
+.rb-badge--analytical {
+  color: var(--rb-accent-analytical);
+}
+.rb-badge--positive {
+  color: var(--rb-status-positive);
+}
+.rb-badge--warning {
+  color: var(--rb-status-warning);
+}
+.rb-badge--failure {
+  color: var(--rb-status-failure);
+}
+.rb-badge--official {
+  color: var(--rb-status-official);
+}
+
+/* -- Metric tile ----------------------------------------------------------- */
+.rb-metric {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rb-space-1);
+  padding: var(--rb-space-3);
+  background: var(--rb-surface-inset);
+  border: 1px solid var(--rb-border);
+  border-radius: var(--rb-radius-card);
+  box-shadow: var(--rb-shadow-inset);
+  min-width: 0;
+}
+
+.rb-metric__pair {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--rb-space-1);
+  min-width: 0;
+}
+
+.rb-metric__label {
+  font-size: var(--rb-text-meta);
+  font-weight: 700;
+  letter-spacing: var(--rb-tracking-label);
+  text-transform: uppercase;
+  color: var(--rb-text-muted);
+}
+
+.rb-metric__value {
+  margin: 0;
+  font-size: var(--rb-text-page);
+  font-weight: 650;
+  line-height: var(--rb-leading-tight);
+  letter-spacing: -0.02em;
+  color: var(--rb-text-primary);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.rb-metric__note {
+  margin: 0;
+  font-size: var(--rb-text-label);
+  color: var(--rb-text-secondary);
+}
+
+/* -- Message states (empty / unavailable / error) -------------------------- */
+.rb-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rb-space-2);
+  padding: var(--rb-space-5) var(--rb-space-4);
+  background: var(--rb-surface-raised);
+  border: 1px solid var(--rb-border);
+  border-radius: var(--rb-radius-card);
+  text-align: left;
+}
+
+.rb-state--unavailable {
+  border-style: dashed;
+  background: var(--rb-surface-inset);
+  box-shadow: var(--rb-shadow-inset);
+}
+
+.rb-state--error {
+  border-color: var(--rb-status-failure);
+  border-left-width: 4px;
+}
+
+.rb-state__heading {
+  display: flex;
+  align-items: center;
+  gap: var(--rb-space-2);
+  margin: 0;
+  font-size: var(--rb-text-section);
+  font-weight: 650;
+  line-height: var(--rb-leading-tight);
+  color: var(--rb-text-primary);
+}
+
+.rb-state__glyph {
+  font-size: var(--rb-text-body);
+  line-height: 1;
+}
+
+.rb-state--error .rb-state__glyph {
+  color: var(--rb-status-failure);
+}
+
+.rb-state--unavailable .rb-state__glyph {
+  color: var(--rb-text-muted);
+}
+
+.rb-state__body {
+  margin: 0;
+  font-size: var(--rb-text-body);
+  color: var(--rb-text-secondary);
+  max-width: 68ch;
+}
+
+.rb-state__detail {
+  margin: 0;
+  font-size: var(--rb-text-label);
+  color: var(--rb-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* -- Loading skeleton ------------------------------------------------------ *
+ * The bars are decorative and hidden from assistive technology; the component
+ * exposes a screen-reader message instead.
+ */
+.rb-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rb-space-2);
+}
+
+.rb-skeleton__bar {
+  height: 12px;
+  border-radius: var(--rb-radius-pill);
+  background: var(--rb-surface-inset);
+  box-shadow: var(--rb-shadow-inset);
+  animation: rb-skeleton-pulse 1.6s var(--rb-motion-ease) infinite;
+}
+
+@keyframes rb-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rb-skeleton__bar {
+    animation: none;
+    opacity: 0.75;
+  }
+}
