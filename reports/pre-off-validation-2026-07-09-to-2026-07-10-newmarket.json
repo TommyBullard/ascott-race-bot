@@ -1,0 +1,379 @@
+{
+  "schema_version": 2,
+  "from": "2026-07-09",
+  "to": "2026-07-10",
+  "course": "Newmarket",
+  "generated_at": "2026-07-28T11:19:51.411Z",
+  "read_only": true,
+  "database_mutated": false,
+  "layer": "diagnostic",
+  "coverage": {
+    "races_in_scope": 14,
+    "races_with_pre_off_run": 14,
+    "settled_races_with_pre_off_run": 14,
+    "pending_races_with_pre_off_run": 0,
+    "races_without_pre_off_run": 0,
+    "read_errors": 0
+  },
+  "ranking": {
+    "measured": true,
+    "model": {
+      "races": 13,
+      "top1": 15.384615384615385,
+      "top2": 46.15384615384615,
+      "top3": 61.53846153846154
+    },
+    "market": {
+      "races": 13,
+      "top1": 15.384615384615385,
+      "top2": 46.15384615384615,
+      "top3": 61.53846153846154
+    },
+    "agreement": {
+      "races": 13,
+      "both": 2,
+      "model_only": 0,
+      "market_only": 0,
+      "neither": 11
+    }
+  },
+  "decision_performance": {
+    "recommendations_total": 10,
+    "settled_count": 10,
+    "pending_count": 0,
+    "winners": 5,
+    "losers": 5,
+    "strike_rate": 50,
+    "profit_loss": 34.363203232109356,
+    "roi": 248.41439191302393,
+    "average_ev": 0.20208139103007686,
+    "total_staked": 13.833016262657104,
+    "no_bet_races": 4
+  },
+  "model_calibration": {
+    "n": 114,
+    "sufficientSample": true,
+    "brier": 0.097,
+    "logLoss": 0.3123,
+    "ece": 0.0477,
+    "mce": 0.6245,
+    "meanPredicted": 0.1228,
+    "meanObserved": 0.114,
+    "bins": [
+      {
+        "bin": 0,
+        "lo": 0,
+        "hi": 0.1,
+        "predMean": 0.042,
+        "obsRate": 0.0323,
+        "n": 62
+      },
+      {
+        "bin": 1,
+        "lo": 0.1,
+        "hi": 0.2,
+        "predMean": 0.1343,
+        "obsRate": 0.129,
+        "n": 31
+      },
+      {
+        "bin": 2,
+        "lo": 0.2,
+        "hi": 0.3,
+        "predMean": 0.2528,
+        "obsRate": 0.4545,
+        "n": 11
+      },
+      {
+        "bin": 3,
+        "lo": 0.3,
+        "hi": 0.4,
+        "predMean": 0.3526,
+        "obsRate": 0.25,
+        "n": 4
+      },
+      {
+        "bin": 4,
+        "lo": 0.4,
+        "hi": 0.5,
+        "predMean": 0.4782,
+        "obsRate": 0.25,
+        "n": 4
+      },
+      {
+        "bin": 5,
+        "lo": 0.5,
+        "hi": 0.6,
+        "predMean": 0.5043,
+        "obsRate": 0,
+        "n": 1
+      },
+      {
+        "bin": 6,
+        "lo": 0.6,
+        "hi": 0.7,
+        "predMean": 0.6245,
+        "obsRate": 0,
+        "n": 1
+      },
+      {
+        "bin": 7,
+        "lo": 0.7,
+        "hi": 0.8,
+        "predMean": null,
+        "obsRate": null,
+        "n": 0
+      },
+      {
+        "bin": 8,
+        "lo": 0.8,
+        "hi": 0.9,
+        "predMean": null,
+        "obsRate": null,
+        "n": 0
+      },
+      {
+        "bin": 9,
+        "lo": 0.9,
+        "hi": 1,
+        "predMean": null,
+        "obsRate": null,
+        "n": 0
+      }
+    ]
+  },
+  "market_baseline": {
+    "calibration": {
+      "n": 114,
+      "sufficientSample": true,
+      "brier": 0.1,
+      "logLoss": 0.3197,
+      "ece": 0.0759,
+      "mce": 0.6162,
+      "meanPredicted": 0.1228,
+      "meanObserved": 0.114,
+      "bins": [
+        {
+          "bin": 0,
+          "lo": 0,
+          "hi": 0.1,
+          "predMean": 0.0467,
+          "obsRate": 0.0308,
+          "n": 65
+        },
+        {
+          "bin": 1,
+          "lo": 0.1,
+          "hi": 0.2,
+          "predMean": 0.1355,
+          "obsRate": 0.1724,
+          "n": 29
+        },
+        {
+          "bin": 2,
+          "lo": 0.2,
+          "hi": 0.3,
+          "predMean": 0.2499,
+          "obsRate": 0.4545,
+          "n": 11
+        },
+        {
+          "bin": 3,
+          "lo": 0.3,
+          "hi": 0.4,
+          "predMean": 0.3637,
+          "obsRate": 0,
+          "n": 3
+        },
+        {
+          "bin": 4,
+          "lo": 0.4,
+          "hi": 0.5,
+          "predMean": 0.4944,
+          "obsRate": 1,
+          "n": 1
+        },
+        {
+          "bin": 5,
+          "lo": 0.5,
+          "hi": 0.6,
+          "predMean": 0.5217,
+          "obsRate": 0,
+          "n": 4
+        },
+        {
+          "bin": 6,
+          "lo": 0.6,
+          "hi": 0.7,
+          "predMean": 0.6162,
+          "obsRate": 0,
+          "n": 1
+        },
+        {
+          "bin": 7,
+          "lo": 0.7,
+          "hi": 0.8,
+          "predMean": null,
+          "obsRate": null,
+          "n": 0
+        },
+        {
+          "bin": 8,
+          "lo": 0.8,
+          "hi": 0.9,
+          "predMean": null,
+          "obsRate": null,
+          "n": 0
+        },
+        {
+          "bin": 9,
+          "lo": 0.9,
+          "hi": 1,
+          "predMean": null,
+          "obsRate": null,
+          "n": 0
+        }
+      ]
+    },
+    "favourite_races": 14,
+    "favourite_wins": 2,
+    "favourite_strike_rate": 14.285714285714285,
+    "roi_measured": false
+  },
+  "model_vs_market_calibration": "model_better",
+  "segments": {
+    "by_confidence": [
+      {
+        "label": "LOW",
+        "performance": {
+          "recommendations_total": 10,
+          "settled_count": 10,
+          "pending_count": 0,
+          "winners": 5,
+          "losers": 5,
+          "strike_rate": 50,
+          "profit_loss": 34.363203232109356,
+          "roi": 248.41439191302393,
+          "average_ev": 0.20208139103007686,
+          "total_staked": 13.833016262657104,
+          "no_bet_races": 0
+        }
+      }
+    ],
+    "by_course": [
+      {
+        "label": "Newmarket",
+        "performance": {
+          "recommendations_total": 10,
+          "settled_count": 10,
+          "pending_count": 0,
+          "winners": 5,
+          "losers": 5,
+          "strike_rate": 50,
+          "profit_loss": 34.363203232109356,
+          "roi": 248.41439191302393,
+          "average_ev": 0.20208139103007686,
+          "total_staked": 13.833016262657104,
+          "no_bet_races": 0
+        }
+      }
+    ],
+    "by_odds_band": [
+      {
+        "label": "3.0-8.0",
+        "performance": {
+          "recommendations_total": 6,
+          "settled_count": 6,
+          "pending_count": 0,
+          "winners": 4,
+          "losers": 2,
+          "strike_rate": 66.66666666666666,
+          "profit_loss": 26.81124226455716,
+          "roi": 285.68254996138364,
+          "average_ev": 0.25547472349634887,
+          "total_staked": 9.3849772302093,
+          "no_bet_races": 0
+        }
+      },
+      {
+        "label": ">8.0",
+        "performance": {
+          "recommendations_total": 4,
+          "settled_count": 4,
+          "pending_count": 0,
+          "winners": 1,
+          "losers": 3,
+          "strike_rate": 25,
+          "profit_loss": 7.551960967552198,
+          "roi": 169.78180525084724,
+          "average_ev": 0.12199139233066875,
+          "total_staked": 4.448039032447802,
+          "no_bet_races": 0
+        }
+      }
+    ],
+    "by_ev": [
+      {
+        "label": "EV_POSITIVE",
+        "performance": {
+          "recommendations_total": 10,
+          "settled_count": 10,
+          "pending_count": 0,
+          "winners": 5,
+          "losers": 5,
+          "strike_rate": 50,
+          "profit_loss": 34.363203232109356,
+          "roi": 248.41439191302393,
+          "average_ev": 0.20208139103007686,
+          "total_staked": 13.833016262657104,
+          "no_bet_races": 0
+        }
+      }
+    ],
+    "by_handicap": {
+      "measured": false,
+      "reason": "handicap flag not fetched by the SELECT (never inferred from strings)"
+    },
+    "by_field_size": {
+      "measured": false,
+      "reason": "field-size band not derived in this slice"
+    },
+    "by_country": {
+      "measured": false,
+      "reason": "country not fetched by the SELECT (never inferred from strings)"
+    }
+  },
+  "official_locked_layer": {
+    "measured": false,
+    "reason": "official locked_race_decisions are evaluated by report:locked; this diagnostic scorecard keeps the layers separate"
+  },
+  "each_way": {
+    "measured": false,
+    "reason": "each-way terms (place count/fraction/price/dead-heat/non-runner) are not stored"
+  },
+  "chronological_drawdown": {
+    "measured": false,
+    "reason": "reliable per-bet chronological ordering is not established here"
+  },
+  "descriptive_signals": {
+    "model_calibration_quality": "favourable",
+    "market_comparison": "favourable",
+    "decision_roi_sign": "not_measured",
+    "confidence_ordering": "not_measured",
+    "ev_honesty": "not_measured"
+  },
+  "not_measured": [
+    "official locked-decision layer (evaluated separately by report:locked; kept separate from the diagnostic scorecard)",
+    "market-baseline ROI (stored market_prob is an implied probability, not a tradeable price)",
+    "segmentation by handicap / field-size / country (the SELECT does not fetch these stored fields; the fix is to add reliable stored fields, else leave NOT MEASURED — never inferred from strings)",
+    "exact each-way validation (place count / fraction / applicable price / settled-runner / non-runner / dead-heat terms are not stored)",
+    "chronological maximum drawdown (per-bet chronological ordering is not established in this range aggregation)",
+    "decision-quality description (only 10 settled decisions; need >= 50)"
+  ],
+  "invariant_violations": [],
+  "verdict": "INSUFFICIENT_EVIDENCE",
+  "notes": [
+    "Verdict is an EVIDENCE-QUALITY judgement (completeness / boundary / thresholds / invariants) — NOT profitability and NOT a model-beats-market test. Model-vs-market and all quality signals are descriptive only.",
+    "Diagnostic pre-off layer only; the official locked-decision history is separate (report:locked). Decision-support usefulness only — no bet is placed and no betting capability exists here."
+  ]
+}
