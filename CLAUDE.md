@@ -44,6 +44,11 @@ These are the live, actively maintained references for all operators and AI agen
   workflow. How to approve tipster selections for use in the model.
 - **`docs/API.md`** — `/api/accuracy` endpoint spec and pre-off evaluation
   semantics. How pending races, settled races, and no-bet races are counted.
+- **`docs/PRE_OFF_VALIDATION.md`** — the READ-ONLY `validate:pre-off` scorecard.
+  Stored-evidence pre-off prediction-quality validation (calibration, market
+  baseline, decision ROI/strike/no-bet, confidence bands, EV honesty) with an
+  honest sample gate and PASS / REVIEW / INSUFFICIENT_EVIDENCE verdict. Never
+  runs or re-scores the model; places no bet.
 
 **Use these documents for all current operational guidance.** They are updated
 regularly and reflect the actual implemented behaviour.

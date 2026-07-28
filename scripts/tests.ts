@@ -111,6 +111,7 @@ import './routeOwnershipGuard.test';
 import './ownershipPropagation.test';
 import './directModelClaimCheck.test';
 import './ownershipEnforcementDocs.test';
+import './preOffValidation.test';
 import './autoResults.test';
 import './freeResultsMatch.test';
 import './todayResultsSettlement.test';

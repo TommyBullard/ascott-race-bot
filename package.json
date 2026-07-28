@@ -49,6 +49,7 @@
     "convert:bsp": "tsx scripts/convertBetfairBsp.ts",
     "snapshot:pre-off": "tsx scripts/snapshotPreOff.ts",
     "report:day": "tsx scripts/reportDay.ts",
+    "validate:pre-off": "tsx scripts/preOffValidation.ts",
     "lessons:day": "tsx scripts/dayLessons.ts",
     "preflight:day": "tsx scripts/dayPreflightPack.ts",
     "dashboard:ready": "tsx scripts/dashboardReadiness.ts",
