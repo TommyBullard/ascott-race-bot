@@ -13,9 +13,27 @@
  * no API, issues no writes, settles nothing, runs no model, fetches no odds.
  * Classification reuses the Phase 5A `lockedDayReport` core verbatim via the
  * pure `predictionAudit` helpers. Decision-support only — not betting advice.
+ *
+ * SHELL ADOPTION. `AppShell` owns the single main landmark, so this page no
+ * longer renders its own. The endpoint, the ?date/?course handling, the
+ * official-versus-diagnostic separation and every classification bucket are
+ * unchanged — only the presentation moved onto the committed primitives, and
+ * the diagnostic block is now labelled "diagnostic, not official" in visible
+ * text as well as in its section heading.
  */
 
 import { useEffect, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import Link from 'next/link';
+import AppShell from '@/components/AppShell';
+import {
+  AnalyticalCard,
+  EmptyState,
+  ErrorState,
+  LoadingSkeleton,
+  MetricTile,
+  StatusBadge,
+  type StatusTone,
+} from '@/components/UiPrimitives';
 import {
   auditConfidenceAsOfMs,
   buildPredictionAuditRow,
@@ -57,6 +75,9 @@ interface PageCard extends AuditCardInput {
 
 const DASH = '—';
 
+/** The read-only endpoint backing this page. */
+const RECOMMENDATIONS_ENDPOINT = '/api/recommendations';
+
 /**
  * No-op subscribe for useSyncExternalStore: the URL query string does not
  * change during the page's lifetime, so there is nothing to subscribe to;
@@ -88,109 +109,31 @@ function orDash(v: string | null | undefined): string {
   return v === null || v === undefined || v === '' ? DASH : v;
 }
 
-/* ------------------------------- styling ---------------------------------- */
-
-const TONE_COLORS: Record<BadgeTone, { color: string; bg: string; border: string }> = {
-  pos: { color: '#1a7f37', bg: '#dafbe1', border: '#aceebb' },
-  neg: { color: '#cf222e', bg: '#ffebe9', border: '#ffcecb' },
-  warn: { color: '#9a6700', bg: '#fff8c5', border: '#eed888' },
-  neutral: { color: '#656d76', bg: '#f6f8fa', border: '#d0d7de' },
-};
-
-function badgeStyle(tone: BadgeTone): CSSProperties {
-  const t = TONE_COLORS[tone];
-  return {
-    display: 'inline-block',
-    padding: '2px 8px',
-    borderRadius: 12,
-    fontSize: 11,
-    fontWeight: 700,
-    color: t.color,
-    background: t.bg,
-    border: `1px solid ${t.border}`,
-  };
+/**
+ * Maps the audit helper's tone vocabulary onto the design system's.
+ * Presentation only — it never changes how a race was classified.
+ */
+function toneOf(tone: BadgeTone): StatusTone {
+  if (tone === 'pos') return 'positive';
+  if (tone === 'neg') return 'failure';
+  if (tone === 'warn') return 'warning';
+  return 'neutral';
 }
 
-const styles = {
-  page: {
-    maxWidth: 860,
-    margin: '0 auto',
-    padding: '24px 16px 48px',
-    fontFamily:
-      'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
-    color: '#1f2328',
-  } as CSSProperties,
-  h1: { fontSize: 22, fontWeight: 700, margin: 0 } as CSSProperties,
-  scope: { fontSize: 13, color: '#656d76', marginTop: 4 } as CSSProperties,
-  disclaimer: {
-    fontSize: 12,
-    color: '#656d76',
-    background: '#f6f8fa',
-    border: '1px solid #d0d7de',
-    borderRadius: 6,
-    padding: '8px 12px',
-    margin: '12px 0 20px',
-    lineHeight: 1.5,
-  } as CSSProperties,
-  summaryGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-    gap: 8,
-    marginBottom: 24,
-  } as CSSProperties,
-  summaryCard: {
-    background: '#f6f8fa',
-    border: '1px solid #d0d7de',
-    borderRadius: 6,
-    padding: '8px 10px',
-  } as CSSProperties,
-  summaryLabel: {
-    fontSize: 10,
-    fontWeight: 700,
-    letterSpacing: 0.5,
-    color: '#656d76',
-    textTransform: 'uppercase' as const,
-  } as CSSProperties,
-  summaryValue: { fontSize: 18, fontWeight: 700, marginTop: 2 } as CSSProperties,
-  card: {
-    border: '1px solid #d0d7de',
-    borderRadius: 8,
-    padding: 14,
-    marginBottom: 12,
-    background: '#ffffff',
-  } as CSSProperties,
-  cardHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    gap: 12,
-    alignItems: 'baseline',
-    flexWrap: 'wrap' as const,
-  } as CSSProperties,
-  raceName: { fontSize: 15, fontWeight: 700, minWidth: 0 } as CSSProperties,
-  offTime: { fontSize: 13, color: '#656d76', whiteSpace: 'nowrap' as const } as CSSProperties,
-  sectionLabel: {
-    fontSize: 10,
-    fontWeight: 700,
-    letterSpacing: 0.5,
-    color: '#656d76',
-    textTransform: 'uppercase' as const,
-    marginTop: 10,
-    marginBottom: 2,
-  } as CSSProperties,
-  line: { fontSize: 13, lineHeight: 1.6, overflowWrap: 'anywhere' as const } as CSSProperties,
-  muted: { color: '#656d76' } as CSSProperties,
-  small: { fontSize: 11, color: '#656d76', lineHeight: 1.5 } as CSSProperties,
-  backLink: { fontSize: 13, color: '#0969da', textDecoration: 'none' } as CSSProperties,
-};
+const mutedLine: CSSProperties = { color: 'var(--rb-text-muted)' };
 
 /* ------------------------------- components ------------------------------- */
 
-function outcomeBadge(outcome: 'won' | 'lost' | 'pending' | 'unevaluable' | null) {
+function OutcomeBadge({
+  outcome,
+}: {
+  outcome: 'won' | 'lost' | 'pending' | 'unevaluable' | null;
+}) {
   if (outcome === null) return null;
   const tone: BadgeTone =
     outcome === 'won' ? 'pos' : outcome === 'lost' ? 'neg' : 'neutral';
   const label = outcome === 'pending' ? 'PENDING — not counted' : outcome.toUpperCase();
-  return <span style={badgeStyle(tone)}>{label}</span>;
+  return <StatusBadge tone={toneOf(tone)}>{label}</StatusBadge>;
 }
 
 function SummaryStrip({ summary }: { summary: PredictionAuditSummary }) {
@@ -219,12 +162,9 @@ function SummaryStrip({ summary }: { summary: PredictionAuditSummary }) {
     cells.splice(9, 0, ['Not locked yet', String(summary.not_locked_yet)]);
   }
   return (
-    <div style={styles.summaryGrid}>
+    <div className="rb-metric-grid">
       {cells.map(([label, value]) => (
-        <div key={label} style={styles.summaryCard}>
-          <div style={styles.summaryLabel}>{label}</div>
-          <div style={styles.summaryValue}>{value}</div>
-        </div>
+        <MetricTile key={label} label={label} value={value} />
       ))}
     </div>
   );
@@ -233,39 +173,43 @@ function SummaryStrip({ summary }: { summary: PredictionAuditSummary }) {
 function OfficialBlock({ row }: { row: PredictionAuditRow }) {
   const locked = row.locked;
   if (row.display_status === 'not_locked_yet') {
-    return <div style={{ ...styles.line, ...styles.muted }}>Not locked yet — the T-minus-5 window has not closed.</div>;
+    return (
+      <p className="rb-line rb-line--muted">
+        Not locked yet — the T-minus-5 window has not closed.
+      </p>
+    );
   }
   if (row.display_status === 'lock_missing') {
     return (
-      <div style={styles.line}>
-        <span style={badgeStyle('warn')}>LOCK MISSING</span>{' '}
-        <span style={styles.muted}>
+      <p className="rb-line">
+        <StatusBadge tone="warning">LOCK MISSING</StatusBadge>{' '}
+        <span style={mutedLine}>
           No official decision was captured (never backfilled; not a loss). Diagnostic below is fallback only.
         </span>
-      </div>
+      </p>
     );
   }
   if (row.display_status === 'no_run_available') {
     return (
-      <div style={styles.line}>
-        <span style={badgeStyle('warn')}>NO MODEL RUN AT LOCK</span>{' '}
-        <span style={styles.muted}>(separate bucket; not a loss, not a no-bet)</span>
-      </div>
+      <p className="rb-line">
+        <StatusBadge tone="warning">NO MODEL RUN AT LOCK</StatusBadge>{' '}
+        <span style={mutedLine}>(separate bucket; not a loss, not a no-bet)</span>
+      </p>
     );
   }
   if (row.display_status === 'locked_no_bet') {
     return (
-      <div style={styles.line}>
-        <span style={badgeStyle('neutral')}>OFFICIAL NO-BET</span>{' '}
-        <span style={styles.muted}>
+      <p className="rb-line">
+        <StatusBadge tone="neutral">OFFICIAL NO-BET</StatusBadge>{' '}
+        <span style={mutedLine}>
           {orDash(locked?.no_bet_reason)} (valid decision — not a loss)
         </span>
-      </div>
+      </p>
     );
   }
   // locked_pick
   return (
-    <div style={styles.line}>
+    <p className="rb-line">
       <strong>{orDash(locked?.pick_horse_name)}</strong>
       {' · odds '}
       {fmtOdds(locked?.pick_odds)}
@@ -275,25 +219,25 @@ function OfficialBlock({ row }: { row: PredictionAuditRow }) {
       {fmtEv(locked?.pick_ev)}
       {' · confidence '}
       {orDash(locked?.pick_confidence_label)}{' '}
-      {outcomeBadge(row.locked_outcome)}
-    </div>
+      <OutcomeBadge outcome={row.locked_outcome} />
+    </p>
   );
 }
 
 function DiagnosticBlock({ row }: { row: PredictionAuditRow }) {
   if (!row.diagnostic) {
     return (
-      <div style={{ ...styles.line, ...styles.muted }}>
+      <p className="rb-line rb-line--muted">
         {row.diagnostic_run_exists
           ? 'No bet — the pre-off run made no rank-1 recommendation.'
           : 'No pre-off model run recorded.'}
-      </div>
+      </p>
     );
   }
   const d = row.diagnostic;
   const detail = row.diagnosticDetail;
   return (
-    <div style={styles.line}>
+    <p className="rb-line">
       <strong>{orDash(d.horse_name)}</strong>
       {' · odds '}
       {fmtOdds(d.odds)}
@@ -303,8 +247,8 @@ function DiagnosticBlock({ row }: { row: PredictionAuditRow }) {
       {fmtEv(detail?.ev)}
       {' · confidence '}
       {orDash(detail?.confidence_label)}{' '}
-      {outcomeBadge(row.diagnostic_outcome)}
-    </div>
+      <OutcomeBadge outcome={row.diagnostic_outcome} />
+    </p>
   );
 }
 
@@ -337,27 +281,27 @@ function ConfidenceLine({ card }: { card: PageCard }) {
   );
   if (!diag) return null;
   return (
-    <div style={styles.small}>
+    <p className="rb-note">
       Confidence (as of race time): original{' '}
       <strong>{orDash(diag.original_confidence_label)}</strong> ·
       diagnostic view{' '}
       <strong>{diag.overall.level === 'unknown' ? DASH : diag.overall.level.toUpperCase()}</strong>{' '}
       ({diag.overall.reason})
-    </div>
+    </p>
   );
 }
 
 function RaceAuditCard({ card, row }: { card: PageCard; row: PredictionAuditRow }) {
   return (
-    <article style={styles.card}>
-      <header style={styles.cardHeader}>
-        <div style={styles.raceName}>{row.race_name ?? '(unknown race)'}</div>
-        <div style={styles.offTime}>{fmtOffTime(row.off_time)}</div>
-      </header>
-      <div style={{ marginTop: 6 }}>
-        <span style={badgeStyle(row.badge.tone)}>{row.badge.label}</span>
+    <AnalyticalCard>
+      <div className="rb-card-head">
+        <span className="rb-card-title">{row.race_name ?? '(unknown race)'}</span>
+        <span className="rb-card-aside">{fmtOffTime(row.off_time)}</span>
       </div>
-      <div style={styles.line}>
+      <div style={{ marginTop: 'var(--rb-space-2)' }}>
+        <StatusBadge tone={toneOf(row.badge.tone)}>{row.badge.label}</StatusBadge>
+      </div>
+      <p className="rb-line" style={{ marginTop: 'var(--rb-space-2)' }}>
         {row.settled ? (
           <>
             Winner: <strong>{row.winner_name ?? 'result recorded — winner not in model data'}</strong>
@@ -365,21 +309,32 @@ function RaceAuditCard({ card, row }: { card: PageCard; row: PredictionAuditRow 
         ) : card.status === 'result' ? (
           // Settled per the race row, but the winner is outside the model's
           // scored field — shown honestly; still conservatively NOT counted.
-          <span style={styles.muted}>
+          <span style={mutedLine}>
             Result recorded — winner not in model data (conservatively not counted).
           </span>
         ) : (
-          <span style={styles.muted}>Result pending — not counted.</span>
+          <span style={mutedLine}>Result pending — not counted.</span>
         )}
-      </div>
-      <div style={styles.sectionLabel}>Official locked decision (T−5 — source of truth)</div>
+      </p>
+
+      <p className="rb-eyebrow">Official locked decision (T−5 — source of truth)</p>
       <OfficialBlock row={row} />
-      <div style={styles.sectionLabel}>Final pre-off diagnostic pick (comparison only — not official)</div>
+
+      <p className="rb-eyebrow">
+        Final pre-off diagnostic pick — diagnostic, not official
+      </p>
+      <p className="rb-line" style={{ marginBottom: 'var(--rb-space-1)' }}>
+        <StatusBadge tone="analytical" srLabel="Evidence class:">
+          DIAGNOSTIC — NOT OFFICIAL
+        </StatusBadge>{' '}
+        <span style={mutedLine}>comparison only; never the official decision</span>
+      </p>
       <DiagnosticBlock row={row} />
-      <div style={{ marginTop: 8 }}>
+
+      <div style={{ marginTop: 'var(--rb-space-2)' }}>
         <ConfidenceLine card={card} />
       </div>
-    </article>
+    </AnalyticalCard>
   );
 }
 
@@ -416,7 +371,7 @@ export default function ResultsAuditPage() {
       try {
         // Forward ?date / ?day / ?course verbatim to the existing read API.
         const query = typeof window !== 'undefined' ? window.location.search : '';
-        const res = await fetch(`/api/recommendations${query}`, {
+        const res = await fetch(`${RECOMMENDATIONS_ENDPOINT}${query}`, {
           signal: controller.signal,
         });
         if (!res.ok) {
@@ -441,39 +396,58 @@ export default function ResultsAuditPage() {
   const summary = summarizePredictionAudit(rows);
 
   return (
-    <main style={styles.page}>
-      <a href={`/${search}`} style={styles.backLink}>
-        ← Dashboard
-      </a>
-      <h1 style={{ ...styles.h1, marginTop: 8 }}>Prediction Audit</h1>
-      <div style={styles.scope}>
-        {meta.date ?? DASH}
-        {meta.course ? ` · ${meta.course}` : ''}
-      </div>
-      <div style={styles.disclaimer}>
-        Official decision = the immutable T-minus-5 locked record (`locked_race_decisions`).
-        Final pre-off diagnostic picks are comparison only, never the official decision.
-        Pending races are never losses; official no-bets, no-run and lock-missing races are
-        separate buckets, never losses, and missing locks are never backfilled.
-        Decision-support only — nothing here places or settles bets.
-      </div>
-
-      {error && <div style={{ ...styles.line, color: '#cf222e' }}>{error}</div>}
-      {!error && cards === null && <div style={{ ...styles.line, ...styles.muted }}>Loading…</div>}
-      {!error && cards !== null && cards.length === 0 && (
-        <div style={{ ...styles.line, ...styles.muted }}>
-          No races found for this date/course. Try /results-audit?date=YYYY-MM-DD&course=Newmarket.
+    <AppShell>
+      <div className="rb-stack">
+        <div className="rb-page-header">
+          <div>
+            <h1 className="rb-page-title">Prediction Audit</h1>
+            <p className="rb-page-scope">
+              {meta.date ?? DASH}
+              {meta.course ? ` · ${meta.course}` : ''}
+            </p>
+          </div>
+          <Link href={`/${search}`} className="rb-inline-link">
+            ← Dashboard
+          </Link>
         </div>
-      )}
 
-      {cards !== null && cards.length > 0 && (
-        <>
-          <SummaryStrip summary={summary} />
-          {rows.map((row, i) => (
-            <RaceAuditCard key={row.race_id} card={cards[i]} row={row} />
-          ))}
-        </>
-      )}
-    </main>
+        {/*
+          Page-specific evidence limitations. This is NOT the shell disclaimer
+          and must not be collapsed into it: it states how this page classifies
+          locked, diagnostic, pending and missing evidence.
+        */}
+        <p className="rb-callout rb-callout--note">
+          Official decision = the immutable T-minus-5 locked record (`locked_race_decisions`).
+          Final pre-off diagnostic picks are comparison only, never the official decision.
+          Pending races are never losses; official no-bets, no-run and lock-missing races are
+          separate buckets, never losses, and missing locks are never backfilled.
+          Decision-support only — nothing here places or settles bets.
+        </p>
+
+        {error && <ErrorState title="Race data unavailable">{error}</ErrorState>}
+
+        {!error && cards === null && <LoadingSkeleton lines={5} label="Loading race data" />}
+
+        {!error && cards !== null && cards.length === 0 && (
+          <EmptyState
+            title="No races in this scope"
+            detail="Example: /results-audit?date=YYYY-MM-DD&course=Newmarket"
+          >
+            No races found for this date and course.
+          </EmptyState>
+        )}
+
+        {cards !== null && cards.length > 0 && (
+          <>
+            <SummaryStrip summary={summary} />
+            <div className="rb-stack rb-stack--tight">
+              {rows.map((row, i) => (
+                <RaceAuditCard key={row.race_id} card={cards[i]} row={row} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </AppShell>
   );
 }

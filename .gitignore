@@ -57,6 +57,9 @@ data/*.csv
 data/exports/*.csv
 !data/exports/*.example.csv
 
+# Local browser-verification artefacts (screenshots, snapshots, console logs)
+.playwright-mcp/
+
 # Editor / OS
 .DS_Store
 *.pem

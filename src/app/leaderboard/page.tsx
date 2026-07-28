@@ -4,20 +4,35 @@
  * Tipster Leaderboard page (/leaderboard).
  *
  * Renders every tracked tipster from `/api/tipsters/leaderboard` in a SORTABLE
- * table: click any column header to sort asc/desc (default: final weight desc).
- * Active and demoted tipsters are shown distinctly (demoted rows are greyed and
- * carry a badge). ROI is a signed percentage coloured green/red; reliability is
- * a 0–1 bar so low-sample tipsters are obvious. Polls for real-time updates.
+ * table: activate any column header to sort asc/desc (default: final weight
+ * desc). Active and demoted tipsters are shown distinctly (demoted rows are
+ * muted and carry a badge). ROI is a signed percentage coloured green/red;
+ * reliability is a 0–1 bar so low-sample tipsters are obvious. Polls for
+ * real-time updates.
  *
  * INTEGRITY: every value is read straight from the API (which reads
  * `tipster_priors` / `tipsters`). Missing fields render as "—"; nothing is
  * fabricated client-side.
  *
  * Expected response: `{ tipsters: TipsterLeaderboardEntry[] }`.
+ *
+ * SHELL ADOPTION. `AppShell` owns the single main landmark, so this page no
+ * longer renders its own. The endpoint, the 30-second poll, the sort semantics
+ * and every column are unchanged; sorting became a real button so it is
+ * keyboard-operable, and the table gained `aria-sort` plus a scrollable
+ * container rather than losing columns on narrow screens. Read-only: no write
+ * control exists anywhere on this page.
  */
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import AppShell from '@/components/AppShell';
+import {
+  EmptyState,
+  ErrorState,
+  LoadingSkeleton,
+  StatusBadge,
+} from '@/components/UiPrimitives';
 
 /** Mirrors the server `TipsterLeaderboardEntry`. */
 interface TipsterLeaderboardEntry {
@@ -39,11 +54,17 @@ interface TipsterLeaderboardEntry {
 type LoadStatus = 'loading' | 'ready' | 'error';
 type SortDir = 'asc' | 'desc';
 
-const POSITIVE_COLOR = '#1a7f37';
-const NEGATIVE_COLOR = '#cf222e';
-const MUTED = '#656d76';
+/** Poll cadence, in milliseconds. Unchanged from the pre-shell page. */
+const POLL_INTERVAL_MS = 30000;
 
-const DASH = '\u2014';
+/** The read-only endpoint backing this page. */
+const LEADERBOARD_ENDPOINT = '/api/tipsters/leaderboard';
+
+const POSITIVE_COLOR = 'var(--rb-status-positive)';
+const NEGATIVE_COLOR = 'var(--rb-status-failure)';
+const MUTED = 'var(--rb-market-neutral)';
+
+const DASH = '—';
 
 /** Formats a ROI fraction (0.12 => +12.0%), or a dash when unknown. */
 function formatRoi(roi: number | null): string {
@@ -51,7 +72,7 @@ function formatRoi(roi: number | null): string {
     return DASH;
   }
   const pct = roi * 100;
-  const sign = pct > 0 ? '+' : pct < 0 ? '\u2212' : '';
+  const sign = pct > 0 ? '+' : pct < 0 ? '−' : '';
   return `${sign}${Math.abs(pct).toFixed(1)}%`;
 }
 
@@ -109,129 +130,36 @@ const COLUMNS: Column[] = [
   { key: 'isActive', label: 'Status', align: 'left', value: (t) => (t.isActive ? 1 : 0) },
 ];
 
-const styles = {
-  page: {
-    maxWidth: 1040,
-    margin: '2rem auto',
-    padding: '0 1rem',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    color: '#1f2328',
-  } as CSSProperties,
-  headerRow: {
-    display: 'flex',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: 12,
-  } as CSSProperties,
-  navLink: {
-    fontSize: 14,
-    color: '#0969da',
-    textDecoration: 'none',
-  } as CSSProperties,
-  meta: { color: MUTED, fontSize: 13, margin: '4px 0 16px' } as CSSProperties,
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse' as const,
-    fontSize: 13,
-  } as CSSProperties,
-  th: {
-    textAlign: 'left' as const,
-    padding: '8px 10px',
-    borderBottom: '2px solid #d0d7de',
-    background: '#f6f8fa',
-    cursor: 'pointer',
-    userSelect: 'none' as const,
-    whiteSpace: 'nowrap' as const,
-  } as CSSProperties,
-  thRight: {
-    textAlign: 'right' as const,
-    padding: '8px 10px',
-    borderBottom: '2px solid #d0d7de',
-    background: '#f6f8fa',
-    cursor: 'pointer',
-    userSelect: 'none' as const,
-    whiteSpace: 'nowrap' as const,
-  } as CSSProperties,
-  td: {
-    padding: '7px 10px',
-    borderBottom: '1px solid #eaeef2',
-  } as CSSProperties,
-  tdRight: {
-    padding: '7px 10px',
-    borderBottom: '1px solid #eaeef2',
-    textAlign: 'right' as const,
-    fontVariantNumeric: 'tabular-nums' as const,
-  } as CSSProperties,
-  name: { fontWeight: 700 } as CSSProperties,
-  muted: { color: MUTED } as CSSProperties,
-  demotedRow: { background: '#fafbfc', color: '#8c959f' } as CSSProperties,
-  badgeActive: {
-    display: 'inline-block',
-    padding: '1px 7px',
-    fontSize: 11,
-    fontWeight: 700,
-    color: '#1a7f37',
-    background: '#dafbe1',
-    border: '1px solid #aceebb',
-    borderRadius: 999,
-  } as CSSProperties,
-  badgeDemoted: {
-    display: 'inline-block',
-    padding: '1px 7px',
-    fontSize: 11,
-    fontWeight: 700,
-    color: '#9a6700',
-    background: '#fff8c5',
-    border: '1px solid #eac54f',
-    borderRadius: 999,
-  } as CSSProperties,
-  relWrap: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    justifyContent: 'flex-end',
-    width: '100%',
-  } as CSSProperties,
-  relTrack: {
-    width: 56,
-    height: 8,
-    borderRadius: 4,
-    background: '#eaeef2',
-    overflow: 'hidden' as const,
-  } as CSSProperties,
-};
-
 /** A 0–1 reliability bar; width scales with the value, dash when unknown. */
 function ReliabilityBar({ value }: { value: number | null }) {
   if (value === null) {
-    return <span style={styles.muted}>{DASH}</span>;
+    return <span style={{ color: MUTED }}>{DASH}</span>;
   }
   const clamped = Math.max(0, Math.min(1, value));
   // Low sample (low reliability) reads amber; well-proofed reads green.
-  const fill = clamped >= 0.5 ? '#1a7f37' : clamped >= 0.25 ? '#9a6700' : '#cf222e';
+  const fill =
+    clamped >= 0.5
+      ? 'var(--rb-status-positive)'
+      : clamped >= 0.25
+        ? 'var(--rb-status-warning)'
+        : 'var(--rb-status-failure)';
   return (
-    <span style={styles.relWrap}>
-      <span style={styles.relTrack}>
+    <span className="rb-bar">
+      <span className="rb-bar__track">
         <span
-          style={{
-            display: 'block',
-            height: '100%',
-            width: `${clamped * 100}%`,
-            background: fill,
-          }}
+          className="rb-bar__fill"
+          style={{ width: `${clamped * 100}%`, background: fill }}
         />
       </span>
-      <span style={{ minWidth: 34, textAlign: 'right' }}>
-        {(clamped * 100).toFixed(0)}%
-      </span>
+      <span className="rb-bar__value">{(clamped * 100).toFixed(0)}%</span>
     </span>
   );
 }
 
 /** Sort indicator glyph for the active column. */
 function sortGlyph(active: boolean, dir: SortDir): string {
-  if (!active) return '\u2009';
-  return dir === 'asc' ? ' \u25B2' : ' \u25BC';
+  if (!active) return ' ';
+  return dir === 'asc' ? '▲' : '▼';
 }
 
 export default function LeaderboardPage() {
@@ -247,7 +175,7 @@ export default function LeaderboardPage() {
 
     async function load() {
       try {
-        const res = await fetch('/api/tipsters/leaderboard', {
+        const res = await fetch(LEADERBOARD_ENDPOINT, {
           signal: controller.signal,
         });
         if (!res.ok) {
@@ -276,7 +204,7 @@ export default function LeaderboardPage() {
 
     load();
     // Poll for real-time updates as discovery/promotion runs.
-    const id = setInterval(load, 30000);
+    const id = setInterval(load, POLL_INTERVAL_MS);
     return () => {
       controller.abort();
       clearInterval(id);
@@ -313,94 +241,132 @@ export default function LeaderboardPage() {
   const activeCount = rows.filter((r) => r.isActive).length;
 
   return (
-    <main style={styles.page}>
-      <div style={styles.headerRow}>
-        <h1>Tipster Leaderboard</h1>
-        <Link href="/" style={styles.navLink}>
-          ← Recommendations
-        </Link>
-      </div>
+    <AppShell>
+      <div className="rb-stack">
+        <div className="rb-page-header">
+          <h1 className="rb-page-title">Tipster Leaderboard</h1>
+          <Link href="/" className="rb-inline-link">
+            ← Recommendations
+          </Link>
+        </div>
 
-      {status === 'loading' && <p style={styles.muted}>Loading leaderboard…</p>}
+        {status === 'loading' && <LoadingSkeleton lines={6} label="Loading leaderboard" />}
 
-      {status === 'error' && (
-        <p style={{ color: NEGATIVE_COLOR }}>
-          Couldn&apos;t load the leaderboard right now. Please refresh to try
-          again.{error ? ` (${error})` : ''}
-        </p>
-      )}
+        {status === 'error' && (
+          <ErrorState
+            title="Leaderboard unavailable"
+            detail={error ? `Reported: ${error}` : undefined}
+          >
+            Couldn&apos;t load the leaderboard right now. Please refresh to try again.
+          </ErrorState>
+        )}
 
-      {status === 'ready' && rows.length === 0 && (
-        <p style={styles.muted}>
-          No tracked tipsters yet — the leaderboard will populate once tipster
-          performance data is available.
-        </p>
-      )}
+        {status === 'ready' && rows.length === 0 && (
+          <EmptyState title="No tracked tipsters yet">
+            The leaderboard will populate once tipster performance data is available.
+          </EmptyState>
+        )}
 
-      {status === 'ready' && rows.length > 0 && (
-        <>
-          <p style={styles.meta}>
-            {rows.length} tracked · {activeCount} active ·{' '}
-            {rows.length - activeCount} demoted
-            {updatedAt !== null &&
-              ` · updated ${new Date(updatedAt).toLocaleTimeString()}`}
-          </p>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                {COLUMNS.map((c) => (
-                  <th
-                    key={c.key}
-                    style={c.align === 'right' ? styles.thRight : styles.th}
-                    onClick={() => onSort(c.key)}
-                    title="Click to sort"
-                  >
-                    {c.label}
-                    {sortGlyph(c.key === sortKey, sortDir)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((t) => {
-                const rowStyle = t.isActive ? undefined : styles.demotedRow;
-                return (
-                  <tr key={t.tipster_id} style={rowStyle}>
-                    <td style={styles.td}>
-                      <span style={styles.name}>{t.name}</span>
-                    </td>
-                    <td style={styles.td}>
-                      {t.source ?? t.affiliation ?? (
-                        <span style={styles.muted}>{DASH}</span>
-                      )}
-                    </td>
-                    <td style={{ ...styles.tdRight, color: roiColor(t.longRunRoi) }}>
-                      {formatRoi(t.longRunRoi)}
-                    </td>
-                    <td style={{ ...styles.tdRight, color: roiColor(t.recentRoi30d) }}>
-                      {formatRoi(t.recentRoi30d)}
-                    </td>
-                    <td style={styles.tdRight}>{formatPct(t.strikeRate)}</td>
-                    <td style={styles.tdRight}>{formatInt(t.longestLosingStreak)}</td>
-                    <td style={styles.tdRight}>
-                      <ReliabilityBar value={t.reliability} />
-                    </td>
-                    <td style={styles.tdRight}>{formatNum(t.finalWeight, 3)}</td>
-                    <td style={styles.tdRight}>{formatInt(t.betsCount)}</td>
-                    <td style={styles.td}>
-                      <span
-                        style={t.isActive ? styles.badgeActive : styles.badgeDemoted}
-                      >
-                        {t.isActive ? 'ACTIVE' : 'DEMOTED'}
-                      </span>
-                    </td>
+        {status === 'ready' && rows.length > 0 && (
+          <>
+            <p className="rb-meta">
+              {rows.length} tracked · {activeCount} active ·{' '}
+              {rows.length - activeCount} demoted
+              {updatedAt !== null &&
+                ` · updated ${new Date(updatedAt).toLocaleTimeString()}`}
+            </p>
+            {/*
+              The analytical columns are never dropped on a narrow screen —
+              hiding evidence is worse than scrolling to it. The region is
+              focusable so the overflow is reachable by keyboard as well.
+            */}
+            <div
+              className="rb-scroll-x"
+              role="region"
+              aria-label="Tipster leaderboard table"
+              tabIndex={0}
+            >
+              <table className="rb-table">
+                <caption className="rb-visually-hidden">
+                  Tracked tipsters with performance evidence. Activate a column
+                  header to change the sort order.
+                </caption>
+                <thead>
+                  <tr>
+                    {COLUMNS.map((c) => {
+                      const active = c.key === sortKey;
+                      return (
+                        <th
+                          key={c.key}
+                          scope="col"
+                          className={c.align === 'right' ? 'rb-num' : undefined}
+                          aria-sort={
+                            active
+                              ? sortDir === 'asc'
+                                ? 'ascending'
+                                : 'descending'
+                              : 'none'
+                          }
+                        >
+                          <button
+                            type="button"
+                            className={
+                              c.align === 'right' ? 'rb-sort rb-sort--right' : 'rb-sort'
+                            }
+                            data-active={active ? 'true' : 'false'}
+                            onClick={() => onSort(c.key)}
+                          >
+                            {c.label}
+                            {/*
+                              Decorative only. The sort state is carried by
+                              `aria-sort` on the header cell above; repeating it
+                              in the button's accessible name would make screen
+                              readers announce it twice per column.
+                            */}
+                            <span className="rb-sort__glyph" aria-hidden="true">
+                              {sortGlyph(active, sortDir)}
+                            </span>
+                          </button>
+                        </th>
+                      );
+                    })}
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </>
-      )}
-    </main>
+                </thead>
+                <tbody>
+                  {sorted.map((t) => (
+                    <tr key={t.tipster_id} className={t.isActive ? undefined : 'rb-row--demoted'}>
+                      <th scope="row" style={{ fontWeight: 700 }}>
+                        {t.name}
+                      </th>
+                      <td>
+                        {t.source ?? t.affiliation ?? <span style={{ color: MUTED }}>{DASH}</span>}
+                      </td>
+                      <td className="rb-num" style={{ color: roiColor(t.longRunRoi) }}>
+                        {formatRoi(t.longRunRoi)}
+                      </td>
+                      <td className="rb-num" style={{ color: roiColor(t.recentRoi30d) }}>
+                        {formatRoi(t.recentRoi30d)}
+                      </td>
+                      <td className="rb-num">{formatPct(t.strikeRate)}</td>
+                      <td className="rb-num">{formatInt(t.longestLosingStreak)}</td>
+                      <td className="rb-num">
+                        <ReliabilityBar value={t.reliability} />
+                      </td>
+                      <td className="rb-num">{formatNum(t.finalWeight, 3)}</td>
+                      <td className="rb-num">{formatInt(t.betsCount)}</td>
+                      <td>
+                        <StatusBadge tone={t.isActive ? 'positive' : 'warning'}>
+                          {t.isActive ? 'ACTIVE' : 'DEMOTED'}
+                        </StatusBadge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+    </AppShell>
   );
 }

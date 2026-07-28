@@ -104,6 +104,13 @@
   /* -- Layout -------------------------------------------------------------- */
   --rb-shell-max-width: 1280px;
   --rb-touch-target-min: 44px;
+  /*
+   * Reading measure. Fixed rather than `ch` on purpose: prose, callouts and
+   * the disclaimer are set at different sizes, so a `ch` measure would give
+   * each of them a different pixel width and the left column would visibly
+   * step in and out.
+   */
+  --rb-measure: 640px;
 }
 
 /*
@@ -245,6 +252,13 @@
   font-family: var(--rb-font-system);
   font-size: var(--rb-text-body);
   line-height: var(--rb-leading-body);
+  /*
+   * `viewport-fit: cover` (see the root layout) lets content reach the display
+   * edges, which in landscape on a notched device means the notch itself. Both
+   * insets resolve to 0px everywhere else, so this costs nothing elsewhere.
+   */
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 /* -- Skip link: invisible until focused, then unmistakable ----------------- *
@@ -489,7 +503,10 @@
   background: var(--rb-surface-raised);
   border-top: 1px solid var(--rb-border-strong);
   box-shadow: var(--rb-shadow-elevated);
+  /* The bar spans the display, so it clears the home indicator and the notch. */
   padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 .rb-nav--mobile .rb-nav__list {
@@ -536,6 +553,18 @@
   border-top-color: var(--rb-accent-analytical);
   background: var(--rb-state-selected);
   box-shadow: none;
+  /*
+   * The selected fill is a translucent accent over the bar surface. Composited
+   * (#d4deea light, #283547 dark) it drops `--rb-border-strong` to 2.75:1 light
+   * / 2.51:1 dark on this one edge — under the 3:1 floor. Darkening just this
+   * border restores it to 4.54:1 light / 4.20:1 dark without touching a shared
+   * token or any other control. Figures are computed, not estimated, and are
+   * enforced by test 34 in scripts/appShell.test.ts.
+   *
+   * A first-child active item keeps its transparent edge — that rule is more
+   * specific — so no rail ever appears against the viewport edge.
+   */
+  border-left-color: var(--rb-text-muted);
 }
 
 /* ========================================================================== *
@@ -846,4 +875,309 @@
     animation: none;
     opacity: 0.75;
   }
+}
+
+/* ========================================================================== *
+ * 9. Adopted-page composition
+ *
+ * The vocabulary the adopted routes compose from. Every value is a token
+ * declared above — no second palette, no framework, no new dependency. These
+ * exist so an adopted page can drop its own inline colour constants rather
+ * than run a second visual system inside the shell.
+ * ========================================================================== */
+
+/* -- Standing decision-support disclaimer ---------------------------------- *
+ * Quiet by design: a rule and muted body text at the end of the page. Not
+ * sticky, not a banner, not a call to action. It states the product boundary
+ * and never instructs anyone to stake money.
+ */
+.rb-disclaimer {
+  display: block;
+  margin-top: var(--rb-space-6);
+  padding-top: var(--rb-space-3);
+  border-top: 1px solid var(--rb-border);
+  max-width: var(--rb-measure);
+  font-size: var(--rb-text-label);
+  line-height: var(--rb-leading-body);
+  color: var(--rb-text-muted);
+}
+
+/* -- Page furniture -------------------------------------------------------- */
+.rb-page-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--rb-space-3);
+  flex-wrap: wrap;
+}
+
+.rb-page-title {
+  margin: 0;
+  font-size: var(--rb-text-page);
+  font-weight: 650;
+  line-height: var(--rb-leading-tight);
+  letter-spacing: -0.02em;
+  color: var(--rb-text-primary);
+}
+
+.rb-page-scope {
+  margin: var(--rb-space-1) 0 0;
+  font-size: var(--rb-text-label);
+  color: var(--rb-text-muted);
+}
+
+.rb-inline-link {
+  color: var(--rb-accent-analytical);
+  font-size: var(--rb-text-label);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+
+.rb-inline-link:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* Vertical rhythm for a column of panels or blocks. */
+.rb-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rb-space-4);
+}
+
+.rb-stack--tight {
+  gap: var(--rb-space-2);
+}
+
+/* -- Text blocks ----------------------------------------------------------- */
+.rb-lead {
+  margin: 0;
+  max-width: var(--rb-measure);
+  font-size: var(--rb-text-body);
+  line-height: var(--rb-leading-body);
+  color: var(--rb-text-secondary);
+}
+
+/*
+ * A real list, styled as one. Deliberately not `display: flex`: that drops the
+ * list role in some screen readers, and a methodology page is exactly where
+ * "this is a list of four checks" has to survive.
+ */
+.rb-list {
+  margin: 0;
+  padding-left: var(--rb-space-5);
+  color: var(--rb-text-secondary);
+}
+
+.rb-list > li + li {
+  margin-top: var(--rb-space-1);
+}
+
+.rb-line {
+  margin: 0;
+  font-size: var(--rb-text-body);
+  line-height: var(--rb-leading-body);
+  overflow-wrap: anywhere;
+}
+
+.rb-line--muted {
+  color: var(--rb-text-muted);
+}
+
+.rb-note {
+  margin: 0;
+  font-size: var(--rb-text-meta);
+  line-height: var(--rb-leading-body);
+  color: var(--rb-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.rb-meta {
+  margin: 0;
+  font-size: var(--rb-text-label);
+  color: var(--rb-text-muted);
+}
+
+/* Short uppercase label introducing a block of evidence. */
+.rb-eyebrow {
+  margin: var(--rb-space-3) 0 var(--rb-space-1);
+  font-size: var(--rb-text-meta);
+  font-weight: 700;
+  letter-spacing: var(--rb-tracking-label);
+  text-transform: uppercase;
+  color: var(--rb-text-muted);
+}
+
+/* -- Callout: an emphasised sentence, bounded by a border rather than a fill */
+.rb-callout {
+  margin: 0;
+  padding: var(--rb-space-3) var(--rb-space-4);
+  max-width: var(--rb-measure);
+  background: var(--rb-surface-elevated);
+  border: 1px solid var(--rb-border);
+  border-left: 4px solid var(--rb-border-strong);
+  border-radius: var(--rb-radius-card);
+  font-size: var(--rb-text-body);
+  line-height: var(--rb-leading-body);
+  color: var(--rb-text-primary);
+}
+
+.rb-callout--key {
+  border-left-color: var(--rb-accent-analytical);
+  font-weight: 600;
+}
+
+.rb-callout--note {
+  border-left-color: var(--rb-status-warning);
+  font-size: var(--rb-text-label);
+  color: var(--rb-text-secondary);
+}
+
+/* -- Analytical table ------------------------------------------------------ *
+ * The table keeps a floor width so columns stay readable; the `.rb-scroll-x`
+ * wrapper is what makes the overflow reachable. Columns are never dropped —
+ * an analytical table that silently hides evidence is worse than one that
+ * scrolls.
+ */
+.rb-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+  font-size: var(--rb-text-label);
+}
+
+.rb-table th,
+.rb-table td {
+  padding: var(--rb-space-2) var(--rb-space-3);
+  border-bottom: 1px solid var(--rb-border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.rb-table thead th {
+  padding: var(--rb-space-2);
+  background: var(--rb-surface-inset);
+  border-bottom: 2px solid var(--rb-border-strong);
+  vertical-align: bottom;
+}
+
+.rb-table tbody tr:hover {
+  background: var(--rb-state-hover);
+}
+
+.rb-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rb-row--demoted {
+  background: var(--rb-surface-inset);
+  color: var(--rb-text-muted);
+}
+
+/* -- Sort control ---------------------------------------------------------- *
+ * A real button, so sorting is keyboard-operable and announced as a control.
+ * It carries a visible border and a text label; the arrow is a redundant
+ * visual cue and `aria-sort` on the header is what assistive technology reads.
+ */
+.rb-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rb-space-1);
+  width: 100%;
+  padding: var(--rb-space-1) var(--rb-space-2);
+  background: var(--rb-surface-raised);
+  border: 1px solid var(--rb-border-strong);
+  border-radius: var(--rb-radius-control);
+  color: var(--rb-text-secondary);
+  font-family: inherit;
+  font-size: var(--rb-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--rb-motion-fast) var(--rb-motion-ease),
+    color var(--rb-motion-fast) var(--rb-motion-ease);
+}
+
+.rb-sort--right {
+  justify-content: flex-end;
+}
+
+.rb-sort:hover {
+  background: var(--rb-state-hover);
+  color: var(--rb-text-primary);
+}
+
+.rb-sort[data-active='true'] {
+  background: var(--rb-state-selected);
+  box-shadow: var(--rb-shadow-inset);
+  color: var(--rb-accent-analytical);
+}
+
+.rb-sort__glyph {
+  font-size: var(--rb-text-meta);
+  line-height: 1;
+}
+
+/* -- Metric grid ----------------------------------------------------------- */
+.rb-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: var(--rb-space-2);
+}
+
+/* -- Card furniture -------------------------------------------------------- */
+.rb-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--rb-space-3);
+  flex-wrap: wrap;
+}
+
+.rb-card-title {
+  font-size: var(--rb-text-section);
+  font-weight: 650;
+  line-height: var(--rb-leading-tight);
+  color: var(--rb-text-primary);
+  min-width: 0;
+}
+
+.rb-card-aside {
+  font-size: var(--rb-text-label);
+  color: var(--rb-text-muted);
+  white-space: nowrap;
+}
+
+/* -- Proportion bar (0-1 evidence strength) -------------------------------- */
+.rb-bar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--rb-space-2);
+  width: 100%;
+}
+
+.rb-bar__track {
+  width: 56px;
+  height: 8px;
+  background: var(--rb-surface-inset);
+  border: 1px solid var(--rb-border);
+  border-radius: var(--rb-radius-pill);
+  overflow: hidden;
+}
+
+.rb-bar__fill {
+  display: block;
+  height: 100%;
+}
+
+.rb-bar__value {
+  min-width: 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }

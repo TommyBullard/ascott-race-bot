@@ -32,8 +32,10 @@ import {
   MOBILE_NAV_MAX_DESTINATIONS,
   PLANNED_DESTINATIONS,
   PRIMARY_DESTINATIONS,
+  SHELL_DISCLAIMER,
   isNavDestinationActive,
 } from '../src/components/AppShell';
+import { resolveActivePathname } from '../src/components/AppNavigation';
 import {
   AnalyticalCard,
   DEFAULT_SKELETON_LINES,
@@ -53,8 +55,30 @@ import {
 
 const SHELL_SRC = readFileSync('src/components/AppShell.tsx', 'utf8');
 const PRIMITIVES_SRC = readFileSync('src/components/UiPrimitives.tsx', 'utf8');
+const NAV_SRC = readFileSync('src/components/AppNavigation.tsx', 'utf8');
+const NAV_MODEL_SRC = readFileSync('src/components/navDestinations.ts', 'utf8');
 const TOKENS_CSS = readFileSync('src/styles/tokens.css', 'utf8');
+
+/**
+ * The SERVER half of the shell. These must never become client components:
+ * no `'use client'`, no hooks.
+ */
 const NEW_TSX = [SHELL_SRC, PRIMITIVES_SRC];
+
+/**
+ * Every shell source, including the one sanctioned client component. The
+ * safety scans (no fetch, no storage, no secrets, no betting controls) apply
+ * to all of them without exception.
+ */
+const SHELL_SOURCES = [SHELL_SRC, PRIMITIVES_SRC, NAV_SRC, NAV_MODEL_SRC];
+
+/** All anchors as {href, ariaCurrent}, independent of attribute order. */
+function anchors(html: string): { href: string | null; ariaCurrent: string | null }[] {
+  return [...html.matchAll(/<a\b([^>]*)>/g)].map((match) => ({
+    href: /href="([^"]*)"/.exec(match[1])?.[1] ?? null,
+    ariaCurrent: /aria-current="([^"]*)"/.exec(match[1])?.[1] ?? null,
+  }));
+}
 
 /**
  * The stylesheet with comments removed, for structural assertions. Prose in a
@@ -171,7 +195,7 @@ test('4. application branding is course-agnostic', () => {
 test('5. no single-course branding is introduced', () => {
   const course = /ascot|newmarket|cheltenham|aintree|epsom|goodwood|doncaster/i;
   assert.equal(course.test(renderShell('/')), false, 'rendered shell names no course');
-  for (const src of [...NEW_TSX, TOKENS_CSS]) {
+  for (const src of [...SHELL_SOURCES, TOKENS_CSS]) {
     assert.equal(course.test(src), false, 'new source files name no course');
   }
 });
@@ -201,9 +225,9 @@ test('7. planned destinations are never rendered as links', () => {
   }
 
   // And nothing renders them inside an anchor.
-  const anchors = html.match(/<a\b[^>]*>[\s\S]*?<\/a>/g) ?? [];
+  const anchorElements = html.match(/<a\b[^>]*>[\s\S]*?<\/a>/g) ?? [];
   for (const planned of PLANNED_DESTINATIONS) {
-    for (const anchor of anchors) {
+    for (const anchor of anchorElements) {
       assert.equal(
         anchor.includes(planned.label),
         false,
@@ -215,7 +239,7 @@ test('7. planned destinations are never rendered as links', () => {
   }
 
   // No link anywhere points at a route that does not exist.
-  const hrefs = [...html.matchAll(/<a[^>]*href="([^"]+)"/g)].map((m) => m[1]);
+  const hrefs = anchors(html).map((a) => a.href ?? '');
   const known = new Set<string>([
     `#${MAIN_LANDMARK_ID}`,
     ...PRIMARY_DESTINATIONS.map((d) => d.href),
@@ -230,9 +254,11 @@ test('7. planned destinations are never rendered as links', () => {
 test('8. the active route is marked with aria-current="page"', () => {
   const html = renderShell('/leaderboard');
 
-  const active = [...html.matchAll(/<a[^>]*href="([^"]+)"[^>]*aria-current="page"/g)].map(
-    (m) => m[1]
-  );
+  // Attribute order is not asserted: `next/link` emits className and
+  // aria-current before href, and that ordering is not a contract.
+  const active = anchors(html)
+    .filter((a) => a.ariaCurrent === 'page')
+    .map((a) => a.href);
   // Present once in the primary nav and once in the mobile nav.
   assert.deepEqual(active, ['/leaderboard', '/leaderboard']);
 
@@ -417,7 +443,7 @@ test('15. focus-visible CSS is present and no outline is ever removed', () => {
   assert.match(TOKENS_CSS, /:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--rb-focus-ring\)/);
   assert.match(TOKENS_CSS, /outline-offset:/);
   assert.equal(/outline:\s*(none|0)\b/.test(TOKENS_CSS), false, 'outlines must never be removed');
-  for (const src of NEW_TSX) {
+  for (const src of SHELL_SOURCES) {
     assert.equal(/outline:\s*['"]?(none|0)\b/.test(src), false);
   }
 });
@@ -604,7 +630,7 @@ test('18b. the full token vocabulary required by the design system exists', () =
   );
   // A dark scheme is defined by value only — there is no theme toggle.
   assert.match(TOKENS_CSS, /@media \(prefers-color-scheme: dark\)/);
-  for (const src of NEW_TSX) {
+  for (const src of SHELL_SOURCES) {
     assert.equal(/theme|toggle|setTheme|dark-mode/i.test(src), false, 'no theme toggle in slice 1');
   }
   // A tabular-numeral utility exists for aligned figures.
@@ -614,7 +640,7 @@ test('18b. the full token vocabulary required by the design system exists', () =
 /* ========================= 19-23. safety source scans ====================== */
 
 test('19. no fetch or API call exists in the new shell or primitive files', () => {
-  for (const src of NEW_TSX) {
+  for (const src of SHELL_SOURCES) {
     assert.equal(/\bfetch\s*\(|XMLHttpRequest|EventSource|WebSocket/.test(src), false);
     assert.equal(/['"`]\/api\//.test(src), false, 'no API path is referenced');
     assert.equal(/supabase|createClient/i.test(src), false);
@@ -638,42 +664,133 @@ test('20. no browser write or storage call exists', () => {
   }
 });
 
+test('20b. the one client component is narrowly scoped to navigation state', () => {
+  // AppNavigation is the ONLY sanctioned client component in the shell. It may
+  // read the route; it may not do anything else a client component can do.
+  assert.match(NAV_SRC, /^'use client';/, 'AppNavigation must declare the boundary');
+
+  // Route reading is the entire justification for the boundary.
+  assert.match(NAV_SRC, /\busePathname\s*\(\s*\)/);
+
+  // No state, no effects, no storage, no history/router mutation, no fetch.
+  assert.equal(
+    /\buse(State|Effect|Reducer|SyncExternalStore|LayoutEffect)\s*\(/.test(NAV_SRC),
+    false,
+    'navigation holds no state and runs no effect'
+  );
+  assert.equal(/useRouter|router\.(push|replace)|history\.(push|replace)/.test(NAV_SRC), false);
+  assert.equal(/localStorage|sessionStorage|indexedDB|document\.cookie/.test(NAV_SRC), false);
+  assert.equal(/\bfetch\s*\(|XMLHttpRequest|EventSource|WebSocket/.test(NAV_SRC), false);
+
+  // The pathname is used for aria-current only — never rendered as content.
+  // Checked on the visible text, with every tag (and so every href) stripped.
+  const visibleText = renderShell('/leaderboard').replace(/<[^>]*>/g, ' ');
+  for (const destination of PRIMARY_DESTINATIONS) {
+    if (destination.href === '/') continue;
+    assert.equal(
+      visibleText.includes(destination.href),
+      false,
+      `${destination.href} must never appear as visible text`
+    );
+  }
+
+  // The rest of the shell stays server-rendered.
+  for (const src of NEW_TSX) {
+    assert.equal(/^\s*['"]use client['"]\s*;?\s*$/m.test(src), false);
+  }
+  assert.equal(/^\s*['"]use client['"]\s*;?\s*$/m.test(NAV_MODEL_SRC), false);
+});
+
 test('21. no environment or secret reference exists', () => {
-  for (const src of [...NEW_TSX, TOKENS_CSS]) {
+  for (const src of [...SHELL_SOURCES, TOKENS_CSS]) {
     assert.equal(/process\.env|import\.meta\.env/.test(src), false);
     assert.equal(/CRON_SECRET|SERVICE_ROLE|BETFAIR_|RACING_API|API_KEY|SUPABASE_/.test(src), false);
   }
 });
 
-test('22. no connector or external service import exists', () => {
-  for (const src of [...NEW_TSX, TOKENS_CSS]) {
+test('22. imports stay inside a narrow allowlist', () => {
+  for (const src of [...SHELL_SOURCES, TOKENS_CSS]) {
     assert.equal(/railway|vercel|stripe|sentry|@supabase/i.test(src), false);
   }
-  // Imports are limited to react types plus in-repo modules.
-  const imports = [...SHELL_SRC.matchAll(/from '([^']+)'/g), ...PRIMITIVES_SRC.matchAll(/from '([^']+)'/g)].map(
-    (m) => m[1]
-  );
-  for (const specifier of imports) {
+
+  const specifiersOf = (src: string) => [...src.matchAll(/from '([^']+)'/g)].map((m) => m[1]);
+  const inRepo = (s: string) => s === 'react' || s.startsWith('.') || s.startsWith('@/');
+
+  // The server half may import react and in-repo modules only — unchanged.
+  for (const src of [SHELL_SRC, PRIMITIVES_SRC, NAV_MODEL_SRC]) {
+    for (const specifier of specifiersOf(src)) {
+      assert.ok(inRepo(specifier), `unexpected import: ${specifier}`);
+    }
+  }
+
+  // The navigation component additionally gets exactly two framework imports:
+  // the router-aware link and the pathname hook. Nothing else is permitted,
+  // and the widening does not apply to any other file.
+  const NAV_EXTRA = new Set(['next/link', 'next/navigation']);
+  for (const specifier of specifiersOf(NAV_SRC)) {
     assert.ok(
-      specifier === 'react' || specifier.startsWith('.') || specifier.startsWith('@/'),
-      `unexpected import: ${specifier}`
+      inRepo(specifier) || NAV_EXTRA.has(specifier),
+      `unexpected import in AppNavigation: ${specifier}`
     );
+  }
+
+  // The allowance is narrow by construction: no other shell source may reach
+  // for `next/*` at all.
+  for (const src of [SHELL_SRC, PRIMITIVES_SRC, NAV_MODEL_SRC]) {
+    assert.equal(/from 'next\//.test(src), false, 'only AppNavigation may import next/*');
   }
 });
 
 test('23. no betting control or betting language exists', () => {
-  const html = renderShell('/');
-  for (const src of [...NEW_TSX, TOKENS_CSS, html]) {
+  // The standing disclaimer necessarily contains the phrase it disclaims
+  // ("not ... instructions to place a bet"). It is asserted on its own terms
+  // in test 24b, and removed here so the scan cannot be satisfied by a
+  // negation — or defeated by one.
+  const html = renderShell('/').split(SHELL_DISCLAIMER).join('');
+  assert.equal(html.includes('place a bet'), false, 'disclaimer removal must be exact');
+
+  for (const src of [...SHELL_SOURCES, TOKENS_CSS, html]) {
+    const scanned = src.split(SHELL_DISCLAIMER).join('');
     // No write controls at all.
-    assert.equal(/<form|<button|onClick|onSubmit|--commit/.test(src), false);
+    assert.equal(/<form|<button|onClick|onSubmit|--commit/.test(scanned), false);
     // No bet-placement or outcome-guarantee vocabulary.
     assert.equal(
       /best bet|safe bet|guaranteed|bet now|place (a )?(bet|wager)|recommended stake|betslip|bookmaker/i.test(
-        src
+        scanned
       ),
       false
     );
   }
+});
+
+test('24b. the standing disclaimer states a boundary, never an instruction', () => {
+  const html = renderShell('/');
+
+  // Rendered exactly once, inside the main landmark the shell owns.
+  assert.equal(html.split(SHELL_DISCLAIMER).length - 1, 1, 'exactly one disclaimer');
+  const main = sliceBetween(html, '<main', '</main>');
+  assert.ok(main.includes(SHELL_DISCLAIMER), 'the disclaimer belongs to the page content');
+  assert.match(html, /<footer class="rb-disclaimer">/);
+
+  // No imperative call to action, no promise of return.
+  assert.equal(
+    /\b(bet|back|stake|wager|deposit|join|sign up|claim)\s+(now|today|here)\b/i.test(
+      SHELL_DISCLAIMER
+    ),
+    false,
+    'no call to action'
+  );
+  assert.equal(/guaranteed|guarantee\b|profit|returns|winnings|odds boost/i.test(SHELL_DISCLAIMER), false);
+  assert.equal(/\bshould (bet|back|stake)\b|\bplace your\b/i.test(SHELL_DISCLAIMER), false);
+
+  // It says what the product is, and what its output is not.
+  assert.match(SHELL_DISCLAIMER, /Decision-support analytics only/);
+  assert.match(SHELL_DISCLAIMER, /not\b[^.]*\bguarantees\b/);
+
+  // Quiet, not sticky, and it never becomes a banner.
+  const style = sliceBetween(TOKENS_CSS, '.rb-disclaimer {', '}');
+  assert.equal(/position:\s*(sticky|fixed)/.test(style), false, 'the disclaimer is not sticky');
+  assert.match(style, /color:\s*var\(--rb-text-muted\)/);
 });
 
 /* ============ 24-32. code-review corrections (layout and boundaries) ======= */
@@ -877,6 +994,127 @@ test('32. LoadingSkeleton normalises an unusable line count', () => {
     const html = renderToStaticMarkup(h(LoadingSkeleton, { lines: unusable }));
     assert.equal(bars(html), DEFAULT_SKELETON_LINES, `lines=${unusable} must fall back`);
     assert.match(html, /role="status"/, 'the loading state is still announced');
+  }
+});
+
+/* ============ 33-34. production route resolution and active contrast ====== */
+
+test('33. resolveActivePathname covers the production detection path', () => {
+  // Every behavioural active-route test supplies an explicit override, and
+  // `usePathname()` yields null outside a router context — so without this
+  // pure seam, code that ignored the detected value would still pass the whole
+  // suite while dropping aria-current on every real page.
+
+  // 1. undefined override defers to the detected path.
+  assert.equal(resolveActivePathname(undefined, '/leaderboard'), '/leaderboard');
+  assert.equal(resolveActivePathname(undefined, null), null);
+
+  // 2. a string override wins over the detected path.
+  assert.equal(resolveActivePathname('/results-audit', '/leaderboard'), '/results-audit');
+  assert.equal(resolveActivePathname('/', '/leaderboard'), '/');
+
+  // 3. an explicit null is a deliberate "nothing active", not a fallback.
+  assert.equal(resolveActivePathname(null, '/leaderboard'), null);
+
+  // 4. the component actually consumes the hook result through the resolver.
+  assert.match(NAV_SRC, /const detected = usePathname\(\);/);
+  assert.match(NAV_SRC, /resolveActivePathname\(pathname, detected\)/);
+  assert.equal(
+    /const current = pathname\b/.test(NAV_SRC),
+    false,
+    'the detected route must not be bypassed'
+  );
+});
+
+test('33b. resolved routes match exactly, by descendant, query and trailing slash', () => {
+  // The resolver feeds the matcher; this is the pair the pages actually rely on.
+  const activeFor = (detected: string | null) =>
+    PRIMARY_DESTINATIONS.filter((d) =>
+      isNavDestinationActive(resolveActivePathname(undefined, detected), d.href)
+    ).map((d) => d.href);
+
+  assert.deepEqual(activeFor('/'), ['/']);
+  assert.deepEqual(activeFor('/how-it-works'), ['/how-it-works']);
+  assert.deepEqual(activeFor('/how-it-works/detail'), ['/how-it-works'], 'descendant');
+  assert.deepEqual(activeFor('/leaderboard/'), ['/leaderboard'], 'trailing slash');
+  assert.deepEqual(activeFor('/results-audit?date=2026-07-28'), ['/results-audit'], 'query');
+  assert.deepEqual(activeFor('/results-audit#top'), ['/results-audit'], 'hash');
+  assert.deepEqual(activeFor('/leaderboards'), [], 'no false prefix match');
+  assert.deepEqual(activeFor(null), [], 'unknown route activates nothing');
+
+  // Overview never prefix-matches another route.
+  for (const detected of ['/how-it-works', '/leaderboard', '/results-audit']) {
+    assert.equal(activeFor(detected).includes('/'), false, `Overview active on ${detected}`);
+  }
+});
+
+/** Parses an `rgba()`/`rgb()` token into channels plus alpha. */
+function parseRgba(value: string): { r: number; g: number; b: number; a: number } {
+  const match = /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,/\s]+([\d.]+))?\s*\)/.exec(value);
+  assert.ok(match, `expected an rgba() colour, got: ${value}`);
+  return {
+    r: Number(match[1]),
+    g: Number(match[2]),
+    b: Number(match[3]),
+    a: match[4] === undefined ? 1 : Number(match[4]),
+  };
+}
+
+/** Flattens a translucent overlay onto an opaque #rrggbb base. */
+function compositeOver(overlay: string, baseHex: string): string {
+  const top = parseRgba(overlay);
+  const base = [1, 3, 5].map((i) => parseInt(baseHex.slice(i, i + 2), 16));
+  const mixed = [top.r, top.g, top.b].map((channel, i) =>
+    Math.round(top.a * channel + (1 - top.a) * base[i])
+  );
+  return `#${mixed.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+test('34. the active mobile divider clears 3:1 over the composited selected fill', () => {
+  const active = sliceBetween(
+    TOKENS_CSS_CODE,
+    ".rb-nav--mobile .rb-nav__link[aria-current='page'] {",
+    '}'
+  );
+
+  // The divider on the active item is darkened deliberately: the translucent
+  // selected fill lifts the surface luminance and drops --rb-border-strong
+  // below 3:1 on this one edge.
+  assert.match(active, /border-left-color:\s*var\(--rb-text-muted\)/);
+
+  // The other selected-state indicators are unchanged: accent rail, fill, and
+  // — from the shared rule — underline and weight, so the current destination
+  // is never signalled by colour alone.
+  assert.match(active, /border-top-color:\s*var\(--rb-accent-analytical\)/);
+  assert.match(active, /background:\s*var\(--rb-state-selected\)/);
+  const shared = sliceBetween(TOKENS_CSS_CODE, ".rb-nav__link[aria-current='page'] {", '}');
+  assert.match(shared, /text-decoration:\s*underline/);
+  assert.match(shared, /font-weight:\s*700/);
+  assert.match(shared, /box-shadow:\s*var\(--rb-shadow-inset\)/);
+
+  // Computed, not asserted from memory: composite the selected fill over the
+  // bar surface, then measure the divider against that.
+  for (const [scheme, tokens] of [
+    ['light', lightTokens()],
+    ['dark', darkTokens()],
+  ] as const) {
+    const fill = tokens['--rb-state-selected'];
+    assert.ok(parseRgba(fill).a < 1, `${scheme} selected fill must be translucent`);
+
+    const composited = compositeOver(fill, tokens['--rb-surface-raised']);
+    const ratio = contrast(tokens['--rb-text-muted'], composited);
+    assert.ok(
+      ratio >= 3,
+      `${scheme} active divider is ${ratio.toFixed(2)}:1 on ${composited} — below 3:1`
+    );
+
+    // And the untreated token really would have failed here — which is why the
+    // override exists. If this ever stops being true, the override is dead code.
+    const untreated = contrast(tokens['--rb-border-strong'], composited);
+    assert.ok(
+      untreated < ratio,
+      `${scheme}: the override must improve on --rb-border-strong (${untreated.toFixed(2)}:1)`
+    );
   }
 });
 

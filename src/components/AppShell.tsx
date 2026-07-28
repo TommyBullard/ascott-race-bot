@@ -1,31 +1,42 @@
 /**
  * Racing Bot application shell — course-agnostic, read-only, presentational.
  *
- * SLICE 1 SCOPE. This component establishes the structural and visual frame
- * for the multi-course UK & Ireland rebuild: skip link, header landmark,
- * navigation landmarks, and a single `<main>` landmark with a stable id.
+ * It provides the structural and visual frame for the multi-course UK & Ireland
+ * rebuild: skip link, header landmark, navigation landmarks, a single `<main>`
+ * landmark with a stable id, and the standing decision-support disclaimer.
  *
- * It is deliberately a SERVER component: no `'use client'`, no hooks, no
- * router access, no browser storage, no environment access, no data fetching
- * and no write controls. The caller passes the current `pathname` if it has
- * one, and active-route marking is computed by the pure
- * `isNavDestinationActive` helper below, so the shell renders identically on
- * the server and the client.
+ * SERVER COMPONENT. No `'use client'`, no hooks, no browser storage, no
+ * environment access, no data fetching, no write controls. The only part that
+ * crosses the client boundary is `AppNavigation`, which exists solely to read
+ * the current route for `aria-current`.
  *
- * NOT YET MOUNTED. Every existing page (`/`, `/how-it-works`, `/leaderboard`,
- * `/results-audit`) currently renders its own `<main>`. Mounting this shell in
- * the root layout today would nest `<main>` inside `<main>` on every route, so
- * adoption happens per route in Slice 2 as each page's own `<main>` is
- * migrated. Slice 1 ships the foundation and the tokens only.
- *
- * NAVIGATION POLICY. Only routes that actually exist are rendered as links.
- * Planned destinations carry no `href` field at all — they are structurally
- * incapable of becoming a link, so the shell can never produce a 404.
+ * ADOPTION. The shell owns `<main>`, so a page that renders inside it must NOT
+ * render its own — nested `<main>` landmarks are invalid and break landmark
+ * navigation. Adopted so far: `/how-it-works`, `/leaderboard`,
+ * `/results-audit`. The dashboard (`/`) still renders its own `<main>` and is
+ * migrated in a later slice.
  *
  * Decision-support only. Nothing here places, recommends or settles a bet.
  */
 
 import type { ReactNode } from 'react';
+
+import { AppNavigation } from './AppNavigation';
+
+/**
+ * The navigation model lives in its own module so the shell and the client
+ * navigation do not import each other. Re-exported here because the shell is
+ * the public entry point for consumers and tests.
+ */
+export {
+  MOBILE_DESTINATIONS,
+  MOBILE_NAV_MAX_DESTINATIONS,
+  PLANNED_DESTINATIONS,
+  PRIMARY_DESTINATIONS,
+  isNavDestinationActive,
+  type NavDestination,
+  type PlannedDestination,
+} from './navDestinations';
 
 /** Course-agnostic product identity. Never names a single racecourse. */
 export const APP_NAME = 'Racing Bot';
@@ -34,54 +45,19 @@ export const APP_TAGLINE = 'UK & Ireland Racing Analytics';
 /** Stable id for the single `<main>` landmark; also the skip-link target. */
 export const MAIN_LANDMARK_ID = 'rb-main';
 
-/** A destination that exists today and may safely be linked. */
-export interface NavDestination {
-  /** In-app route that is known to exist. */
-  href: string;
-  /** Full label used in the header navigation. */
-  label: string;
-  /** Condensed label used in the mobile bottom bar. */
-  shortLabel: string;
-}
-
 /**
- * A destination that does NOT exist yet.
+ * The standing disclaimer shown once on every page the shell owns.
  *
- * There is intentionally no `href` on this type. A planned destination cannot
- * be rendered as an anchor without a compile error, which is what keeps
- * "no misleading links" a structural guarantee rather than a convention.
+ * It states the boundary of the product and nothing more: it is not a warning
+ * banner, not a call to action, and it never instructs anyone to stake money.
+ * It does not replace a page's own evidence limitations — the prediction audit,
+ * for example, still explains its locked-versus-diagnostic semantics in full.
  */
-export interface PlannedDestination {
-  label: string;
-}
-
-/** Working routes, verified to exist in `src/app`. */
-export const PRIMARY_DESTINATIONS: readonly NavDestination[] = [
-  { href: '/', label: 'Overview', shortLabel: 'Overview' },
-  { href: '/how-it-works', label: 'Methodology', shortLabel: 'Method' },
-  { href: '/leaderboard', label: 'Tipster Evidence', shortLabel: 'Tipsters' },
-  { href: '/results-audit', label: 'Official Record', shortLabel: 'Record' },
-];
-
-/** Destinations arriving in later slices. Shown as clearly unavailable. */
-export const PLANNED_DESTINATIONS: readonly PlannedDestination[] = [
-  { label: 'Today' },
-  { label: 'Meetings' },
-  { label: 'Operations' },
-];
-
-/** Hard ceiling on mobile bottom-bar destinations. */
-export const MOBILE_NAV_MAX_DESTINATIONS = 5;
-
-/**
- * Mobile bottom navigation: working destinations only, capped.
- * Planned destinations are excluded entirely so the bar can never trap a user
- * on a disabled control.
- */
-export const MOBILE_DESTINATIONS: readonly NavDestination[] = PRIMARY_DESTINATIONS.slice(
-  0,
-  MOBILE_NAV_MAX_DESTINATIONS
-);
+// Deliberately one unbroken literal: the safety scans strip this exact string
+// before looking for betting language, and a concatenated expression would
+// leave half of it behind in the source for the scan to trip over.
+// prettier-ignore
+export const SHELL_DISCLAIMER = 'Decision-support analytics only. Outputs are evidence-based signals, not guarantees or instructions to place a bet.';
 
 /** Inert regions reserving space for controls that arrive in later slices. */
 export const PLACEHOLDER_SLOTS: readonly { label: string; state: string }[] = [
@@ -90,58 +66,18 @@ export const PLACEHOLDER_SLOTS: readonly { label: string; state: string }[] = [
   { label: 'Scope', state: 'Planned' },
 ];
 
-/**
- * Pure active-route test.
- *
- * `/` matches only itself (it would otherwise prefix-match every route).
- * Other routes match themselves and their descendants. A null/unknown
- * pathname simply yields no active item — never a guess.
- */
-export function isNavDestinationActive(pathname: string | null | undefined, href: string): boolean {
-  if (!pathname) return false;
-  // Ignore any query string or hash the caller may have included.
-  const path = pathname.split('?')[0].split('#')[0];
-  const normalised = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
-  if (href === '/') return normalised === '/';
-  return normalised === href || normalised.startsWith(`${href}/`);
-}
-
 export interface AppShellProps {
   children: ReactNode;
   /**
-   * Current route path, when the caller can supply it safely. Used only to set
-   * `aria-current="page"`. Omit it and no destination is marked active.
+   * Explicit route override for `aria-current`. Omit it — the normal case —
+   * and the navigation detects the live route itself.
    */
   pathname?: string | null;
   /** Optional extra class on the shell root. */
   className?: string;
 }
 
-/** Renders one navigation anchor, marking the active route for AT and sight. */
-function NavLink({
-  destination,
-  pathname,
-  useShortLabel = false,
-}: {
-  destination: NavDestination;
-  pathname: string | null | undefined;
-  useShortLabel?: boolean;
-}) {
-  const active = isNavDestinationActive(pathname, destination.href);
-  return (
-    <li className="rb-nav__item">
-      <a
-        className="rb-nav__link"
-        href={destination.href}
-        aria-current={active ? 'page' : undefined}
-      >
-        {useShortLabel ? destination.shortLabel : destination.label}
-      </a>
-    </li>
-  );
-}
-
-export function AppShell({ children, pathname = null, className }: AppShellProps) {
+export function AppShell({ children, pathname, className }: AppShellProps) {
   const rootClass = className ? `rb-app ${className}` : 'rb-app';
 
   return (
@@ -178,39 +114,24 @@ export function AppShell({ children, pathname = null, className }: AppShellProps
         </div>
 
         <nav className="rb-nav rb-nav--primary" aria-label="Primary">
-          <ul className="rb-nav__list">
-            {PRIMARY_DESTINATIONS.map((destination) => (
-              <NavLink key={destination.href} destination={destination} pathname={pathname} />
-            ))}
-            {PLANNED_DESTINATIONS.map((planned) => (
-              <li className="rb-nav__item rb-nav__item--planned" key={planned.label}>
-                {/* Not an anchor: planned destinations have no route to visit. */}
-                <span className="rb-nav__planned">
-                  {planned.label}
-                  <span className="rb-nav__planned-tag">Planned</span>
-                </span>
-              </li>
-            ))}
-          </ul>
+          <AppNavigation variant="primary" pathname={pathname} />
         </nav>
       </header>
 
       <main className="rb-main" id={MAIN_LANDMARK_ID} tabIndex={-1}>
         {children}
+
+        {/*
+          Scoped to `<main>`, so it is a footer for this page rather than a
+          second site-wide landmark, and so the mobile bottom-bar clearance
+          already reserved on `.rb-main` protects it too.
+        */}
+        <footer className="rb-disclaimer">{SHELL_DISCLAIMER}</footer>
       </main>
 
       {/* Working destinations only — no disabled item can trap a mobile user. */}
       <nav className="rb-nav rb-nav--mobile" aria-label="Primary mobile">
-        <ul className="rb-nav__list">
-          {MOBILE_DESTINATIONS.map((destination) => (
-            <NavLink
-              key={destination.href}
-              destination={destination}
-              pathname={pathname}
-              useShortLabel
-            />
-          ))}
-        </ul>
+        <AppNavigation variant="mobile" pathname={pathname} />
       </nav>
     </div>
   );
