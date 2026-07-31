@@ -168,16 +168,32 @@ test('homepage renders the all-courses banner with the Newmarket quick link (cli
   assert.doesNotMatch(block, /<form|<button|onClick|onSubmit|fetch\(|method:\s*['"]POST/);
 });
 
-test('nav block is anchors only — no form/button/onClick/fetch/--commit', () => {
+test('nav block is navigation only — same-route anchors, cross-route Link', () => {
   const start = PAGE_SRC.indexOf('function RaceDayNav');
   const end = PAGE_SRC.indexOf('const raceDayPrimaryButtonStyle');
   assert.ok(start >= 0 && end > start, 'RaceDayNav block located');
   const navBlock = PAGE_SRC.slice(start, end);
 
-  // It links via plain anchors to the built nav hrefs...
+  /*
+   * Same-route scope changes stay PLAIN ANCHORS so the browser performs a
+   * full-document navigation. A client-side transition would keep the page
+   * mounted, and three of its scope-sensitive effects have empty dependency
+   * arrays — the dashboard would show evidence from the previous scope under
+   * the new URL.
+   */
   assert.match(navBlock, /<a href=\{nav\.primary\.href\}/);
-  assert.match(navBlock, /<a href=\{nav\.audit\.href\}/);
-  // ...and introduces no write control or network call.
+  assert.match(navBlock, /<a href=\{nav\.previousDay\.href\}/);
+
+  /*
+   * The cross-route Prediction Audit destination unmounts this page entirely,
+   * so it has no stale-scope risk and uses Link — with prefetch disabled, to
+   * keep the plain-anchor property of making no speculative request.
+   */
+  assert.doesNotMatch(navBlock, /<a href=\{nav\.audit\.href\}/);
+  assert.match(navBlock, /<Link href=\{nav\.audit\.href\} prefetch=\{false\} style=\{raceDaySecondaryLinkStyle\}>/);
+  assert.match(navBlock, /\{nav\.audit\.label\}/);
+
+  // ...and it introduces no write control or network call.
   assert.doesNotMatch(navBlock, /<form|<button|onClick|onSubmit|fetch\(|method:\s*['"]POST/);
   assert.doesNotMatch(navBlock, /--commit|placeOrder|placeBet|submitOrder|\/api\//);
 });

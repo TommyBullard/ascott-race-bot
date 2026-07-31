@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import RaceExplanationPanel from '@/components/RaceExplanationPanel';
 import RaceIntelligencePanel from '@/components/RaceIntelligencePanel';
@@ -1639,6 +1640,11 @@ function PerformancePanel({ performance }: { performance: ModelPerformance | nul
   const cov = performance.lockCoverage;
   const fallback = performance.fallbackPerformance;
   // Read-only deep link to the Prediction Audit page, preserving ?date/?course.
+  // Reading window.location during render is safe HERE only because this panel
+  // returns null while `performance` is null, and `performance` is populated
+  // solely by a client effect — so these links never exist in the server render
+  // and cannot produce a hydration mismatch. Left as-is deliberately: changing
+  // this URL handling is out of scope for slice 3B.
   const auditHref =
     '/results-audit' + (typeof window !== 'undefined' ? window.location.search : '');
 
@@ -1648,9 +1654,13 @@ function PerformancePanel({ performance }: { performance: ModelPerformance | nul
         <div style={styles.perfHeading}>
           <span style={styles.perfTitle}>Recommendation performance</span>
           <span style={styles.perfScope}>{scope}</span>
-          <a href={auditHref} style={{ fontSize: 12, color: '#0969da', textDecoration: 'none' }}>
+          <Link
+            href={auditHref}
+            prefetch={false}
+            style={{ fontSize: 12, color: '#0969da', textDecoration: 'none' }}
+          >
             Prediction Audit →
-          </a>
+          </Link>
         </div>
         {modeNote && <div style={styles.perfNote}>{modeNote}</div>}
         <span style={styles.muted}>
@@ -1679,9 +1689,13 @@ function PerformancePanel({ performance }: { performance: ModelPerformance | nul
         <span style={{ ...styles.accuracyUpdated }}>
           updated {formatUpdated(performance.computedAt)}
         </span>
-        <a href={auditHref} style={{ fontSize: 12, color: '#0969da', textDecoration: 'none' }}>
+        <Link
+          href={auditHref}
+          prefetch={false}
+          style={{ fontSize: 12, color: '#0969da', textDecoration: 'none' }}
+        >
           Prediction Audit →
-        </a>
+        </Link>
       </div>
       {modeNote && <div style={styles.perfNote}>{modeNote}</div>}
       <div style={styles.perfRow}>
@@ -1957,6 +1971,11 @@ function AllCoursesBanner({ search, isClient }: { search: string; isClient: bool
     <div style={safetyBannerStyle}>
       <strong>{ALL_COURSES_BANNER_MESSAGE}</strong>
       <div style={{ marginTop: 8 }}>
+        {/*
+          Same-route scope change (`/` with a course query), so this stays a
+          plain anchor for full-document navigation — see the LINK POLICY note
+          on RaceDayNav below.
+        */}
         <a href={ACTIVE_COURSE_QUICK_LINK.href} style={raceDayPrimaryButtonStyle}>
           {ACTIVE_COURSE_QUICK_LINK.label}
         </a>
@@ -1969,10 +1988,27 @@ function AllCoursesBanner({ search, isClient }: { search: string; isClient: bool
  * Homepage race-day navigation, course/date-aware (no hardcoded course): a
  * primary link to today's races for the SELECTED course, a previous-day
  * results link derived from the selected date, and a Prediction Audit deep
- * link preserving the current query. NAVIGATION ONLY — plain in-app anchors;
- * no backend-route call, no DB write, no wager, no write-mode flag. When
- * unscoped it shows a short "choose a view" prompt and generic wording.
- * `search` is the hydration-safe URL query ('' on the server render).
+ * link preserving the current query. NAVIGATION ONLY — no backend-route call,
+ * no DB write, no wager, no write-mode flag. When unscoped it shows a short
+ * "choose a view" prompt and generic wording. `search` is the hydration-safe
+ * URL query ('' on the server render).
+ *
+ * LINK POLICY (slice 3B). The two kinds of destination are handled
+ * differently, on purpose:
+ *
+ *   - SAME-ROUTE scope changes (`/` with a different query) stay plain
+ *     anchors, so the browser performs a FULL-DOCUMENT navigation. A
+ *     client-side transition would keep this page mounted, and three of its
+ *     scope-sensitive effects have empty dependency arrays (accuracy, in-form
+ *     tipsters, tipster status) while the other two key off the `scoped`
+ *     boolean rather than the whole query. The page would therefore keep
+ *     showing evidence gathered for the PREVIOUS scope under the new URL. A
+ *     full document load guarantees every panel is rebuilt for the new scope.
+ *     Do not convert these to Link until URL scope is a dependency of every
+ *     relevant data-loading effect.
+ *
+ *   - The CROSS-ROUTE Prediction Audit destination unmounts this page
+ *     entirely, so it has no stale-scope risk and uses Link.
  */
 function RaceDayNav({ scoped, search }: { scoped: boolean; search: string }) {
   const nav = buildRaceDayNavView(search);
@@ -1984,17 +2020,20 @@ function RaceDayNav({ scoped, search }: { scoped: boolean; search: string }) {
         </p>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+        {/* Same-route scope change — full-document navigation, see above. */}
         <a href={nav.primary.href} style={raceDayPrimaryButtonStyle}>
           {nav.primary.label}
         </a>
         {nav.previousDay && (
+          // Same-route scope change — full-document navigation, see above.
           <a href={nav.previousDay.href} style={raceDaySecondaryLinkStyle}>
             {nav.previousDay.label}
           </a>
         )}
-        <a href={nav.audit.href} style={raceDaySecondaryLinkStyle}>
+        {/* Cross-route destination — safe to navigate client-side. */}
+        <Link href={nav.audit.href} prefetch={false} style={raceDaySecondaryLinkStyle}>
           {nav.audit.label}
-        </a>
+        </Link>
       </div>
     </div>
   );
@@ -2550,14 +2589,13 @@ export default function RecommendationsPage() {
             Beta
           </span>
         </h1>
-        <span style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <a href="/how-it-works" style={{ fontSize: 14, color: '#0969da', textDecoration: 'none' }}>
-            How it works
-          </a>
-          <a href="/leaderboard" style={{ fontSize: 14, color: '#0969da', textDecoration: 'none' }}>
-            Tipster Leaderboard →
-          </a>
-        </span>
+        {/*
+          SLICE 3B: the "How it works" and "Tipster Leaderboard" links that sat
+          here are now supplied by AppShell's primary and mobile navigation
+          (Methodology / Tipster Evidence), so the local duplicates — and their
+          wrapper — were removed. The course/date-aware race-day navigation
+          below is NOT duplicated by the shell and stays.
+        */}
       </div>
       <p
         style={{
