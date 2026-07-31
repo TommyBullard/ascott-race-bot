@@ -673,15 +673,103 @@ test('29b. every adopted route now renders through the shell', () => {
   }
 });
 
-test('29c. the homepage keeps its own navigation and safety copy in this slice', () => {
+test('29c. the duplicated header links are gone; the shell supplies them', () => {
   const html = ADOPTED.find((p) => p.route === '/')!.html;
+  const code = codeOf(HOMEPAGE_SRC);
 
-  // Duplicated navigation is accepted for now; removing it is slice 3B.
+  // Slice 3B removed the local header anchors. (Superseded the slice 3A
+  // contract, which asserted the opposite while duplication was accepted.)
+  assert.equal(/<a href="\/how-it-works"/.test(code), false, 'local How-it-works anchor gone');
+  assert.equal(/<a href="\/leaderboard"/.test(code), false, 'local Leaderboard anchor gone');
+
+  // Their wrapper was deleted too, not left as an empty element.
+  assert.equal(
+    /<span style=\{\{ display: 'flex', gap: 16, flexWrap: 'wrap' \}\}>/.test(code),
+    false,
+    'the empty header wrapper must be removed, not left behind'
+  );
+
+  // Each destination now appears EXACTLY twice — once in the shell's primary
+  // navigation and once in its mobile bar. Three would mean the local
+  // duplicate survived; one would mean the shell lost it.
   const hrefs = anchors(html).map((a) => a.href);
-  assert.ok(hrefs.includes('/how-it-works'), 'local How-it-works link retained');
-  assert.ok(hrefs.includes('/leaderboard'), 'local Leaderboard link retained');
+  for (const destination of ['/how-it-works', '/leaderboard']) {
+    assert.equal(
+      hrefs.filter((h) => h === destination).length,
+      2,
+      `${destination} must come from the shell's two navs only`
+    );
+  }
+
+  // ...and they are still reachable under the shell's own labels.
+  assert.ok(html.includes('Methodology'), 'Methodology reachable via the shell');
+  assert.ok(html.includes('Tipster Evidence'), 'Tipster Evidence reachable via the shell');
+});
+
+test('29c-2. course/date-aware navigation is retained and unconverted', () => {
+  const html = ADOPTED.find((p) => p.route === '/')!.html;
+  const code = codeOf(HOMEPAGE_SRC);
+
+  // The race-day cluster is NOT duplicated by the shell, so all of it stays.
   assert.match(HOMEPAGE_SRC, /function RaceDayNav/, 'course/date-aware nav retained');
   assert.match(HOMEPAGE_SRC, /buildRaceDayNavView/);
+  assert.match(HOMEPAGE_SRC, /href: '\/\?day=today&course=Newmarket'/, 'quick link retained');
+  assert.match(HOMEPAGE_SRC, /function AllCoursesBanner/);
+
+  /*
+   * SAME-ROUTE scope changes must stay PLAIN ANCHORS. A client-side transition
+   * keeps this page mounted, and three of its scope-sensitive effects have
+   * empty dependency arrays — the dashboard would show evidence from the
+   * previous scope under the new URL.
+   */
+  for (const sameRoute of [
+    'ACTIVE_COURSE_QUICK_LINK.href',
+    'nav.primary.href',
+    'nav.previousDay.href',
+  ]) {
+    const escaped = sameRoute.replace(/\./g, '\\.');
+    assert.match(code, new RegExp(`<a href=\\{${escaped}\\}`), `${sameRoute} stays an anchor`);
+    assert.equal(
+      new RegExp(`<Link href=\\{${escaped}\\}`).test(code),
+      false,
+      `${sameRoute} must NOT become a Link — it would strand a stale scope`
+    );
+  }
+
+  /*
+   * CROSS-ROUTE audit destinations unmount this page entirely, so they carry no
+   * stale-scope risk and use Link — with prefetch disabled, preserving the
+   * plain-anchor property of issuing no speculative request.
+   */
+  assert.equal((code.match(/<Link\b/g) ?? []).length, 3, 'exactly three Link usages');
+  assert.equal(
+    (code.match(/prefetch=\{false\}/g) ?? []).length,
+    3,
+    'every Link disables prefetch'
+  );
+  assert.equal(
+    (code.match(/href=\{auditHref\}/g) ?? []).length,
+    2,
+    'both PerformancePanel audit links retained'
+  );
+  assert.match(code, /<Link\s+href=\{nav\.audit\.href\} prefetch=\{false\}/);
+  assert.match(HOMEPAGE_SRC, /import Link from 'next\/link';/);
+
+  // Query semantics are untouched: the audit href still preserves the search.
+  assert.match(
+    HOMEPAGE_SRC,
+    /'\/results-audit' \+ \(typeof window !== 'undefined' \? window\.location\.search : ''\)/
+  );
+
+  // The shell's own audit destination plus the retained race-day one render.
+  assert.ok(
+    anchors(html).filter((a) => (a.href ?? '').startsWith('/results-audit')).length >= 3,
+    'results-audit remains reachable from the shell and the race-day nav'
+  );
+});
+
+test('29c-3. the homepage safety copy is unchanged by the navigation cleanup', () => {
+  const html = ADOPTED.find((p) => p.route === '/')!.html;
 
   // All three safety statements coexist; consolidation is slice 3C.
   assert.match(html, /decision-support\s*only, not betting advice/i, 'intro sentence');
