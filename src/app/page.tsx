@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import AppShell from '@/components/AppShell';
 import RaceExplanationPanel from '@/components/RaceExplanationPanel';
 import RaceIntelligencePanel from '@/components/RaceIntelligencePanel';
 import RaceTimelinePanel from '@/components/RaceTimelinePanel';
@@ -2515,7 +2516,13 @@ export default function RecommendationsPage() {
       : null;
 
   return (
-    <main style={styles.page}>
+    // SLICE 3A: structural shell adoption only. AppShell owns the single main
+    // landmark (id="rb-main"), so this page no longer renders its own. The
+    // dashboard's own container keeps its existing inline styles verbatim —
+    // colours, spacing, panels, local links and safety copy are unchanged and
+    // are migrated in later slices.
+    <AppShell>
+      <div style={styles.page}>
       <div
         style={{
           display: 'flex',
@@ -2629,6 +2636,7 @@ export default function RecommendationsPage() {
           ))}
         </div>
       )}
-    </main>
+      </div>
+    </AppShell>
   );
 }
