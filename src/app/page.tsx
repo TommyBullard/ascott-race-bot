@@ -283,6 +283,45 @@ interface InFormTipster {
 type LoadStatus = 'loading' | 'ready' | 'error';
 type ConfidenceLabel = 'High' | 'Medium' | 'Low';
 
+/**
+ * TEMPORARY legacy-light compatibility surface for the page wrapper.
+ *
+ * The value matches the current LIGHT value of `--rb-bg-app` in
+ * `src/styles/tokens.css`. It is deliberately a fixed literal and does NOT
+ * automatically track that token — the contrast test detects drift between the
+ * two, but nothing here follows the token at runtime. That is the point: the
+ * whole purpose of this constant is to stay light when the token goes dark.
+ *
+ * WHY THIS EXISTS. This page is still a legacy light-only design: it renders
+ * hard-coded light surfaces (`styles.card`, `styles.panel`, `styles.nextRace`
+ * at `#fff`; `styles.accuracyBar`, `styles.perfPanel` at `#f6f8fa`; plus
+ * tinted banners) with hard-coded dark foregrounds. Two facts follow:
+ *
+ *   - Leaving this wrapper TRANSPARENT lets it sit on the shell's `.rb-app`
+ *     background, which is `#12161c` under `prefers-color-scheme: dark`.
+ *     Text inheriting `styles.page`'s `#1f2328` then renders at ~1.15:1 —
+ *     effectively invisible.
+ *   - Replacing that foreground with dark-aware `--rb-text-*` tokens is NOT a
+ *     safe fix on its own. Those tokens become light in the dark scheme, and
+ *     the child surfaces above are still hard-coded light, so the text would
+ *     land light-on-light (~1.13:1 on `#fff`). A foreground may only migrate
+ *     together with its own containing surface.
+ *
+ * Pinning an opaque light surface here keeps every existing foreground on the
+ * light background it was designed and measured against, in BOTH schemes.
+ *
+ * THIS IS TRANSITIONAL, NOT DARK-MODE SUPPORT. It is contrast containment, not
+ * a native dark homepage, not a completed token migration, and not a new
+ * permanent design token.
+ *
+ * REMOVAL CONDITION. Delete this constant and the `background` on
+ * `styles.page` once every homepage region — the cards, the panels, the tinted
+ * banners and the imported panel components — has completed PAIRED
+ * foreground/surface migration onto `--rb-*` tokens. Until then, removing it
+ * reintroduces the ~1.15:1 failure.
+ */
+const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';
+
 const EV_POSITIVE_COLOR = '#1a7f37';
 const EV_NEGATIVE_COLOR = '#cf222e';
 
@@ -547,6 +586,8 @@ const styles = {
     paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 32px)',
     fontFamily: 'system-ui, -apple-system, sans-serif',
     color: '#1f2328',
+    // Temporary contrast containment — see LEGACY_LIGHT_PAGE_SURFACE.
+    background: LEGACY_LIGHT_PAGE_SURFACE,
   } as CSSProperties,
   cardList: {
     display: 'flex',
@@ -681,6 +722,19 @@ const styles = {
   } as CSSProperties,
   muted: {
     color: '#656d76',
+  } as CSSProperties,
+  /**
+   * Muted text rendered DIRECTLY on the page surface rather than inside a white
+   * or tinted child panel.
+   *
+   * `styles.muted`'s `#656d76` reaches 5.24:1 on the `#fff` panels that carry
+   * twelve of its fourteen uses, but only ~4.38:1 on
+   * `LEGACY_LIGHT_PAGE_SURFACE` — under the 4.5:1 normal-text floor. This
+   * slightly darker value clears it at ~5.16:1 without touching the twelve
+   * panel-contained uses, which are already compliant and must not change.
+   */
+  pageMuted: {
+    color: '#59626f',
   } as CSSProperties,
   accuracyBar: {
     display: 'flex',
@@ -2653,7 +2707,7 @@ export default function RecommendationsPage() {
       )}
 
       {status === 'loading' && (
-        <p style={styles.muted}>Loading recommendations…</p>
+        <p style={styles.pageMuted}>Loading recommendations…</p>
       )}
 
       {status === 'error' && (
@@ -2664,7 +2718,7 @@ export default function RecommendationsPage() {
       )}
 
       {status === 'ready' && cards.length === 0 && (
-        <p style={styles.muted}>No races available for this day yet.</p>
+        <p style={styles.pageMuted}>No races available for this day yet.</p>
       )}
 
       {status === 'ready' && cards.length > 0 && (
