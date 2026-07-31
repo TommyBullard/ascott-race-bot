@@ -2605,10 +2605,19 @@ export default function RecommendationsPage() {
           overflowWrap: 'anywhere',
         }}
       >
-        Model and tipster analysis for UK &amp; Irish racing — decision-support
-        only, not betting advice. Recommendations are model outputs, not
-        guarantees.
+        Model and tipster analysis for UK &amp; Irish racing.
       </p>
+
+      {/*
+        SLICE 3C: the safety statement sits directly beneath the descriptive
+        intro, ABOVE the operational panels. CommandCentrePanel and
+        DecisionConsolePanel are both conditional and can be tall, so leaving
+        the banner below them could push the page's only detailed safety copy
+        out of the first screen. The intro paragraph above is now purely
+        descriptive — its "decision-support only, not betting advice ... not
+        guarantees" clause said nothing this banner does not say in full.
+      */}
+      <SafetyBanner />
 
       {commandCentre && <CommandCentrePanel view={commandCentre} />}
 
@@ -2621,7 +2630,6 @@ export default function RecommendationsPage() {
         statusError={statusError}
         nowMs={nowMs}
       />
-      <SafetyBanner />
 
       <AllCoursesBanner search={search} isClient={isClient} />
       <RaceDayNav scoped={scoped} search={search} />
