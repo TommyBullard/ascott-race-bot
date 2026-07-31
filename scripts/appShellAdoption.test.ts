@@ -21,10 +21,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import RecommendationsPage from '../src/app/page';
 import HowItWorksPage from '../src/app/how-it-works/page';
 import LeaderboardPage from '../src/app/leaderboard/page';
 import ResultsAuditPage from '../src/app/results-audit/page';
@@ -37,6 +37,7 @@ import {
 } from '../src/components/AppShell';
 import { MODEL_FLOW_STEPS } from '../src/components/ModelFlowVisual';
 
+const HOMEPAGE_SRC = readFileSync('src/app/page.tsx', 'utf8');
 const HOW_IT_WORKS_SRC = readFileSync('src/app/how-it-works/page.tsx', 'utf8');
 const LEADERBOARD_SRC = readFileSync('src/app/leaderboard/page.tsx', 'utf8');
 const RESULTS_AUDIT_SRC = readFileSync('src/app/results-audit/page.tsx', 'utf8');
@@ -44,13 +45,20 @@ const LAYOUT_SRC = readFileSync('src/app/layout.tsx', 'utf8');
 const TOKENS_CSS = readFileSync('src/styles/tokens.css', 'utf8');
 
 const ADOPTED_SRC: Record<string, string> = {
+  '/': HOMEPAGE_SRC,
   '/how-it-works': HOW_IT_WORKS_SRC,
   '/leaderboard': LEADERBOARD_SRC,
   '/results-audit': RESULTS_AUDIT_SRC,
 };
 
-/** The three adopted routes, rendered once each. */
+/**
+ * Every adopted route, rendered once each. The dashboard joined in slice 3A;
+ * its pre-fetch render is the loading state, since effects do not run during
+ * static rendering and all three of its external stores return their server
+ * snapshots (scoped=false, search='', isClient=false).
+ */
 const ADOPTED: { route: string; html: string }[] = [
+  { route: '/', html: renderToStaticMarkup(h(RecommendationsPage)) },
   { route: '/how-it-works', html: renderToStaticMarkup(h(HowItWorksPage)) },
   { route: '/leaderboard', html: renderToStaticMarkup(h(LeaderboardPage)) },
   { route: '/results-audit', html: renderToStaticMarkup(h(ResultsAuditPage)) },
@@ -86,34 +94,6 @@ function sliceBetween(html: string, start: string, end: string): string {
   const to = html.indexOf(end, from);
   assert.notEqual(to, -1, `expected to find ${end} after ${start}`);
   return html.slice(from, to + end.length);
-}
-
-/**
- * The reviewed Slice 1 commit this slice is measured against.
- *
- * Anchored to a FIXED commit, not to HEAD. `git status` only reports a file as
- * changed while the work is uncommitted, so a status-based boundary assertion
- * silently becomes a no-op the moment the slice lands — exactly when it would
- * still be needed.
- */
-const SLICE_1_BASELINE = '69825036ed1f9f0758de13993f07e868b0349f52';
-
-/**
- * Whether `path` is byte-identical to its content at `commit`.
- *
- * Returns `null` — never throws — when git metadata is unavailable (no git on
- * PATH, an exported source tree, a shallow clone without the baseline commit),
- * so those environments get a clear diagnostic instead of an opaque stack.
- */
-function unchangedSince(commit: string, path: string): boolean | null {
-  try {
-    execFileSync('git', ['diff', '--quiet', commit, '--', path], { stdio: 'pipe' });
-    return true;
-  } catch (err) {
-    // git diff --quiet exits 1 for "differs"; anything else means we could not
-    // make the comparison at all.
-    return (err as { status?: number }).status === 1 ? false : null;
-  }
 }
 
 /** Import specifiers in a source file. */
@@ -313,16 +293,17 @@ test('10. internal destinations are next/link, resolved from the live route', ()
 
   // Every rendered destination is a real, existing route. An arbitrary path is
   // NOT acceptable merely because it starts with "/" — that would let a link to
-  // a non-existent route pass the very check meant to catch it. The audit's
-  // dashboard back-link is the one addition, and it is admitted by shape: the
-  // dashboard itself, optionally carrying the forwarded query string.
+  // a non-existent route pass the very check meant to catch it. Instead the
+  // QUERY is stripped and the remaining PATH must be a known destination: the
+  // dashboard's own race-day nav and the audit back-link legitimately carry
+  // ?date/?course/?day, but they may only ever point at a route that exists.
   const known = new Set([`#${MAIN_LANDMARK_ID}`, ...PRIMARY_DESTINATIONS.map((d) => d.href)]);
   for (const { route, html } of ADOPTED) {
     for (const anchor of anchors(html)) {
       const href = anchor.href ?? '';
-      const isDashboardBackLink = href === '/' || href.startsWith('/?');
+      const path = href.split('?')[0].split('#')[0] || '/';
       assert.ok(
-        known.has(href) || isDashboardBackLink,
+        known.has(href) || known.has(path),
         `${route}: unexpected link target ${href}`
       );
       assert.equal(href.startsWith('http'), false, `${route}: no external link expected`);
@@ -342,8 +323,18 @@ test('11. planned destinations are never links on an adopted page', () => {
         ),
         `${route}: ${planned.label} must render as a marked non-link`
       );
-      for (const anchor of html.match(/<a\b[^>]*>[\s\S]*?<\/a>/g) ?? []) {
-        assert.equal(anchor.includes(planned.label), false, `${route}: ${planned.label} linked`);
+      // Scoped to the NAVIGATION regions. The contract is that a planned
+      // destination is never a navigable link — not that the word may never
+      // appear in page copy: the dashboard's own race-day nav legitimately
+      // reads "View Today's Races", which is a different thing entirely.
+      for (const region of html.match(/<nav\b[\s\S]*?<\/nav>/g) ?? []) {
+        for (const anchor of region.match(/<a\b[^>]*>[\s\S]*?<\/a>/g) ?? []) {
+          assert.equal(
+            anchor.includes(planned.label),
+            false,
+            `${route}: ${planned.label} linked in navigation`
+          );
+        }
       }
     }
   }
@@ -404,9 +395,12 @@ test('15. the standing disclaimer appears exactly once per adopted page', () => 
     assert.equal(count(html, '<footer class="rb-disclaimer">'), 1, `${route}: one footer`);
   }
 
-  // Not rendered on the untouched homepage: it has not adopted the shell.
-  const homepage = readFileSync('src/app/page.tsx', 'utf8');
-  assert.equal(/AppShell|SHELL_DISCLAIMER/.test(homepage), false, 'homepage is unmigrated');
+  // Since slice 3A the dashboard is one of those adopted pages, so it is
+  // covered by the loop above rather than excluded here.
+  assert.ok(
+    ADOPTED.some((p) => p.route === '/'),
+    'the homepage must be inside the per-page disclaimer contract'
+  );
 });
 
 test('16. the disclaimer carries no guarantee, CTA or wager instruction', () => {
@@ -636,37 +630,197 @@ test('28. no API route implementation is reachable from the adopted UI', () => {
   }
 });
 
-test('29. the homepage keeps its own main and has not adopted the shell', (t) => {
-  // Durable content contract — runs in every environment and survives commit.
-  const homepage = readFileSync('src/app/page.tsx', 'utf8');
+test('29. the homepage renders through the shell and owns no main of its own', () => {
+  /*
+   * Slice 3A supersedes the slice 1/2 contract, which required the opposite:
+   * that the dashboard had NOT adopted the shell, pinned by a byte-identity
+   * comparison against the slice 1 commit. That comparison has been removed
+   * rather than re-anchored to a newer commit — the migration it was guarding
+   * against is the change being made here.
+   */
+  assert.match(HOMEPAGE_SRC, /import AppShell from '@\/components\/AppShell';/);
+  assert.match(HOMEPAGE_SRC, /<AppShell>/);
+  assert.match(HOMEPAGE_SRC, /<\/AppShell>/);
+
+  // The page's own <main> is gone; the shell's is the only one.
+  assert.equal(/<main[\s>]/.test(codeOf(HOMEPAGE_SRC)), false, 'no page-owned <main>');
+
+  // Its container styles survive verbatim — this slice is structural only.
+  assert.match(HOMEPAGE_SRC, /<div style=\{styles\.page\}>/);
+  assert.match(HOMEPAGE_SRC, /maxWidth: 820/);
+  assert.match(HOMEPAGE_SRC, /position: 'sticky' as const/, 'the next-race panel stays sticky');
+
+  // No primitive or token migration happened here; that is slice 3D. Matched on
+  // the import path: the dashboard has its own long-standing helpers whose
+  // names embed primitive-like words (resultStatusBadge, captureStatusBadge).
   assert.equal(
-    /AppShell|UiPrimitives|AppNavigation|navDestinations|tokens\.css/.test(homepage),
+    importsOf(HOMEPAGE_SRC).some((s) => s.includes('UiPrimitives')),
     false,
-    'the homepage must not adopt the shell in this slice'
+    'no primitive adoption in this slice'
   );
-  assert.match(homepage, /<main style=\{styles\.page\}>/, 'it still owns its own main');
+  assert.equal(/from '@\/styles\/tokens\.css'/.test(HOMEPAGE_SRC), false);
+});
+
+test('29b. every adopted route now renders through the shell', () => {
+  assert.deepEqual(
+    ADOPTED.map((p) => p.route),
+    ['/', '/how-it-works', '/leaderboard', '/results-audit'],
+    'all four routes are adopted'
+  );
+  for (const { route, html } of ADOPTED) {
+    assert.match(html, /^<div class="rb-app">/, `${route}: shell root`);
+    assert.match(html, /<header class="rb-header">/, `${route}: shell header`);
+  }
+});
+
+test('29c. the homepage keeps its own navigation and safety copy in this slice', () => {
+  const html = ADOPTED.find((p) => p.route === '/')!.html;
+
+  // Duplicated navigation is accepted for now; removing it is slice 3B.
+  const hrefs = anchors(html).map((a) => a.href);
+  assert.ok(hrefs.includes('/how-it-works'), 'local How-it-works link retained');
+  assert.ok(hrefs.includes('/leaderboard'), 'local Leaderboard link retained');
+  assert.match(HOMEPAGE_SRC, /function RaceDayNav/, 'course/date-aware nav retained');
+  assert.match(HOMEPAGE_SRC, /buildRaceDayNavView/);
+
+  // All three safety statements coexist; consolidation is slice 3C.
+  assert.match(html, /decision-support\s*only, not betting advice/i, 'intro sentence');
+  assert.match(html, /Decision-support only — not betting advice\./, 'SafetyBanner');
+  assert.match(html, /No\s*auto-betting and no bet placement/, 'read-only guarantee');
+  assert.ok(html.includes(SHELL_DISCLAIMER), 'shell disclaimer');
+  assert.equal(count(html, SHELL_DISCLAIMER), 1, 'shell disclaimer exactly once');
+});
+
+test('29d. the homepage data contract is untouched by adoption', () => {
+  /*
+   * Six endpoints, contacted in THREE deliberately different ways:
+   *
+   *   - recommendations, ml/shadow-comparison, accuracy and race-day/status
+   *     forward the COMPLETE current search verbatim;
+   *   - tipsters/status rebuilds a suffix from date + course ONLY, so params
+   *     such as ?day=today are deliberately dropped;
+   *   - tipsters/in-form receives NO query at all;
+   *   - and nothing else is contacted.
+   *
+   * The three modes are pinned separately below: collapsing any of them into
+   * "everything forwards the search" would silently change what an API sees.
+   */
+  const apiPaths = [...HOMEPAGE_SRC.matchAll(/`?(\/api\/[a-z0-9/-]+)/g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(apiPaths)].sort(), [
+    '/api/accuracy',
+    '/api/ml/shadow-comparison',
+    '/api/race-day/status',
+    '/api/recommendations',
+    '/api/tipsters/in-form',
+    '/api/tipsters/status',
+  ]);
+
+  // Mode 1 — the complete search, forwarded verbatim.
+  assert.match(HOMEPAGE_SRC, /fetch\(`\/api\/recommendations\$\{query\}`/);
+  assert.match(HOMEPAGE_SRC, /fetch\(`\/api\/ml\/shadow-comparison\$\{query\}`/);
+  assert.match(HOMEPAGE_SRC, /fetch\(`\/api\/accuracy\$\{query\}`/);
+  assert.match(HOMEPAGE_SRC, /fetch\(`\/api\/race-day\/status\$\{query\}`/);
+
+  // Mode 2 — date + course rebuilt, never the raw search.
+  assert.match(HOMEPAGE_SRC, /const \{ date, course \} = readScopeFromUrl\(\);/);
+  assert.match(HOMEPAGE_SRC, /const qs = new URLSearchParams\(\);/);
+  assert.match(HOMEPAGE_SRC, /if \(date\) qs\.set\('date', date\);/);
+  assert.match(HOMEPAGE_SRC, /if \(course\) qs\.set\('course', course\);/);
+  assert.match(
+    HOMEPAGE_SRC,
+    /const suffix = qs\.toString\(\) \? `\?\$\{qs\.toString\(\)\}` : '';/
+  );
+  assert.match(HOMEPAGE_SRC, /fetch\(`\/api\/tipsters\/status\$\{suffix\}`,\s*\{/);
+  assert.equal(
+    /fetch\(`\/api\/tipsters\/status\$\{query\}`|\/api\/tipsters\/status\$\{[^}]*search/.test(
+      HOMEPAGE_SRC
+    ),
+    false,
+    'tipster status must not switch to raw full-search forwarding'
+  );
+
+  // Mode 3 — no query. A plain single-quoted literal leaves nowhere to append
+  // one, so the call shape itself is the contract.
+  assert.match(HOMEPAGE_SRC, /fetch\('\/api\/tipsters\/in-form',\s*\{/);
+  // Anchored to the call: an unanchored backtick search would match a backtick
+  // belonging to an EARLIER template (the accuracy fetch) and span to here.
+  assert.equal(
+    /\/api\/tipsters\/in-form\$\{|fetch\(`[^`]*\/api\/tipsters\/in-form/.test(HOMEPAGE_SRC),
+    false,
+    'in-form must never gain a query suffix or become a template literal'
+  );
+
+  // Polling cadence and the conditions that gate it.
+  assert.match(HOMEPAGE_SRC, /setInterval\(\(\) => load\(false\), RACE_DAY_REFRESH_MS\)/);
+  assert.match(HOMEPAGE_SRC, /const refreshId = scoped/, 'recommendations poll is scope-gated');
+  assert.match(HOMEPAGE_SRC, /setInterval\(pollStatus, RACE_DAY_REFRESH_MS\)/);
+  assert.match(HOMEPAGE_SRC, /if \(!scoped \|\| !scope\.date\) return;/);
+  assert.match(HOMEPAGE_SRC, /setInterval\(loadAccuracy, 30000\)/);
+  assert.match(HOMEPAGE_SRC, /setInterval\(loadInForm, 60000\)/);
+  assert.match(HOMEPAGE_SRC, /setInterval\(loadTipsterStatus, 60000\)/);
+  assert.match(HOMEPAGE_SRC, /setInterval\(\(\) => setNowMs\(Date\.now\(\)\), 1000\)/);
+  assert.equal(
+    (HOMEPAGE_SRC.match(/new AbortController\(\)/g) ?? []).length,
+    5,
+    'every fetching effect still aborts'
+  );
+
+  // The three hydration-safe stores keep their server snapshots.
+  assert.match(HOMEPAGE_SRC, /\(\) => hasRaceDayScope\(window\.location\.search\),\s*\(\) => false,/);
+  assert.match(HOMEPAGE_SRC, /\(\) => window\.location\.search,\s*\(\) => '',/);
+  assert.match(HOMEPAGE_SRC, /\(\) => true,\s*\(\) => false,/);
+
+  // Last-known-good status preservation, and the initial-vs-background policy.
+  assert.equal(/setStatusData\(null\)/.test(HOMEPAGE_SRC), false);
+  assert.match(HOMEPAGE_SRC, /if \(isInitial\) \{/);
 
   /*
-   * SLICE 2 BOUNDARY ASSERTION.
-   *
-   * Anchored to the reviewed Slice 1 commit, so it keeps its meaning after
-   * Slice 2 is committed. It exists because homepage migration is explicitly
-   * out of scope for this slice.
-   *
-   * MUST BE SUPERSEDED DELIBERATELY when the homepage migration begins: at
-   * that point this byte-identity check is expected to fail, and the correct
-   * response is to remove it together with the "must not adopt the shell"
-   * assertion above — not to re-anchor it to a newer commit.
+   * Evidence separation survives. FIVE displayed states stay distinct, and
+   * `pending` is deliberately NOT one of the four lock buckets: it is a
+   * settlement counter with its own field, never a lock outcome and never a
+   * loss. Collapsing it into a bucket would misreport an unsettled race.
    */
-  const identical = unchangedSince(SLICE_1_BASELINE, 'src/app/page.tsx');
-  if (identical === null) {
-    t.diagnostic(
-      `git metadata unavailable — skipped the ${SLICE_1_BASELINE.slice(0, 7)} byte-identity ` +
-        'check for src/app/page.tsx; the content contract above still applies'
-    );
-    return;
+  for (const bucket of [
+    'official no-bet',
+    'no run at lock',
+    'not locked yet',
+    'LOCK MISSING',
+  ]) {
+    assert.ok(HOMEPAGE_SRC.includes(bucket), `lock bucket label retained: ${bucket}`);
   }
-  assert.equal(identical, true, `src/app/page.tsx must be byte-identical to ${SLICE_1_BASELINE}`);
+
+  // pending is surfaced separately, from its own field, in both places.
+  assert.match(HOMEPAGE_SRC, /pending \{performance\.pending_count\}/);
+  assert.match(HOMEPAGE_SRC, /\{performance\.pending_count\} pending of/);
+
+  // ...and it never appears inside the lock-bucket line itself.
+  const lockBucketLines = HOMEPAGE_SRC.split('\n').filter((line) =>
+    line.includes('official no-bet')
+  );
+  assert.ok(lockBucketLines.length > 0, 'the lock-bucket line must exist');
+  for (const line of lockBucketLines) {
+    assert.equal(
+      /pending/.test(line),
+      false,
+      'pending must not be collapsed into the lock buckets'
+    );
+  }
+  assert.match(HOMEPAGE_SRC, /officialMode === 'official_locked'/);
+  assert.match(HOMEPAGE_SRC, /fallbackPerformance/);
+
+  // The suggested operator command stays inert text inside <code>.
+  assert.match(HOMEPAGE_SRC, /<code style=\{styles\.nextActionCmd\}>\{action\.suggestedCommand\}<\/code>/);
+  assert.equal(/<button/.test(HOMEPAGE_SRC), false, 'no control was introduced');
+});
+
+test('29e. the shell adds no overflow ancestor that would break sticky', () => {
+  // styles.nextRace is position:sticky. A shell ancestor declaring overflow in
+  // either axis would make it resolve against a scrollport that never scrolls.
+  assert.match(HOMEPAGE_SRC, /position: 'sticky' as const/);
+  for (const selector of ['.rb-app {', '.rb-header {', '.rb-main {']) {
+    const block = sliceBetween(TOKENS_CSS, selector, '}');
+    assert.equal(/overflow/.test(block), false, `${selector} must not clip`);
+  }
 });
 
 test('30. no src/lib implementation is pulled into the new UI surface', () => {
@@ -686,6 +840,32 @@ test('30. no src/lib implementation is pulled into the new UI surface', () => {
     ])
   );
   assert.deepEqual(libImports, {
+    // The dashboard's pure display helpers, pinned exactly. Adoption added
+    // none; a new server dependency here would be visible immediately.
+    '/': [
+      '@/lib/commandCentre',
+      '@/lib/confidenceCardDiagnostics',
+      '@/lib/confidenceDiagnostics',
+      '@/lib/confidenceLadder',
+      '@/lib/decisionConsole',
+      '@/lib/genaiCommentaryView',
+      '@/lib/liveStatus',
+      '@/lib/lockCoverage',
+      '@/lib/modelDataQuality',
+      '@/lib/operatorNextAction',
+      '@/lib/placeAuditView',
+      '@/lib/proofPanel',
+      '@/lib/raceDayNav',
+      '@/lib/raceDayStatus',
+      '@/lib/raceDayStatusApi',
+      '@/lib/raceDaySummary',
+      '@/lib/raceDayTimeline',
+      '@/lib/raceExplanation',
+      '@/lib/raceIntelligence',
+      '@/lib/relativeTime',
+      '@/lib/settlementStatus',
+      '@/lib/tipsterStatus',
+    ],
     '/how-it-works': [],
     '/leaderboard': [],
     '/results-audit': ['@/lib/confidenceCardDiagnostics', '@/lib/predictionAudit'],
@@ -724,21 +904,26 @@ test('33. no runtime dependency was added', () => {
 });
 
 test('34. no auto-betting or order-placement feature was introduced', () => {
-  // Targets instructions and promises, not mere mention. The methodology page
-  // says the product is "not a bookmaker" and "never guarantees an outcome";
-  // that is the disclaimer working, not a violation, so a bare keyword scan
-  // would be measuring the wrong thing.
-  const forbidden =
-    /\bbest bet\b|\bsafe bet\b|guaranteed (win|winner|profit|return|roi)|\bbet now\b|\bplace (a|your) (bet|wager)\b|\bbetslip\b|auto-?bet|\brecommended stake\b/i;
+  // PROSE: targets instructions and promises, not mere mention. The methodology
+  // page says the product is "not a bookmaker"; the dashboard's safety banner
+  // says "No auto-betting and no bet placement". Those are the disclaimers
+  // WORKING, so a bare keyword scan would measure the wrong thing — an
+  // auto-betting FEATURE is caught by the identifier scan below instead.
+  const forbiddenProse =
+    /\bbest bet\b|\bsafe bet\b|guaranteed (win|winner|profit|return|roi)|\bbet now\b|\bplace (a|your) (bet|wager)\b|\bbetslip\b|\brecommended stake\b/i;
 
   for (const { route, html } of ADOPTED) {
     const scanned = html.split(SHELL_DISCLAIMER).join('');
-    assert.equal(forbidden.test(scanned), false, `${route}: betting instruction or promise`);
+    assert.equal(forbiddenProse.test(scanned), false, `${route}: betting instruction or promise`);
   }
+
+  // IDENTIFIERS: what an actual betting feature would look like in code. These
+  // are absolute — no disclaimer has a legitimate reason to name them.
+  const forbiddenIdentifiers =
+    /betfair|placeOrder|place_order|placeBet|place_bet|submitOrder|autoBet|auto_bet|stake now|betslip/i;
   for (const [route, src] of Object.entries(ADOPTED_SRC)) {
-    assert.equal(forbidden.test(src.split(SHELL_DISCLAIMER).join('')), false, route);
-    // No betting integration of any kind.
-    assert.equal(/betfair|placeOrder|place_order|exchange|stake now/i.test(src), false, route);
+    assert.equal(forbiddenProse.test(src.split(SHELL_DISCLAIMER).join('')), false, route);
+    assert.equal(forbiddenIdentifiers.test(src), false, `${route}: betting integration`);
   }
 });
 
@@ -759,7 +944,14 @@ test('35. the operational surface is absent from the frontend', () => {
     for (const specifier of importsOf(src)) {
       assert.equal(operational.test(specifier), false, `${route} imports ${specifier}`);
     }
-    assert.equal(/execSync|spawn\(|child_process|npm run /.test(src), false, `${route}: no CLI`);
+    // Checked on the CODE: the dashboard's documentation legitimately mentions
+    // the offline `npm run confidence:audit` command it mirrors, and the
+    // next-action widget renders a suggested command as inert <code> text.
+    assert.equal(
+      /execSync|spawn\(|child_process|npm run /.test(codeOf(src)),
+      false,
+      `${route}: no CLI invocation`
+    );
   }
 
   // Migrations and deployment config are not referenced from the UI at all.

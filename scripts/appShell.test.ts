@@ -1135,15 +1135,20 @@ test('29. no runtime dependency is added by this slice', () => {
   assert.match(TOKENS_CSS, /--rb-font-system:\s*\n?\s*system-ui/);
 });
 
-/* ============ slice boundary: the shell is not wired into production ======= */
+/* ====== shell wiring: per-route adoption, never a global layout mount ====== */
 
-test('slice 1 wires only the tokens stylesheet; the shell is not yet mounted', () => {
+test('the root layout wires the stylesheet only; adoption stays per route', () => {
   const layout = readFileSync('src/app/layout.tsx', 'utf8');
   assert.match(layout, /import '@\/styles\/tokens\.css';/);
-  // Mounting AppShell here would nest <main> inside every page's own <main>.
-  assert.equal(/AppShell/.test(layout), false, 'shell adoption happens in slice 2');
+  // Mounting AppShell HERE would wrap every route, including any future page
+  // that still renders its own <main> — nesting the landmark. Adoption is a
+  // per-page decision and must stay one.
+  assert.equal(/AppShell/.test(layout), false, 'the shell is never mounted globally');
 
-  // The existing dashboard is untouched by this slice.
+  // The dashboard adopted the shell in slice 3A, so it no longer owns a <main>
+  // of its own. (Superseded the slice 1/2 contract that required the opposite.)
   const page = readFileSync('src/app/page.tsx', 'utf8');
-  assert.equal(/AppShell|UiPrimitives|tokens\.css/.test(page), false);
+  assert.match(page, /import AppShell from '@\/components\/AppShell';/);
+  assert.match(page, /<AppShell>/);
+  assert.equal(/<main[\s>]/.test(page), false, 'AppShell owns the main landmark');
 });
