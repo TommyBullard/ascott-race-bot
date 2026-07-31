@@ -177,11 +177,21 @@ test('7. no dark-aware token foreground exists anywhere in the homepage', () => 
    * `--rb-text-primary` on `#fff` is ~1.13:1, `--rb-text-secondary` ~1.80:1,
    * `--rb-text-muted` ~2.96:1, `--rb-status-positive` ~2.30:1.
    *
+   * SCOPE: this prohibits a foreground token LITERAL in `page.tsx` — a colour
+   * this page applies to text while owning no matching surface.
+   *
+   * It does NOT prohibit token-driven primitives. Since slice 3D.2 the message
+   * states render via `UiPrimitives`, whose `rb-state` / `rb-skeleton` classes
+   * carry a paired surface AND foreground together in `tokens.css`. Those never
+   * inherit `styles.page`'s legacy `#1f2328` and never rely on the containment
+   * surface, so the failure mode above cannot occur — which is exactly why they
+   * were authorised while this assertion stands.
+   *
    * This assertion MUST be deliberately superseded — not silently re-anchored
    * or weakened — by the later tranche that begins PAIRED regional
-   * foreground/surface migration. At that point it should be narrowed to the
-   * regions still unmigrated, never simply deleted while legacy light surfaces
-   * remain.
+   * foreground/surface migration of the page's OWN inline styles. At that point
+   * it should be narrowed to the regions still unmigrated, never simply deleted
+   * while legacy light surfaces remain.
    */
   for (const forbidden of ['var(--rb-text-', 'var(--rb-status-', 'var(--rb-accent-']) {
     assert.equal(
@@ -200,40 +210,42 @@ test('8. styles.muted is unchanged', () => {
   assert.match(PAGE_CODE, /muted: \{\s*color: '#656d76',\s*\} as CSSProperties,/);
 });
 
-test('9. styles.pageMuted is the darker page-surface value', () => {
-  assert.match(PAGE_CODE, /pageMuted: \{\s*color: '#59626f',\s*\} as CSSProperties,/);
-});
+test('9-11. the message states render via primitives, and pageMuted is gone (slice 3D.2)', () => {
+  /*
+   * SUPERSEDES the slice 3D.1 contracts that required `styles.pageMuted` to be
+   * `#59626f` and to have exactly two call sites.
+   *
+   * `pageMuted` existed solely because `styles.muted`'s `#656d76` reached only
+   * ~4.39:1 against the containment surface at those two sites. Slice 3D.2
+   * moved both states onto `LoadingSkeleton` and `EmptyState`, which bring their
+   * own paired surface and foreground, so no page-owned foreground sits on the
+   * containment surface there at all and the style key became dead code.
+   *
+   * The twelve panel-contained `styles.muted` uses are untouched — see test 12.
+   */
+  assert.match(PAGE_CODE, /<LoadingSkeleton lines=\{4\} label="Loading recommendations" \/>/);
+  assert.match(PAGE_CODE, /<EmptyState title="No races yet" level=\{2\}>/);
+  assert.match(PAGE_CODE, /<ErrorState\s+title="Recommendations unavailable"/);
 
-test('10. exactly the two direct page-surface states use styles.pageMuted', () => {
-  const uses = [...PAGE_CODE.matchAll(/styles\.pageMuted/g)];
-  assert.equal(uses.length, 2, 'pageMuted is for the two direct page-surface states only');
+  assert.equal(/styles\.pageMuted/.test(PAGE_CODE), false, 'the dead style key is removed');
+  assert.equal(/#59626f/.test(PAGE_SRC), false, 'and its literal no longer appears');
 
-  assert.match(PAGE_CODE, /<p style=\{styles\.pageMuted\}>Loading recommendations…<\/p>/);
-  assert.match(
-    PAGE_CODE,
-    /<p style=\{styles\.pageMuted\}>No races available for this day yet\.<\/p>/
-  );
-});
-
-test('11. those two states no longer use styles.muted', () => {
-  assert.equal(
-    /<p style=\{styles\.muted\}>Loading recommendations…/.test(PAGE_CODE),
-    false,
-    'the loading state must not use the panel-contained muted value'
-  );
+  // The superseded bare paragraphs are gone.
+  assert.equal(/<p style=\{styles\.muted\}>Loading recommendations…/.test(PAGE_CODE), false);
   assert.equal(
     /<p style=\{styles\.muted\}>No races available for this day yet\./.test(PAGE_CODE),
-    false,
-    'the empty state must not use the panel-contained muted value'
+    false
   );
 });
 
 test('12. exactly twelve styles.muted uses remain after the two page-level states move', () => {
   /*
    * SCOPE OF THIS ASSERTION. It proves the COUNT and therefore non-migration:
-   * `styles.muted` had fourteen uses, two moved to `pageMuted`, and twelve are
-   * still present. A blanket literal replacement would have emptied this count
-   * and broken all twelve in the dark scheme, so the number is the guard.
+   * `styles.muted` had fourteen uses; the two direct page-surface states moved
+   * away (to `pageMuted` in slice 3D.1, then onto the message-state primitives
+   * in 3D.2), and twelve are still present. A blanket literal replacement would
+   * have emptied this count and broken all twelve in the dark scheme, so the
+   * number is the guard.
    *
    * It does NOT independently establish each one's containing surface. That
    * those twelve sit inside `#fff` or `#f6f8fa` panels — where `#656d76`
@@ -267,10 +279,14 @@ test('13. the temporary removal condition is documented at the constant', () => 
  * ========================================================================== */
 
 test('14. the migrated page-surface foregrounds clear 4.5:1 on the containment surface', () => {
+  /*
+   * `#59626f` was dropped from this table by slice 3D.2: `styles.pageMuted` no
+   * longer exists, because the two states that used it now render via
+   * primitives that own their surface as well as their foreground.
+   */
   const pairs: [string, string][] = [
     ['#1f2328', 'inherited page text (h1, nav prompt)'],
     ['#57606a', 'intro paragraph'],
-    ['#59626f', 'pageMuted — loading and empty states'],
   ];
   for (const [fg, what] of pairs) {
     const ratio = contrast(fg, LEGACY_LIGHT_PAGE_SURFACE);
@@ -281,40 +297,34 @@ test('14. the migrated page-surface foregrounds clear 4.5:1 on the containment s
   }
 });
 
-test('14b. pageMuted was necessary: the old muted value misses AA on this surface', () => {
-  /*
-   * `#656d76` reaches 5.24:1 on the `#fff` panels that carry its twelve
-   * remaining uses, but only ~4.39:1 on the containment surface. That gap is
-   * the entire reason `styles.pageMuted` exists for the two direct
-   * page-surface states, and the reason the other twelve were left alone.
-   */
-  assert.ok(
-    contrast('#656d76', LEGACY_LIGHT_PAGE_SURFACE) < AA_NORMAL_TEXT,
-    'if this passes, styles.pageMuted is no longer justified'
-  );
-  assert.ok(contrast('#656d76', '#ffffff') >= AA_NORMAL_TEXT, 'muted is fine on white panels');
-});
-
-test('14c. KNOWN SHORTFALL — two legacy foregrounds remain just below AA', () => {
+test('14c. KNOWN SHORTFALL — one legacy foreground remains just below AA', () => {
   /*
    * NOT FIXED IN THIS TRANCHE, AND DELIBERATELY SO.
    *
-   * `#cf222e` (error state) and `#0969da` (race-day nav secondary links) land
-   * at ~4.48:1 and ~4.34:1 on the containment surface — short of the 4.5:1
-   * normal-text floor. Both are PRE-EXISTING legacy values, and containment
-   * strictly IMPROVES both (from ~3.39:1 and ~3.50:1 in the uncontained dark
-   * scheme), so this tranche is a clear net gain; it simply does not carry
-   * them over the line.
+   * `#0969da` (race-day nav secondary links) lands at ~4.34:1 on the containment
+   * surface — short of the 4.5:1 normal-text floor. It is a PRE-EXISTING legacy
+   * value, and containment strictly IMPROVED it (from ~3.50:1 in the uncontained
+   * dark scheme), so it is not a regression; it simply is not yet over the line.
+   * Changing a link colour is a palette decision belonging to the NAVIGATION
+   * visual tranche, which owns that region and its surface together.
    *
-   * They are excluded here because changing a semantic status colour or a link
-   * colour is a palette decision belonging to the tranche that migrates those
-   * regions with their surfaces — not to a containment fix. Pinning the
-   * measured values means neither can silently WORSEN in the meantime, and the
-   * upper bound makes this test fail (prompting its own deletion) once a later
-   * tranche legitimately fixes them.
+   * `#cf222e` WAS on this list and has been REMOVED — resolved, not merely
+   * moved. Slice 3D.2 replaced the inline error paragraph with `ErrorState`,
+   * whose text is `--rb-text-primary` / `--rb-text-secondary` on
+   * `--rb-surface-raised` (both proven >= 4.5:1 in each scheme by
+   * appShell.test.ts 18/18c). The failure colour now appears only as a border,
+   * where it also clears 4.5:1 — far above the 3:1 non-text floor. The failing
+   * TEXT pair no longer exists.
+   *
+   * `#cf222e` itself is NOT globally removed: `EV_NEGATIVE_COLOR` still colours
+   * EV, profit/loss and ROI figures, all of which sit inside white or `#f6f8fa`
+   * panels rather than on the containment surface.
+   *
+   * Pinning the measured value means it cannot silently WORSEN, and the upper
+   * bound makes this test fail — prompting its own deletion — once the
+   * navigation tranche legitimately fixes it.
    */
   for (const [fg, what, floor] of [
-    ['#cf222e', 'error state', 4.4],
     ['#0969da', 'race-day nav secondary links', 4.3],
   ] as const) {
     const ratio = contrast(fg, LEGACY_LIGHT_PAGE_SURFACE);
