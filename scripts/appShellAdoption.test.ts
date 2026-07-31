@@ -768,15 +768,136 @@ test('29c-2. course/date-aware navigation is retained and unconverted', () => {
   );
 });
 
-test('29c-3. the homepage safety copy is unchanged by the navigation cleanup', () => {
+test('29c-3. the homepage safety copy is consolidated onto one banner (slice 3C)', () => {
   const html = ADOPTED.find((p) => p.route === '/')!.html;
+  const code = codeOf(HOMEPAGE_SRC);
 
-  // All three safety statements coexist; consolidation is slice 3C.
-  assert.match(html, /decision-support\s*only, not betting advice/i, 'intro sentence');
-  assert.match(html, /Decision-support only — not betting advice\./, 'SafetyBanner');
-  assert.match(html, /No\s*auto-betting and no bet placement/, 'read-only guarantee');
+  /*
+   * SLICE 3C. Before this slice the homepage stated "decision-support only",
+   * "not betting advice" and "not guarantees" three times over: in the intro
+   * paragraph, in SafetyBanner, and in the shell footer. The intro's copy was
+   * a strict subset of SafetyBanner's, so it was reduced to its one unique
+   * clause — the product description — and SafetyBanner moved up to take its
+   * place. Nothing unique was dropped; the assertions below are what proves
+   * that, so they enumerate every clause rather than sampling.
+   */
+
+  // 1. The intro paragraph is now purely descriptive, and exact.
+  assert.ok(
+    html.includes('>Model and tipster analysis for UK &amp; Irish racing.</p>'),
+    'intro paragraph is exactly the descriptive sentence'
+  );
+
+  /*
+   * 2. Its former safety clause is gone from the rendered HTML AND from the
+   *    comment-stripped source. Both halves earn their place: the render alone
+   *    would miss a copy that exists in the file but is unreachable, while RAW
+   *    source would trip over page.tsx's own explanatory comment, which
+   *    legitimately quotes the wording it is explaining. `codeOf` strips
+   *    comments, so an explanatory comment can neither satisfy this contract
+   *    nor defeat it — only rendered or reachable copy counts.
+   */
+  assert.equal(
+    /decision-support\s*only, not betting advice/i.test(html),
+    false,
+    'the intro no longer restates the safety copy (rendered HTML)'
+  );
+  assert.equal(
+    /decision-support\s*only, not betting advice/i.test(code),
+    false,
+    'the intro no longer restates the safety copy (comment-stripped source)'
+  );
+  assert.equal(
+    /Recommendations are model outputs, not\s*guarantees\.\s*<\/p>/.test(html),
+    false,
+    'the intro no longer restates the guarantees clause'
+  );
+
+  // 3. SafetyBanner survives, rendered exactly once, from exactly one call site.
+  assert.equal(count(code, '<SafetyBanner />'), 1, 'one SafetyBanner call site');
+  assert.equal(count(html, 'Decision-support only'), 1, 'SafetyBanner rendered once');
+
+  /*
+   * 4. Every clause it carries, matched against the BANNER'S OWN markup rather
+   *    than the whole page. That distinction is load-bearing rather than
+   *    fastidious: SettlementStatusPanel renders "Results are settled
+   *    separately and may be entered manually during beta — this page is
+   *    read-only." on this same page once race cards load, so a page-wide
+   *    match could be satisfied by a different component while the banner had
+   *    quietly lost the clause. Scoping to the fragment binds each guarantee
+   *    to the element that is supposed to make it.
+   *
+   *    Four of these exist nowhere else on the page: the no-auto-betting
+   *    guarantee, the no-bet-placement guarantee, the read-only guarantee, and
+   *    the beta settlement-lag caveat. Losing any one of them would remove
+   *    information, not duplication.
+   */
+  const banner = sliceBetween(html, 'Decision-support only', '</div>');
+  for (const [label, pattern] of [
+    ['decision-support boundary', /Decision-support only/],
+    ['not betting advice', /not betting advice/],
+    ['no auto-betting', /No\s*auto-betting/],
+    ['no bet placement', /no bet placement/],
+    ['page is read-only', /this page is read-only/],
+    ['outputs are not guarantees', /Recommendations are model outputs, not\s*guarantees/],
+    [
+      'beta settlement lag',
+      /During beta, results may\s*be settled manually and can lag behind the live race/,
+    ],
+  ] as const) {
+    assert.match(banner, pattern, `SafetyBanner retains: ${label}`);
+  }
+
+  // 5. The shell's standing disclaimer is untouched and still renders once.
   assert.ok(html.includes(SHELL_DISCLAIMER), 'shell disclaimer');
   assert.equal(count(html, SHELL_DISCLAIMER), 1, 'shell disclaimer exactly once');
+
+  /*
+   * 6. The anti-regression pin: at most two statements may open with
+   *    "decision-support only". Today it is ONE — SafetyBanner's — because the
+   *    shell says "Decision-support analytics only", which is deliberately not
+   *    this literal. The allowance of two exists so aligning the shell's
+   *    wording later stays legal, while a fourth statement creeping back onto
+   *    the homepage does not.
+   */
+  const decisionSupportOnly = (html.toLowerCase().match(/decision-support only/g) ?? []).length;
+  assert.ok(
+    decisionSupportOnly <= 2,
+    `expected at most 2 "decision-support only" statements, found ${decisionSupportOnly}`
+  );
+
+  // 7. Order: intro, then the banner, then the operational panels. Asserted on
+  //    source because CommandCentrePanel is conditional and absent from the
+  //    pre-fetch render this suite exercises.
+  const introAt = code.indexOf('Model and tipster analysis for UK &amp; Irish racing.');
+  const bannerAt = code.indexOf('<SafetyBanner />');
+  const commandCentreAt = code.indexOf('<CommandCentrePanel');
+  const liveModeBarAt = code.indexOf('<LiveModeBar');
+  assert.notEqual(introAt, -1, 'intro present');
+  assert.notEqual(bannerAt, -1, 'banner present');
+  assert.notEqual(commandCentreAt, -1, 'command centre present');
+  assert.notEqual(liveModeBarAt, -1, 'live-mode bar present');
+  assert.ok(introAt < bannerAt, 'SafetyBanner follows the intro paragraph');
+  assert.ok(bannerAt < commandCentreAt, 'SafetyBanner precedes CommandCentrePanel');
+
+  // 8. And it did not stay behind at its old position after LiveModeBar. The
+  //    single-call-site count above already forbids a duplicate; this pins the
+  //    direction of the move so a revert is a test failure, not a silent undo.
+  assert.ok(bannerAt < liveModeBarAt, 'SafetyBanner no longer sits after LiveModeBar');
+
+  /*
+   * 9. The banner's defensive wording is prose, not capability. "No
+   *    auto-betting and no bet placement" is the disclaimer WORKING — test 34
+   *    makes the same distinction — so the guarantee that no betting feature
+   *    exists is made against identifiers, which no disclaimer would name.
+   */
+  assert.equal(
+    /betfair|placeOrder|place_order|placeBet|place_bet|submitOrder|autoBet|auto_bet|betslip/i.test(
+      HOMEPAGE_SRC
+    ),
+    false,
+    'defensive wording introduces no betting integration'
+  );
 });
 
 test('29d. the homepage data contract is untouched by adoption', () => {
