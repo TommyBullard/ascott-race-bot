@@ -15,6 +15,7 @@
 import { useEffect, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
+import { EmptyState, ErrorState, LoadingSkeleton } from '@/components/UiPrimitives';
 import RaceExplanationPanel from '@/components/RaceExplanationPanel';
 import RaceIntelligencePanel from '@/components/RaceIntelligencePanel';
 import RaceTimelinePanel from '@/components/RaceTimelinePanel';
@@ -722,19 +723,6 @@ const styles = {
   } as CSSProperties,
   muted: {
     color: '#656d76',
-  } as CSSProperties,
-  /**
-   * Muted text rendered DIRECTLY on the page surface rather than inside a white
-   * or tinted child panel.
-   *
-   * `styles.muted`'s `#656d76` reaches 5.24:1 on the `#fff` panels that carry
-   * twelve of its fourteen uses, but only ~4.38:1 on
-   * `LEGACY_LIGHT_PAGE_SURFACE` — under the 4.5:1 normal-text floor. This
-   * slightly darker value clears it at ~5.16:1 without touching the twelve
-   * panel-contained uses, which are already compliant and must not change.
-   */
-  pageMuted: {
-    color: '#59626f',
   } as CSSProperties,
   accuracyBar: {
     display: 'flex',
@@ -2706,19 +2694,35 @@ export default function RecommendationsPage() {
         <ProofOfUpdatePanel view={proofPanelView} />
       )}
 
+      {/*
+        SLICE 3D.2: the three message states use the shared primitives, matching
+        /leaderboard and /results-audit. Each primitive carries its own paired
+        surface AND foreground via `rb-state` / `rb-skeleton`, so none of them
+        inherits `styles.page`'s legacy `#1f2328` — they stay readable in both
+        colour schemes without the page owning a token foreground.
+
+        `level={2}` is deliberate: the page has one `<h1>`, and the three
+        top-level panels that already render headings use `<h2>`. The primitive
+        default of 3 would create an h1 -> h3 skip.
+      */}
       {status === 'loading' && (
-        <p style={styles.pageMuted}>Loading recommendations…</p>
+        <LoadingSkeleton lines={4} label="Loading recommendations" />
       )}
 
       {status === 'error' && (
-        <p style={{ color: EV_NEGATIVE_COLOR }}>
-          Couldn&apos;t load recommendations right now. Please refresh to try
-          again.{error ? ` (${error})` : ''}
-        </p>
+        <ErrorState
+          title="Recommendations unavailable"
+          detail={error ? `Reported: ${error}` : undefined}
+          level={2}
+        >
+          Couldn&apos;t load recommendations right now. Please refresh to try again.
+        </ErrorState>
       )}
 
       {status === 'ready' && cards.length === 0 && (
-        <p style={styles.pageMuted}>No races available for this day yet.</p>
+        <EmptyState title="No races yet" level={2}>
+          No races available for this day yet.
+        </EmptyState>
       )}
 
       {status === 'ready' && cards.length > 0 && (

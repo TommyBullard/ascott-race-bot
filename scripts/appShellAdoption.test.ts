@@ -36,6 +36,9 @@ import {
   SHELL_DISCLAIMER,
 } from '../src/components/AppShell';
 import { MODEL_FLOW_STEPS } from '../src/components/ModelFlowVisual';
+// Rendered directly in 29a-3 to prove the semantics the homepage's error and
+// empty states rely on, without adding a DOM library or a router mock.
+import { EmptyState, ErrorState } from '../src/components/UiPrimitives';
 
 const HOMEPAGE_SRC = readFileSync('src/app/page.tsx', 'utf8');
 const HOW_IT_WORKS_SRC = readFileSync('src/app/how-it-works/page.tsx', 'utf8');
@@ -650,15 +653,219 @@ test('29. the homepage renders through the shell and owns no main of its own', (
   assert.match(HOMEPAGE_SRC, /maxWidth: 820/);
   assert.match(HOMEPAGE_SRC, /position: 'sticky' as const/, 'the next-race panel stays sticky');
 
-  // No primitive or token migration happened here; that is slice 3D. Matched on
-  // the import path: the dashboard has its own long-standing helpers whose
-  // names embed primitive-like words (resultStatusBadge, captureStatusBadge).
-  assert.equal(
+  /*
+   * PRIMITIVE BOUNDARY — superseded deliberately by slice 3D.2.
+   *
+   * Slice 3A's gate here forbade ALL `UiPrimitives` imports and said primitive
+   * migration belonged to slice 3D. Slice 3D.2 is that tranche, so the blanket
+   * ban is replaced rather than deleted: the homepage may now import exactly
+   * THREE self-contained message-state primitives and nothing else.
+   *
+   * Those three are authorised because each carries its own paired surface AND
+   * foreground (`rb-state`, `rb-skeleton`), so none of them lands a dark-aware
+   * foreground on a legacy hard-coded light surface. A primitive that styles
+   * only text, or only a surface, would not have that property.
+   *
+   * Adopting any FURTHER primitive requires its own regional tranche and a
+   * deliberate update to this allowlist. Do not widen it pre-emptively.
+   */
+  assert.ok(
     importsOf(HOMEPAGE_SRC).some((s) => s.includes('UiPrimitives')),
-    false,
-    'no primitive adoption in this slice'
+    'slice 3D.2 adopts the message-state primitives'
   );
+
+  const primitiveImport = /import \{([^}]+)\} from '@\/components\/UiPrimitives';/.exec(
+    HOMEPAGE_SRC
+  );
+  assert.ok(primitiveImport, 'primitives arrive via one named import statement');
+  const adopted = primitiveImport[1]
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .sort();
+  assert.deepEqual(
+    adopted,
+    ['EmptyState', 'ErrorState', 'LoadingSkeleton'],
+    'only the three message-state primitives are authorised on the homepage'
+  );
+
+  // One import statement, so the allowlist above cannot be bypassed by a second.
+  assert.equal(
+    (HOMEPAGE_SRC.match(/from '@\/components\/UiPrimitives'/g) ?? []).length,
+    1,
+    'exactly one UiPrimitives import statement'
+  );
+
+  // Still no direct stylesheet import: tokens arrive via the shell, not the page.
   assert.equal(/from '@\/styles\/tokens\.css'/.test(HOMEPAGE_SRC), false);
+
+  // The 3D.1 compatibility surface is untouched by this tranche.
+  assert.match(HOMEPAGE_SRC, /const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';/);
+});
+
+test('29a. the homepage loading state renders the shared skeleton (slice 3D.2)', () => {
+  /*
+   * The pre-fetch static render IS the loading state — effects do not run under
+   * `renderToStaticMarkup`, and `status` initialises to 'loading'. So this
+   * exercises real rendered markup rather than source text.
+   */
+  const html = ADOPTED.find((p) => p.route === '/')!.html;
+
+  // One status region on the page, and it is the skeleton's.
+  assert.equal(count(html, 'role="status"'), 1, 'exactly one status region while loading');
+
+  /*
+   * Everything below is asserted against the SKELETON'S OWN markup, not the
+   * whole document. Removing the visible "Loading recommendations…" paragraph
+   * left the accessible label as the only thing naming this state, so a
+   * page-wide match would let unrelated text elsewhere satisfy that contract
+   * while the label itself had been dropped.
+   *
+   * The bound is exact: LoadingSkeleton renders only `<span>` children, so the
+   * first `</div>` after its opening tag is its own closing tag.
+   */
+  const skeleton = sliceBetween(html, '<div class="rb-skeleton"', '</div>');
+  assert.equal(
+    skeleton.includes('<div class="rb-skeleton"'),
+    true,
+    'the slice starts at the skeleton itself'
+  );
+
+  assert.match(
+    skeleton,
+    /Loading recommendations/,
+    "LoadingSkeleton's own accessible label names this state"
+  );
+  assert.match(
+    skeleton,
+    /<span class="rb-visually-hidden">Loading recommendations<\/span>/,
+    'the label is screen-reader-only text inside the skeleton'
+  );
+
+  assert.equal(
+    count(skeleton, 'class="rb-skeleton__bar"'),
+    4,
+    'lines={4} renders four bars inside the skeleton'
+  );
+
+  // Every decorative bar in the skeleton is hidden from assistive technology.
+  const bars = [...skeleton.matchAll(/<span class="rb-skeleton__bar"([^>]*)>/g)];
+  assert.equal(bars.length, 4);
+  for (const bar of bars) {
+    assert.match(bar[1], /aria-hidden="true"/, 'skeleton bars are decorative');
+  }
+
+  // The skeleton is not a heading-bearing state, and raises no alert.
+  assert.equal(/rb-state__heading/.test(html), false, 'no message-state heading while loading');
+  assert.equal(/role="alert"/.test(html), false, 'loading never raises an alert');
+
+  // The document still has exactly one h1.
+  assert.equal((html.match(/<h1\b/g) ?? []).length, 1);
+});
+
+test('29a-2. the homepage pins the exact message-state call shapes (slice 3D.2)', () => {
+  /*
+   * Empty and error are post-hydration states, so they cannot be reached by a
+   * static render without a DOM library. Their SEMANTICS are proven by
+   * rendering the primitives directly (29a-3); their homepage call shapes are
+   * pinned here as source contracts.
+   */
+  const code = codeOf(HOMEPAGE_SRC);
+
+  assert.match(code, /<LoadingSkeleton lines=\{4\} label="Loading recommendations" \/>/);
+
+  /*
+   * The ErrorState props are asserted inside its OWN bounded JSX block. A
+   * global `level={2}` count would not notice this call changing to level={3}
+   * while some unrelated element gained a level={2}, and the heading level is
+   * a stated deliverable of this tranche — it is what keeps the outline free of
+   * an h1 -> h3 skip.
+   */
+  const errorBlock = sliceBetween(code, '<ErrorState', '</ErrorState>');
+  assert.match(errorBlock, /title="Recommendations unavailable"/);
+  assert.match(errorBlock, /detail=\{error \? `Reported: \$\{error\}` : undefined\}/);
+  assert.match(errorBlock, /level=\{2\}/, 'ErrorState renders an h2, not the primitive default');
+  assert.match(
+    errorBlock,
+    /Couldn&apos;t load recommendations right now\. Please refresh to try again\./
+  );
+
+  // EmptyState's level is pinned directly on its own opening tag.
+  assert.match(code, /<EmptyState title="No races yet" level=\{2\}>/);
+  assert.match(code, /No races available for this day yet\./);
+
+  /*
+   * Secondary tripwire only — the two bindings above are the actual proof. This
+   * additionally catches a THIRD heading-bearing state appearing without its own
+   * assertion.
+   */
+  assert.equal(
+    (code.match(/level=\{2\}/g) ?? []).length,
+    2,
+    'exactly the two heading-bearing message states set level={2}'
+  );
+
+  // The superseded markup is gone from both the render and the source.
+  assert.equal(/styles\.pageMuted/.test(code), false, 'the dead page-muted style is removed');
+  assert.equal(/#59626f/.test(HOMEPAGE_SRC), false, 'its literal is gone too');
+  assert.equal(/<p style=\{styles\.pageMuted\}>/.test(code), false);
+  assert.equal(
+    /<p style=\{\{ color: EV_NEGATIVE_COLOR \}\}>/.test(code),
+    false,
+    'the inline error paragraph is replaced by ErrorState'
+  );
+
+  // The state conditions themselves are untouched by this tranche.
+  assert.match(code, /\{status === 'loading' && \(/);
+  assert.match(code, /\{status === 'error' && \(/);
+  assert.match(code, /\{status === 'ready' && cards\.length === 0 && \(/);
+});
+
+test('29a-3. the message-state primitives carry the semantics the homepage relies on', () => {
+  /*
+   * Rendered directly, with no DOM library, router mock or network: this is what
+   * the homepage's error and empty states actually produce once hydrated.
+   */
+  const errorHtml = renderToStaticMarkup(
+    h(ErrorState, {
+      title: 'Recommendations unavailable',
+      detail: 'Reported: example',
+      level: 2,
+      children: "Couldn't load recommendations right now. Please refresh to try again.",
+    })
+  );
+
+  assert.match(errorHtml, /^<section /, 'the error state is a section');
+  assert.match(errorHtml, /class="rb-state rb-state--error"/);
+  assert.match(errorHtml, /role="alert"/, 'ErrorState announces itself');
+  assert.match(errorHtml, /<h2 class="rb-state__heading">/, 'level={2} yields an h2');
+  assert.match(errorHtml, /Recommendations unavailable/);
+  assert.match(
+    errorHtml,
+    /Couldn&#x27;t load recommendations right now\. Please refresh to try again\./
+  );
+  assert.match(errorHtml, /<p class="rb-state__detail">Reported: example<\/p>/);
+  // role="alert" already implies an assertive live region; a second one would
+  // risk a double announcement.
+  assert.equal(/aria-live/.test(errorHtml), false, 'no redundant explicit live region');
+
+  const emptyHtml = renderToStaticMarkup(
+    h(EmptyState, {
+      title: 'No races yet',
+      level: 2,
+      children: 'No races available for this day yet.',
+    })
+  );
+
+  assert.match(emptyHtml, /^<section /, 'the empty state is a section');
+  assert.match(emptyHtml, /class="rb-state rb-state--empty"/);
+  assert.equal(/role="alert"/.test(emptyHtml), false, 'an empty result is not an error');
+  assert.equal(/role="status"/.test(emptyHtml), false, 'nor a status region');
+  assert.match(emptyHtml, /<h2 class="rb-state__heading">/);
+  assert.match(emptyHtml, /No races yet/);
+  assert.match(emptyHtml, /No races available for this day yet\./);
+  // No accessible name, so the section never becomes a landmark.
+  assert.equal(/aria-label/.test(emptyHtml), false, 'no named region is introduced');
 });
 
 test('29b. every adopted route now renders through the shell', () => {
