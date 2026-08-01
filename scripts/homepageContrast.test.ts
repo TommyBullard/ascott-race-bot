@@ -118,6 +118,20 @@ function styleBlock(key: string): string {
   return PAGE_CODE.slice(at, end);
 }
 
+/**
+ * One CSS rule body from `tokens.css`, bounded to itself.
+ *
+ * Rules in this stylesheet are written one selector per block with the closing
+ * brace at column 0, so the first `\n}` after the opening is the rule's own.
+ */
+function cssRule(selector: string): string {
+  const start = TOKENS_CSS.indexOf(`${selector} {`);
+  assert.notEqual(start, -1, `${selector} must be defined in tokens.css`);
+  const end = TOKENS_CSS.indexOf('\n}', start);
+  assert.ok(end > start, `${selector} must be a bounded rule`);
+  return TOKENS_CSS.slice(start, end + 2);
+}
+
 /** The containment surface, as the page actually declares it. */
 const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';
 
@@ -227,12 +241,21 @@ test('5b. the five explicit foregrounds reproduce the styles.page anchor (slice 
     );
   }
 
-  for (const name of ['liveBarStyle', 'nextActionStyle'] as const) {
-    assert.ok(
-      functionBody(name).includes(LEGACY_PRIMARY_FOREGROUND),
-      `${name} must declare the same foreground as styles.page`
-    );
-  }
+  /*
+   * `nextActionStyle` was on this list until slice 3D phase 1 migrated the
+   * NextActionWidget frame to the paired `rb-status-frame` classes. It no
+   * longer exists, so there is no legacy foreground left to reconcile — the
+   * class supplies both surface and foreground. See test 17.
+   */
+  assert.ok(
+    functionBody('liveBarStyle').includes(LEGACY_PRIMARY_FOREGROUND),
+    'liveBarStyle must declare the same foreground as styles.page'
+  );
+  assert.equal(
+    /function nextActionStyle\(/.test(PAGE_CODE),
+    false,
+    'nextActionStyle was superseded by the rb-status-frame classes'
+  );
 });
 
 test('6. styles.page still declares maxWidth: 820', () => {
@@ -465,7 +488,7 @@ test('15. the containment is demonstrably necessary (pre-fix failure)', () => {
  * `nextActionCmd`) and the imported panel components.
  */
 
-test('16a. the five summary/status surfaces are explicitly self-contained (slice 3D.4a)', () => {
+test('16a. the remaining legacy summary/status surfaces are explicitly self-contained', () => {
   for (const [key, background] of [
     ['panel', "'#fff'"],
     ['accuracyBar', "'#f6f8fa'"],
@@ -514,29 +537,18 @@ test('16a. the five summary/status surfaces are explicitly self-contained (slice
     'liveBarStyle must declare the explicit legacy foreground'
   );
 
-  const nextAction = functionBody('nextActionStyle');
-  for (const [tone, bg, border] of [
-    ['pos', "'#eafff1'", "'#aceebb'"],
-    ['warn', "'#fff8c5'", "'#eac54f'"],
-    ['neutral', "'#f6f8fa'", "'#d0d7de'"],
-  ] as const) {
-    assert.ok(
-      nextAction.includes(`${tone}: { bg: ${bg}, border: ${border} }`),
-      `nextActionStyle must retain its legacy ${tone} palette`
+  /*
+   * `nextActionStyle` left this set in slice 3D phase 1 — its region migrated
+   * to the paired `rb-status-frame` classes, so it is no longer a legacy
+   * self-contained surface. Test 17 owns that migration; test 16a now covers
+   * FOUR legacy surfaces, not five.
+   */
+  for (const forbidden of ['var(--rb-text-', 'var(--rb-status-', 'var(--rb-accent-']) {
+    assert.equal(
+      liveBar.includes(forbidden),
+      false,
+      `liveBarStyle must not use ${forbidden}`
     );
-  }
-  assert.ok(
-    nextAction.includes(LEGACY_PRIMARY_FOREGROUND),
-    'nextActionStyle must declare the explicit legacy foreground'
-  );
-
-  for (const [name, body] of [
-    ['liveBarStyle', liveBar],
-    ['nextActionStyle', nextAction],
-  ] as const) {
-    for (const forbidden of ['var(--rb-text-', 'var(--rb-status-', 'var(--rb-accent-']) {
-      assert.equal(body.includes(forbidden), false, `${name} must not use ${forbidden}`);
-    }
   }
 
   /*
@@ -575,6 +587,61 @@ test('16b. two legacy surfaces still inherit the page foreground (deferred)', ()
       `styles.${key} still inherits — its tranche has not run yet`
     );
   }
+});
+
+test('17. the NextActionWidget frame is a paired token surface (slice 3D phase 1)', () => {
+  /*
+   * The frame migrated from a tinted inline palette to the `rb-status-frame`
+   * classes. The class is a PAIRED surface — it declares `background` AND
+   * `color` — so nothing inside inherits a foreground that might not match it.
+   * That pairing is why no `var(--rb-*)` literal enters page.tsx and test 7 is
+   * unaffected: the tokens live in the stylesheet, as with the message states.
+   */
+  const frame = cssRule('.rb-status-frame');
+  assert.match(frame, /background: var\(--rb-surface-elevated\)/, 'token surface');
+  assert.match(frame, /color: var\(--rb-text-primary\)/, 'paired token foreground');
+
+  // Tone is a semantic left border, never a tinted fill, and never colour alone.
+  assert.match(
+    cssRule('.rb-status-frame--positive'),
+    /border-left-color: var\(--rb-status-positive\)/
+  );
+  assert.match(
+    cssRule('.rb-status-frame--warning'),
+    /border-left-color: var\(--rb-status-warning\)/
+  );
+
+  // All three tone CLASSIFICATIONS survive the repaint; neutral is the base.
+  const mapper = functionBody('nextActionFrameClass');
+  for (const tone of ['pos', 'warn', 'neutral'] as const) {
+    assert.ok(mapper.includes(`${tone}:`), `the ${tone} tone is still classified`);
+  }
+  assert.match(mapper, /pos: ' rb-status-frame--positive'/);
+  assert.match(mapper, /warn: ' rb-status-frame--warning'/);
+  assert.match(mapper, /neutral: ''/, 'neutral keeps the base frame');
+
+  // The widget uses the paired classes for frame, label, headline and detail.
+  for (const cls of [
+    'rb-status-frame__label',
+    'rb-status-frame__headline',
+    'rb-status-frame__detail',
+  ]) {
+    assert.ok(PAGE_CODE.includes(cls), `NextActionWidget uses ${cls}`);
+    assert.match(TOKENS_CSS, new RegExp(`\\.${cls} \\{`), `${cls} is defined`);
+  }
+
+  /*
+   * THE COMMAND BLOCK IS UNTOUCHED. It keeps its own self-contained dark
+   * pairing and stays an inert <code> element — no button, handler or copy
+   * control. `operatorNextAction.test.ts` pins the same element independently.
+   */
+  const cmd = styleBlock('nextActionCmd');
+  assert.ok(cmd.includes("background: '#0d1117'"), 'command block keeps its dark surface');
+  assert.ok(cmd.includes("color: '#e6edf3'"), 'and its paired light foreground');
+  assert.ok(cmd.includes("overflowX: 'auto'"), 'wide commands scroll, never truncate');
+  assert.ok(cmd.includes("wordBreak: 'break-all'"), 'and wrap rather than overflow the page');
+  assert.match(PAGE_CODE, /<code style=\{styles\.nextActionCmd\}>/, 'still an inert code element');
+  assert.equal(/onClick|navigator\.clipboard|<button/.test(PAGE_CODE), false, 'no write control');
 });
 
 test('16c. the legacy primary foreground clears AA on every 3D.4a surface', () => {
