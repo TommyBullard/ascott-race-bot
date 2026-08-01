@@ -736,6 +736,8 @@ const styles = {
     background: '#f6f8fa',
     fontSize: 14,
     fontVariantNumeric: 'tabular-nums' as const,
+    // SLICE 3D.4a: explicit legacy foreground (previously inherited).
+    color: '#1f2328',
   } as CSSProperties,
   accuracyMetric: {
     fontWeight: 700,
@@ -764,6 +766,8 @@ const styles = {
     background: '#f6f8fa',
     fontSize: 14,
     fontVariantNumeric: 'tabular-nums' as const,
+    // SLICE 3D.4a: explicit legacy foreground (previously inherited).
+    color: '#1f2328',
   } as CSSProperties,
   perfHeading: {
     display: 'flex',
@@ -797,6 +801,9 @@ const styles = {
     padding: 16,
     marginBottom: 16,
     background: '#fff',
+    // SLICE 3D.4a: explicit legacy foreground (previously inherited). Shared by
+    // TipsterStatusPanel and InFormPanel — one definition, two regions.
+    color: '#1f2328',
   } as CSSProperties,
   panelTitle: {
     fontSize: 13,
@@ -1960,6 +1967,9 @@ function liveBarStyle(scoped: boolean): CSSProperties {
     margin: '12px 0',
     background: scoped ? '#eafff1' : '#f6f8fa',
     border: `1px solid ${scoped ? '#aceebb' : '#d0d7de'}`,
+    // SLICE 3D.4a: the legacy foreground this surface already inherited, now
+    // declared explicitly. Same computed colour — see LEGACY_LIGHT_PAGE_SURFACE.
+    color: '#1f2328',
   };
 }
 
@@ -2137,6 +2147,9 @@ function nextActionStyle(tone: NextActionTone): CSSProperties {
     borderRadius: 10,
     padding: '10px 14px',
     margin: '12px 0',
+    // SLICE 3D.4a: explicit legacy foreground (previously inherited). Applies to
+    // all three tones; the code block below keeps its own bespoke pairing.
+    color: '#1f2328',
   };
 }
 
