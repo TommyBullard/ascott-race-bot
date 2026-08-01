@@ -102,8 +102,31 @@ function darkToken(name: string): string {
   return match[1].toLowerCase();
 }
 
+/**
+ * A single entry of the module-level `styles` object, bounded to itself.
+ *
+ * Searching for `<key>: {` and closing on the first `} as CSSProperties,` after
+ * it keeps each entry separate. The keys are distinguishable by case: `panel:`
+ * never matches `perfPanel:` or `explanationPanel:`, and `card:` never matches
+ * `cardList:`.
+ */
+function styleBlock(key: string): string {
+  const at = PAGE_CODE.indexOf(`${key}: {`);
+  assert.notEqual(at, -1, `styles.${key} must exist`);
+  const end = PAGE_CODE.indexOf('} as CSSProperties,', at);
+  assert.ok(end > at, `styles.${key} must be a bounded block`);
+  return PAGE_CODE.slice(at, end);
+}
+
 /** The containment surface, as the page actually declares it. */
 const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';
+
+/**
+ * The legacy primary foreground. `styles.page` is the ORIGINAL anchor: every
+ * light child surface inherited this value from it until slice 3D.4a made that
+ * inheritance explicit on five of them.
+ */
+const LEGACY_PRIMARY_FOREGROUND = "color: '#1f2328'";
 
 /* ========================================================================== *
  * 1-3. the containment surface and its relationship to the token
@@ -148,13 +171,68 @@ test('4. styles.page uses the named containment surface as its background', () =
   );
 });
 
-test('5. styles.page still declares its legacy dark foreground', () => {
+test('5. the styles.page block itself still declares the legacy dark foreground', () => {
   /*
-   * `#1f2328` is what every hard-coded light child surface inherits. Migrating
-   * it to a dark-aware token WITHOUT migrating those surfaces is precisely the
-   * unsafe half-migration this tranche exists to avoid.
+   * BOUNDED ON PURPOSE. This assertion used to match `color: '#1f2328'` across
+   * the whole page source. That was unambiguous while the literal appeared
+   * twice, but slice 3D.4a added it to five summary/status surfaces — seven
+   * occurrences in total — so a page-wide match would now be satisfied by any
+   * of them even if `styles.page` had lost its own foreground entirely.
+   *
+   * `styles.page` is the anchor the other five reproduce, so it is checked
+   * inside its own block, together with the two other properties that define
+   * the compatibility frame.
+   *
+   * `#1f2328` is what every remaining hard-coded light child surface still
+   * inherits. Migrating it to a dark-aware token WITHOUT migrating those
+   * surfaces is precisely the unsafe half-migration the containment prevents.
    */
-  assert.match(PAGE_CODE, /color: '#1f2328',/, 'styles.page keeps its legacy foreground');
+  const page = styleBlock('page');
+  assert.ok(
+    page.includes(LEGACY_PRIMARY_FOREGROUND),
+    'styles.page keeps its legacy foreground'
+  );
+  assert.ok(
+    page.includes('background: LEGACY_LIGHT_PAGE_SURFACE'),
+    'styles.page keeps the named containment surface'
+  );
+  assert.ok(page.includes('maxWidth: 820'), 'styles.page keeps its container width');
+});
+
+test('5b. the five explicit foregrounds reproduce the styles.page anchor (slice 3D.4a)', () => {
+  /*
+   * SOURCE-LEVEL EQUIVALENCE, NOT A COMPUTED-STYLE COMPARISON.
+   *
+   * Before slice 3D.4a these five surfaces declared no `color` and inherited
+   * their primary foreground from `styles.page`. 3D.4a makes that inheritance
+   * explicit. Asserting each bounded block against the SAME constant that
+   * `styles.page` uses is what proves the explicit declarations reproduce the
+   * previously inherited value rather than merely happening to look similar —
+   * repeating the literal independently in six places would prove nothing.
+   *
+   * A later paired visual migration must update each region deliberately. It
+   * must not change this shared legacy anchor as a side effect: doing so would
+   * silently desynchronise the five regions from the frame they were derived
+   * from, and this test is what makes that fail.
+   *
+   * This is a source contract. It does not compare browser-computed styles.
+   */
+  const page = styleBlock('page');
+  assert.ok(page.includes(LEGACY_PRIMARY_FOREGROUND), 'the anchor must hold first');
+
+  for (const key of ['accuracyBar', 'perfPanel', 'panel'] as const) {
+    assert.ok(
+      styleBlock(key).includes(LEGACY_PRIMARY_FOREGROUND),
+      `styles.${key} must declare the same foreground as styles.page`
+    );
+  }
+
+  for (const name of ['liveBarStyle', 'nextActionStyle'] as const) {
+    assert.ok(
+      functionBody(name).includes(LEGACY_PRIMARY_FOREGROUND),
+      `${name} must declare the same foreground as styles.page`
+    );
+  }
 });
 
 test('6. styles.page still declares maxWidth: 820', () => {
@@ -359,80 +437,107 @@ test('15. the containment is demonstrably necessary (pre-fix failure)', () => {
  * 16. no unsafe half-migration of the child surfaces
  * ========================================================================== */
 
-test('16. the seven legacy light/tinted surfaces inheriting the page foreground remain unchanged', () => {
-  /*
-   * SCOPE OF THIS ASSERTION. It owns exactly the surfaces that BOTH declare
-   * their own light or tinted background AND declare no `color`, so their
-   * descendants inherit `styles.page`'s `#1f2328`. There are seven: five
-   * entries in the `styles` object, plus the two function-generated surfaces
-   * checked below.
-   *
-   * That pairing is what makes them the safety-critical set. If a later edit
-   * flips any of them to a dark-aware token surface while the inherited
-   * foreground stays `#1f2328`, the result is dark-on-dark — the inverse of the
-   * defect this tranche fixes. Pinning them proves the migration stayed paired:
-   * this tranche changed the wrapper only.
-   *
-   * Deliberately NOT in scope: surfaces that declare their own foreground
-   * (`safetyBannerStyle`, `favBadge`, `freshStale`, `tipsterStatusCount`, the
-   * Beta badge, `raceDayPrimaryButtonStyle`, `nextActionCmd`) and the imported
-   * panel components. Those cannot be broken by a change to the inherited
-   * foreground, so they belong to the tranches that migrate them.
-   */
+/*
+ * SLICE 3D.4a SPLIT THE FORMER SEVEN-SURFACE SET.
+ *
+ * Until 3D.4a, seven surfaces declared a light or tinted background and NO
+ * `color`, so their descendants inherited `styles.page`'s `#1f2328`. That
+ * inheritance is what made them the safety-critical set: flipping any of them
+ * to a dark-aware token surface while the foreground stayed `#1f2328` produces
+ * dark-on-dark, the inverse of the defect the containment surface fixes.
+ *
+ * 3D.4a made the FIVE summary/status surfaces explicitly self-contained by
+ * declaring the very foreground they already inherited. It is a
+ * zero-computed-colour-change enabling tranche:
+ *
+ *   - it makes inheritance EXPLICIT, nothing more;
+ *   - every computed colour, background, border and geometry is preserved;
+ *   - it does NOT migrate these surfaces to tokens;
+ *   - it prepares each region for a later PAIRED foreground/surface migration,
+ *     which can now change a surface without stranding an inherited colour.
+ *
+ * Two surfaces remain inheriting and are deliberately deferred to the tranches
+ * that own them: `styles.card` (race cards) and `styles.nextRace` (Next Race).
+ *
+ * Still out of scope entirely: surfaces that already declared their own
+ * foreground (`safetyBannerStyle`, `favBadge`, `freshStale`,
+ * `tipsterStatusCount`, the Beta badge, `raceDayPrimaryButtonStyle`,
+ * `nextActionCmd`) and the imported panel components.
+ */
+
+test('16a. the five summary/status surfaces are explicitly self-contained (slice 3D.4a)', () => {
   for (const [key, background] of [
-    ['card', "'#fff'"],
     ['panel', "'#fff'"],
-    ['nextRace', "'#fff'"],
     ['accuracyBar', "'#f6f8fa'"],
     ['perfPanel', "'#f6f8fa'"],
   ] as const) {
-    const at = PAGE_CODE.indexOf(`${key}: {`);
-    assert.notEqual(at, -1, `styles.${key} must exist`);
-    const block = PAGE_CODE.slice(at, PAGE_CODE.indexOf('} as CSSProperties,', at));
+    const block = styleBlock(key);
+
+    // Background and border survive verbatim — this tranche changed no colour.
     assert.ok(
       block.includes(`background: ${background}`),
       `styles.${key} must still declare its legacy background ${background}`
     );
-    assert.equal(
-      /\bcolor:/.test(block),
-      false,
-      `styles.${key} must not declare a foreground in this tranche — it inherits`
+    assert.ok(
+      block.includes("border: '1px solid #d0d7de'"),
+      `styles.${key} must still declare its legacy border`
     );
+
+    // ...and it now owns the foreground it previously inherited.
+    assert.ok(
+      block.includes(LEGACY_PRIMARY_FOREGROUND),
+      `styles.${key} must declare the explicit legacy foreground`
+    );
+
+    // No token foreground was smuggled in alongside it.
+    for (const forbidden of ['var(--rb-text-', 'var(--rb-status-', 'var(--rb-accent-']) {
+      assert.equal(block.includes(forbidden), false, `styles.${key} must not use ${forbidden}`);
+    }
   }
 
   /*
-   * Surfaces 6 and 7 are produced by functions, so each is checked against its
-   * own bounded body. Both branches / all three tones are pinned: a partial
-   * migration that converted only one branch would still leave an inherited
-   * `#1f2328` on a token surface in the other.
+   * The two function-generated surfaces, each bounded to its own body. Every
+   * branch and tone is pinned: a partial change that converted only one would
+   * still strand an inherited `#1f2328` on the others.
    */
   const liveBar = functionBody('liveBarStyle');
   assert.ok(
     liveBar.includes("background: scoped ? '#eafff1' : '#f6f8fa'"),
     'liveBarStyle must retain both legacy background branches'
   );
-  assert.equal(
-    /\bcolor:/.test(liveBar),
-    false,
-    'liveBarStyle must not declare a foreground in this tranche — it inherits'
+  assert.ok(
+    liveBar.includes("border: `1px solid ${scoped ? '#aceebb' : '#d0d7de'}`"),
+    'liveBarStyle must retain both legacy border branches'
+  );
+  assert.ok(
+    liveBar.includes(LEGACY_PRIMARY_FOREGROUND),
+    'liveBarStyle must declare the explicit legacy foreground'
   );
 
   const nextAction = functionBody('nextActionStyle');
-  for (const [tone, bg] of [
-    ['pos', "'#eafff1'"],
-    ['warn', "'#fff8c5'"],
-    ['neutral', "'#f6f8fa'"],
+  for (const [tone, bg, border] of [
+    ['pos', "'#eafff1'", "'#aceebb'"],
+    ['warn', "'#fff8c5'", "'#eac54f'"],
+    ['neutral', "'#f6f8fa'", "'#d0d7de'"],
   ] as const) {
     assert.ok(
-      nextAction.includes(`${tone}: { bg: ${bg},`),
-      `nextActionStyle must retain its legacy ${tone} background ${bg}`
+      nextAction.includes(`${tone}: { bg: ${bg}, border: ${border} }`),
+      `nextActionStyle must retain its legacy ${tone} palette`
     );
   }
-  assert.equal(
-    /\bcolor:/.test(nextAction),
-    false,
-    'nextActionStyle must not declare a foreground in this tranche — it inherits'
+  assert.ok(
+    nextAction.includes(LEGACY_PRIMARY_FOREGROUND),
+    'nextActionStyle must declare the explicit legacy foreground'
   );
+
+  for (const [name, body] of [
+    ['liveBarStyle', liveBar],
+    ['nextActionStyle', nextAction],
+  ] as const) {
+    for (const forbidden of ['var(--rb-text-', 'var(--rb-status-', 'var(--rb-accent-']) {
+      assert.equal(body.includes(forbidden), false, `${name} must not use ${forbidden}`);
+    }
+  }
 
   /*
    * Guards the extractor itself: `liveDotStyle` sits immediately after
@@ -445,4 +550,54 @@ test('16. the seven legacy light/tinted surfaces inheriting the page foreground 
     false,
     'the liveBarStyle slice must not over-run into liveDotStyle'
   );
+});
+
+test('16b. two legacy surfaces still inherit the page foreground (deferred)', () => {
+  /*
+   * `styles.card` and `styles.nextRace` are INTENTIONALLY left inheriting.
+   * They belong to the race-card and Next Race tranches, which own their
+   * regions' text as well as their surfaces and can therefore migrate the pair
+   * together. Until then they must keep both properties: the legacy background,
+   * and no foreground of their own.
+   */
+  for (const [key, background] of [
+    ['card', "'#fff'"],
+    ['nextRace', "'#fff'"],
+  ] as const) {
+    const block = styleBlock(key);
+    assert.ok(
+      block.includes(`background: ${background}`),
+      `styles.${key} must still declare its legacy background ${background}`
+    );
+    assert.equal(
+      /\bcolor:/.test(block),
+      false,
+      `styles.${key} still inherits — its tranche has not run yet`
+    );
+  }
+});
+
+test('16c. the legacy primary foreground clears AA on every 3D.4a surface', () => {
+  /*
+   * SCOPE OF THIS ASSERTION. It calculates WCAG 2.1 contrast for the four
+   * distinct legacy surfaces the five migrated definitions use, and proves each
+   * foreground/background pairing clears the 4.5:1 normal-text threshold.
+   *
+   * It does NOT independently prove before/after computed-colour equality — it
+   * has no before/after comparison and inspects no browser-computed style.
+   * Source-level equality with `styles.page` is proven separately, by the
+   * bounded equivalence contract in test 5b.
+   */
+  for (const [background, what] of [
+    ['#eafff1', 'live mode (scoped) / next action positive'],
+    ['#fff8c5', 'next action warning'],
+    ['#f6f8fa', 'static view / accuracy bar / performance panel'],
+    ['#ffffff', 'tipster panels'],
+  ] as const) {
+    const ratio = contrast('#1f2328', background);
+    assert.ok(
+      ratio >= AA_NORMAL_TEXT,
+      `${what}: #1f2328 on ${background} is ${ratio.toFixed(2)}:1`
+    );
+  }
 });
