@@ -474,6 +474,53 @@ function profitClass(points: number): string {
 }
 
 /**
+ * EV -> token-backed class, for the MIGRATED NEXT-RACE SURFACE ONLY.
+ *
+ * SLICE 3D part 2a. A third semantic helper exists on purpose, one per surface
+ * regime: `evClassSummary` for the part 1 summary panels, this for the
+ * next-race panel, and the legacy `evColorStyle` for the race-card core that
+ * part 2b migrates. Each is used exclusively inside a region that owns a
+ * matching surface, so none can put a dark-aware token colour on a legacy light
+ * surface (~2.30:1) or a legacy colour on a token surface (~2.92:1).
+ *
+ * Branch conditions are identical to `evColorStyle`, except that its `{}`
+ * fall-through — which silently inherited — becomes an explicit neutral class.
+ * Part 2b folds the remaining race-card sites into a single helper.
+ */
+function evClassNextRace(ev: number | null): string {
+  if (ev !== null && ev > 0) {
+    return 'rb-ev--positive';
+  }
+  if (ev !== null && ev < 0) {
+    return 'rb-ev--negative';
+  }
+  return 'rb-ev--neutral';
+}
+
+/**
+ * Confidence band -> token-backed class, for the NEXT-RACE SURFACE ONLY.
+ *
+ * SLICE 3D part 2a. Mirrors the legacy `CONFIDENCE_COLORS` lookup exactly, and
+ * deliberately mirrors its SHAPE too: a `Record<ConfidenceLabel, string>` is
+ * exhaustive at compile time, so adding a member to `ConfidenceLabel` fails the
+ * build here until this map is extended on purpose. An if/else chain with a
+ * default would instead have routed a new band silently to the failure colour.
+ *
+ * `ladderToDisplay` and `displayConfidence` are both total over
+ * High | Medium | Low, so no `unknown` class is reachable on this surface. The
+ * legacy map stays for the race-card core.
+ */
+const NEXT_RACE_CONFIDENCE_CLASSES: Record<ConfidenceLabel, string> = {
+  High: 'rb-conf--high',
+  Medium: 'rb-conf--medium',
+  Low: 'rb-conf--low',
+};
+
+function confidenceClassNextRace(label: ConfidenceLabel): string {
+  return NEXT_RACE_CONFIDENCE_CLASSES[label];
+}
+
+/**
  * EV -> token-backed class, for the MIGRATED SUMMARY SURFACES ONLY.
  *
  * SLICE 3D part 1 deliberately introduces this ALONGSIDE `evColorStyle` rather
@@ -893,13 +940,17 @@ const styles = {
   } as CSSProperties,
   // Mobile / on-course polish: sticky next-race header, warning chips, and a
   // collapsible Alternatives summary. Presentational only.
+  /*
+   * SLICE 3D part 2a: surface, border, radius and foreground now come from the
+   * paired `rb-evidence-card` class. POSITIONING STAYS HERE deliberately —
+   * `position: 'sticky'`, `top` and `zIndex` are pinned by appShellAdoption
+   * test 29e against this literal, and the stickiness contract must not move
+   * into a stylesheet where that test cannot see it.
+   */
   nextRace: {
     position: 'sticky' as const,
     top: 0,
     zIndex: 20,
-    background: '#fff',
-    border: '1px solid #d0d7de',
-    borderRadius: 10,
     padding: '10px 14px',
     margin: '12px 0',
     boxShadow: '0 2px 6px rgba(0,0,0,0.10)',
@@ -910,21 +961,21 @@ const styles = {
     alignItems: 'center',
     gap: 8,
   } as CSSProperties,
+  /* SLICE 3D part 2a: colour supplied by `rb-evidence-muted` at the call site. */
   nextRaceLabel: {
     fontSize: 11,
     fontWeight: 700,
     letterSpacing: 0.5,
     textTransform: 'uppercase' as const,
-    color: '#656d76',
   } as CSSProperties,
   nextRaceTime: {
     fontSize: 18,
     fontWeight: 700,
     fontVariantNumeric: 'tabular-nums' as const,
   } as CSSProperties,
+  /* SLICE 3D part 2a: colour supplied by `rb-evidence-muted` at the call site. */
   nextRaceName: {
     fontSize: 13,
-    color: '#656d76',
     marginTop: 4,
     overflowWrap: 'anywhere' as const,
   } as CSSProperties,
@@ -1154,9 +1205,9 @@ function NextRacePanel({ card, nowMs }: { card: RaceCard | null; nowMs: number }
   const pick = card.modelPick;
   const ladder = pick ? cardConfidenceLadder(card, nowMs) : null;
   return (
-    <div style={styles.nextRace}>
+    <div className="rb-evidence-card" style={styles.nextRace}>
       <div style={styles.nextRaceTop}>
-        <span style={styles.nextRaceLabel}>Next race</span>
+        <span className="rb-evidence-muted" style={styles.nextRaceLabel}>Next race</span>
         <span style={styles.nextRaceTime}>{formatOffTime(card.off_time)}</span>
         <span style={countdownStyle(cd)}>{cd ? cd.text : 'no time'}</span>
         <span style={statusBadgeStyle(state.tone)}>{state.label}</span>
@@ -1165,7 +1216,7 @@ function NextRacePanel({ card, nowMs }: { card: RaceCard | null; nowMs: number }
         )}
       </div>
       {(card.course || card.race_name) && (
-        <div style={styles.nextRaceName}>
+        <div className="rb-evidence-muted" style={styles.nextRaceName}>
           {[card.course, card.race_name].filter(Boolean).join(' \u2014 ')}
         </div>
       )}
@@ -1193,28 +1244,32 @@ function NextRacePanel({ card, nowMs }: { card: RaceCard | null; nowMs: number }
           {isStakeSuppressed(pick) && <StakeSuppressedBadge />}
           <span style={styles.nextRacePickName}>{pick.horse_name}</span>
           <span>
-            <span style={styles.statLabel}>Odds</span>
+            {/*
+              `styles.statLabel` carries a legacy colour and is SHARED with the
+              still-legacy LockedDecisionPanel and RaceCardView. An inline
+              colour would beat the token class, so this surface uses the
+              label's structural margin only and takes its colour from the
+              class. The shared key itself is left untouched for part 2b.
+            */}
+            <span className="rb-evidence-muted" style={{ marginRight: 4 }}>Odds</span>
             {formatOdds(pick.odds)}
           </span>
-          <span style={evColorStyle(pick.ev)}>
-            <span style={styles.statLabel}>EV</span>
+          <span className={evClassNextRace(pick.ev)}>
+            <span className="rb-evidence-muted" style={{ marginRight: 4 }}>EV</span>
             {formatEv(pick.ev)}
           </span>
           <span
-            style={{
-              color:
-                CONFIDENCE_COLORS[
-                  ladder ? ladderToDisplay(ladder.label) : displayConfidence(pick.confidence_label)
-                ],
-              fontWeight: 600,
-            }}
+            className={confidenceClassNextRace(
+              ladder ? ladderToDisplay(ladder.label) : displayConfidence(pick.confidence_label)
+            )}
+            style={{ fontWeight: 600 }}
           >
             {ladder ? ladderToDisplay(ladder.label) : displayConfidence(pick.confidence_label)} conf
           </span>
         </div>
       ) : (
         <div style={styles.nextRacePick}>
-          <span style={styles.muted}>
+          <span className="rb-evidence-muted">
             {card.hasModelRun
               ? 'No qualifying bet for this race.'
               : 'No model pick yet.'}

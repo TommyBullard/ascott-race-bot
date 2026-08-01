@@ -1105,6 +1105,42 @@
   color: var(--rb-text-muted);
 }
 
+/* -- Evidence card --------------------------------------------------------- *
+ * PART 2a scope: the sticky next-race panel only. It is a top-level sibling
+ * with its own surface, NOT a descendant of the race cards, so it can own a
+ * complete token regime while the race-card core stays legacy until part 2b.
+ *
+ * Elevated rather than raised, so the panel still reads as lifted above the
+ * page the way its box-shadow always did. Positioning is deliberately NOT set
+ * here — `position`, `top` and `z-index` stay inline on `styles.nextRace` so
+ * the stickiness contract remains exactly where its tests already pin it.
+ */
+.rb-evidence-card {
+  background: var(--rb-surface-elevated);
+  border: 1px solid var(--rb-border);
+  border-radius: var(--rb-radius-card);
+  color: var(--rb-text-primary);
+}
+
+/* -- Confidence bands ------------------------------------------------------ *
+ * Three classes, because three are all that are reachable: both
+ * `ladderToDisplay` and `displayConfidence` return High | Medium | Low. No
+ * `unknown` branch exists on this surface, so no `rb-conf--unknown` ships.
+ * Part 2b's ConfidenceBreakdownPanel does have an unknown level and may add
+ * one alongside its own consumer.
+ */
+.rb-conf--high {
+  color: var(--rb-status-positive);
+}
+
+.rb-conf--medium {
+  color: var(--rb-status-warning);
+}
+
+.rb-conf--low {
+  color: var(--rb-status-failure);
+}
+
 /* -- Semantic evidence text ------------------------------------------------ *
  * EV, profit and ROI carry genuine analytical meaning, so the colour is kept
  * rather than replaced by a neutral foreground. `neutral` is the explicit
