@@ -917,25 +917,9 @@ const styles = {
     color: '#656d76',
     textTransform: 'uppercase' as const,
   } as CSSProperties,
-  nextActionLabel: {
-    fontSize: 11,
-    fontWeight: 700,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase' as const,
-    color: '#656d76',
-  } as CSSProperties,
-  nextActionHeadline: {
-    fontSize: 15,
-    fontWeight: 700,
-    marginTop: 2,
-    overflowWrap: 'anywhere' as const,
-  } as CSSProperties,
-  nextActionDetail: {
-    fontSize: 13,
-    color: '#424a53',
-    marginTop: 4,
-    overflowWrap: 'anywhere' as const,
-  } as CSSProperties,
+  // SLICE 3D (phase 1): `nextActionLabel`, `nextActionHeadline` and
+  // `nextActionDetail` were replaced by the paired `rb-status-frame__*` classes.
+  // The command row below stays bespoke — see NextActionWidget.
   nextActionCmdRow: {
     marginTop: 8,
   } as CSSProperties,
@@ -2133,24 +2117,25 @@ function readScopeFromUrl(): { date: string | null; course: string | null } {
   return { date: params.get('date'), course: params.get('course') };
 }
 
-/** Tone -> container style for the next-action widget. */
-function nextActionStyle(tone: NextActionTone): CSSProperties {
-  const palette: Record<NextActionTone, { bg: string; border: string }> = {
-    pos: { bg: '#eafff1', border: '#aceebb' },
-    warn: { bg: '#fff8c5', border: '#eac54f' },
-    neutral: { bg: '#f6f8fa', border: '#d0d7de' },
+/**
+ * Maps a next-action tone to the paired `rb-status-frame` classes.
+ *
+ * SLICE 3D (phase 1) supersedes the former `nextActionStyle` inline palette.
+ * The three tone CLASSIFICATIONS are unchanged — only how each is painted:
+ * a semantic left border on a neutral token surface, instead of a tinted fill
+ * that had no token equivalent. `neutral` deliberately adds no modifier, so it
+ * keeps the base border and reads as the quietest of the three.
+ *
+ * Tone never carries meaning alone: the caller always renders a visible
+ * headline and detail.
+ */
+function nextActionFrameClass(tone: NextActionTone): string {
+  const modifier: Record<NextActionTone, string> = {
+    pos: ' rb-status-frame--positive',
+    warn: ' rb-status-frame--warning',
+    neutral: '',
   };
-  const c = palette[tone];
-  return {
-    border: `1px solid ${c.border}`,
-    background: c.bg,
-    borderRadius: 10,
-    padding: '10px 14px',
-    margin: '12px 0',
-    // SLICE 3D.4a: explicit legacy foreground (previously inherited). Applies to
-    // all three tones; the code block below keeps its own bespoke pairing.
-    color: '#1f2328',
-  };
+  return `rb-status-frame${modifier[tone]}`;
 }
 
 /**
@@ -2161,10 +2146,23 @@ function nextActionStyle(tone: NextActionTone): CSSProperties {
  */
 function NextActionWidget({ action }: { action: NextAction }) {
   return (
-    <div style={nextActionStyle(action.tone)}>
-      <span style={styles.nextActionLabel}>Next action</span>
-      <div style={styles.nextActionHeadline}>{action.headline}</div>
-      <div style={styles.nextActionDetail}>{action.detail}</div>
+    /*
+      SLICE 3D (phase 1): the FRAME and its descriptive text migrate to the
+      paired `rb-status-frame` pattern — the class declares both a token surface
+      and a token foreground, so nothing here inherits a colour that might not
+      match it. Tone moves from a tinted fill to a semantic left border, which
+      is how the design system already tints a block; the three tone
+      classifications themselves are unchanged.
+
+      The command block below is DELIBERATELY untouched. It keeps its own
+      self-contained dark pairing, `styles.nextActionCmd`, `overflowX: auto` and
+      `wordBreak: break-all`, and remains an inert <code> element with no
+      button, handler or copy control.
+    */
+    <div className={nextActionFrameClass(action.tone)}>
+      <span className="rb-status-frame__label">Next action</span>
+      <div className="rb-status-frame__headline">{action.headline}</div>
+      <div className="rb-status-frame__detail">{action.detail}</div>
       {action.suggestedCommand && (
         <div style={styles.nextActionCmdRow}>
           <span style={styles.nextActionCmdLabel}>

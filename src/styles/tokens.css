@@ -1034,6 +1034,71 @@
   color: var(--rb-text-secondary);
 }
 
+/* -- Status frame ---------------------------------------------------------- *
+ * A bounded STATUS surface, distinct from `.rb-callout`.
+ *
+ * `.rb-callout` is for prose: it carries a reading measure, body type and — in
+ * its `--key` modifier — a heavier font weight. A status region is not prose.
+ * It is a compact block whose tone must be legible at a glance without being
+ * emphasised as an analytical takeaway, and it must be free to lay itself out
+ * (a wrapping row, a stacked label/headline) rather than inherit a measure.
+ *
+ * Tone is carried by the LEFT BORDER, not by a tinted fill. The design system
+ * has semantic foreground tokens but no semantic surface tints, and inventing
+ * tint tokens for a handful of regions would add a parallel palette. A 4px rule
+ * in a status colour is the system's existing way of tinting a block (see
+ * `.rb-callout--key`/`--note`) and it keeps the fill on a neutral token surface
+ * that is safe in both schemes.
+ *
+ * This class is a PAIRED surface: it declares both `background` and `color`, so
+ * nothing inside it inherits a foreground from an ancestor that may not match.
+ * Tone conveys nothing on its own — the caller always supplies visible text.
+ */
+.rb-status-frame {
+  margin: var(--rb-space-3) 0;
+  padding: var(--rb-space-3) var(--rb-space-4);
+  background: var(--rb-surface-elevated);
+  border: 1px solid var(--rb-border);
+  border-left: 4px solid var(--rb-border-strong);
+  border-radius: var(--rb-radius-card);
+  color: var(--rb-text-primary);
+}
+
+.rb-status-frame--positive {
+  border-left-color: var(--rb-status-positive);
+}
+
+.rb-status-frame--warning {
+  border-left-color: var(--rb-status-warning);
+}
+
+/* Label above a status headline: quiet, uppercase, and never the only signal. */
+.rb-status-frame__label {
+  display: block;
+  font-size: var(--rb-text-meta);
+  font-weight: 700;
+  letter-spacing: var(--rb-tracking-label);
+  text-transform: uppercase;
+  color: var(--rb-text-muted);
+}
+
+.rb-status-frame__headline {
+  margin: var(--rb-space-1) 0 0;
+  font-size: var(--rb-text-section);
+  font-weight: 700;
+  line-height: var(--rb-leading-tight);
+  overflow-wrap: anywhere;
+  color: var(--rb-text-primary);
+}
+
+.rb-status-frame__detail {
+  margin: var(--rb-space-1) 0 0;
+  font-size: var(--rb-text-label);
+  line-height: var(--rb-leading-body);
+  overflow-wrap: anywhere;
+  color: var(--rb-text-secondary);
+}
+
 /* -- Analytical table ------------------------------------------------------ *
  * The table keeps a floor width so columns stay readable; the `.rb-scroll-x`
  * wrapper is what makes the overflow reachable. Columns are never dropped —
