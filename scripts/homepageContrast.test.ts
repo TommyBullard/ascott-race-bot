@@ -347,22 +347,27 @@ test('9-11. the message states render via primitives, and pageMuted is gone (sli
   );
 });
 
-test('12. exactly twelve styles.muted uses remain after the two page-level states move', () => {
+test('12. exactly nine styles.muted uses remain after the summary and Next Race migrations', () => {
   /*
    * SCOPE OF THIS ASSERTION. It proves the COUNT and therefore non-migration:
    * `styles.muted` had fourteen uses; the two direct page-surface states moved
    * away (to `pageMuted` in slice 3D.1, then onto the message-state primitives
-   * in 3D.2), and twelve are still present. A blanket literal replacement would
-   * have emptied this count and broken all twelve in the dark scheme, so the
-   * number is the guard.
+   * in 3D.2), the two summary surfaces followed in evidence part 1 and the
+   * next-race panel in part 2a, and nine are still present. A blanket literal
+   * replacement would have emptied this count and broken all nine in the dark
+   * scheme, so the number is the guard.
    *
-   * It does NOT independently establish each one's containing surface. That
-   * those twelve sit inside `#fff` or `#f6f8fa` panels — where `#656d76`
-   * already clears 4.5:1 (5.25:1 on white, 4.93:1 on `#f6f8fa`) — was
-   * confirmed by inspection when the tranche was written, not by this test.
+   * The nine do NOT share one surface. Seven sit inside the deferred legacy
+   * race-card surfaces and two inside the legacy tipster surfaces; what they
+   * have in common is that all nine still pair the legacy `#656d76` foreground
+   * with a compatible legacy-light background — `#fff` or `#f6f8fa`, where
+   * `#656d76` clears 4.5:1 (5.25:1 on white, 4.93:1 on `#f6f8fa`). The migrated
+   * summary and next-race regions no longer use `styles.muted` at all; test 12b
+   * owns that ownership split, and this test does not independently establish
+   * any individual site's containing surface.
    */
   const remaining = [...PAGE_CODE.matchAll(/styles\.muted/g)];
-  assert.equal(remaining.length, 10, 'exactly the ten remaining legacy uses');
+  assert.equal(remaining.length, 9, 'exactly the nine remaining legacy uses');
 });
 
 test('12b. the styles.muted fork moved exactly the two summary-surface sites', () => {
@@ -375,20 +380,25 @@ test('12b. the styles.muted fork moved exactly the two summary-surface sites', (
    * ~2.96:1 — below the 4.5:1 floor. The two colours therefore cannot serve
    * both regimes, and a blanket replacement would break the tipster panels.
    *
-   * Evidence-migration part 1 moved exactly the TWO sites that now sit on
-   * `rb-evidence-panel` (AccuracyBar's and PerformancePanel's zero-state
-   * messages). The other ten stay legacy: eight in the race-card regions that
-   * part 2 migrates, and two in the tipster panels that wait for their own
-   * tranche.
+   * CURRENT OWNERSHIP RECORD. The count steps down as each regime migrates:
+   * twelve after slice 3D.2, ten after evidence part 1 (AccuracyBar's and
+   * PerformancePanel's zero-state messages, which now sit on
+   * `rb-evidence-panel`), and NINE after part 2a, which moved NextRacePanel's
+   * single use to `rb-evidence-muted`.
+   *
+   * Of those nine, SEVEN belong to the deferred race-card core and TWO to the
+   * tipster panels — `TipsterStatusPanel` and `InFormPanel`. Part 2b migrates
+   * the seven race-card-core uses; the two tipster uses stay legacy until their
+   * own tranche.
    */
   assert.equal(
     [...PAGE_CODE.matchAll(/styles\.muted/g)].length,
-    10,
-    'ten legacy uses remain'
+    9,
+    'nine legacy uses remain'
   );
 
-  // The migrated summary surfaces no longer reference the legacy muted style.
-  for (const region of ['AccuracyBar', 'PerformancePanel'] as const) {
+  // The migrated surfaces no longer reference the legacy muted style.
+  for (const region of ['AccuracyBar', 'PerformancePanel', 'NextRacePanel'] as const) {
     const body = functionBody(region);
     assert.equal(
       body.includes('styles.muted'),
@@ -611,18 +621,18 @@ test('16a. the remaining legacy summary/status surfaces are explicitly self-cont
   );
 });
 
-test('16b. two legacy surfaces still inherit the page foreground (deferred)', () => {
+test('16b. the race-card core still inherits the page foreground (deferred to part 2b)', () => {
   /*
-   * `styles.card` and `styles.nextRace` are INTENTIONALLY left inheriting.
-   * They belong to the race-card and Next Race tranches, which own their
-   * regions' text as well as their surfaces and can therefore migrate the pair
-   * together. Until then they must keep both properties: the legacy background,
-   * and no foreground of their own.
+   * `styles.card` is INTENTIONALLY left inheriting. It belongs to part 2b,
+   * which owns the race-card region's text as well as its surface and can
+   * therefore migrate the pair together. Until then it must keep both
+   * properties: the legacy background, and no foreground of its own.
+   *
+   * `styles.nextRace` LEFT this set in part 2a — the next-race panel is a
+   * top-level sibling with its own surface, not a race-card descendant, so it
+   * could migrate independently. Test 19 owns it.
    */
-  for (const [key, background] of [
-    ['card', "'#fff'"],
-    ['nextRace', "'#fff'"],
-  ] as const) {
+  for (const [key, background] of [['card', "'#fff'"]] as const) {
     const block = styleBlock(key);
     assert.ok(
       block.includes(`background: ${background}`),
@@ -713,23 +723,165 @@ test('18. the summary surfaces are paired token regions (evidence migration part
   assert.match(PAGE_CODE, /const EV_NEGATIVE_COLOR = '#cf222e';/);
 
   /*
-   * Classes that must NOT ship yet. The first three belong to part 2.
-   * `.rb-evidence-secondary` is here for a different reason: it was drafted for
-   * this tranche and removed because nothing consumes it. If part 2 genuinely
-   * needs a secondary-text role it should reintroduce the class together with
-   * its first consumer, and delete this entry — not inherit a dead rule.
+   * Classes that must NOT ship yet, each barred for its own reason.
+   *
+   * `.rb-evidence-nested` and `.rb-status-frame--official` belong to PART 2b —
+   * the race-card core and its official-decision framing. Shipping either in
+   * part 2a would put a dead rule in the stylesheet ahead of the region that
+   * gives it meaning.
+   *
+   * `.rb-evidence-secondary` is barred because NOTHING CONSUMES IT. It was
+   * drafted for part 1 and removed unused. If a later tranche genuinely needs a
+   * secondary-text role it should reintroduce the class together with its first
+   * consumer, and delete this entry — not inherit a dead rule.
+   *
+   * `.rb-conf--unknown` is barred because it is UNREACHABLE on this surface.
+   * NextRacePanel's confidence is the closed `High | Medium | Low` union, and
+   * both `ladderToDisplay` and `displayConfidence` are total over it, so no
+   * unknown branch exists for it to style. Part 2b's ConfidenceBreakdownPanel
+   * does have an unknown level and may add the class alongside that consumer.
    */
   for (const notYet of [
-    '.rb-evidence-card',
-    '.rb-conf--',
+    '.rb-evidence-nested',
     '.rb-status-frame--official',
     '.rb-evidence-secondary',
+    '.rb-conf--unknown',
   ]) {
     assert.equal(
       TOKENS_CSS.includes(notYet),
       false,
       `${notYet} must not ship without a production consumer`
     );
+  }
+});
+
+test('19. the next-race panel is a paired token region (evidence migration part 2a)', () => {
+  /*
+   * PART 2a SCOPE: NextRacePanel only. It is a top-level sibling with its own
+   * `styles.nextRace` surface — not a race-card descendant — so it can own a
+   * complete token regime while the race-card core stays legacy for part 2b.
+   *
+   * THREE semantic regimes now coexist, one per surface, and that is the whole
+   * safety property: `evClassSummary` on the part 1 summary panels,
+   * `evClassNextRace` here, and the legacy `evColorStyle` on the still-legacy
+   * race cards. No helper crosses a regime, so none can put a dark-aware token
+   * colour on a legacy light surface (~2.30:1) or a legacy colour on a token
+   * surface (~2.92:1).
+   */
+  const card = cssRule('.rb-evidence-card');
+  assert.match(card, /background: var\(--rb-surface-[a-z]+\)/, 'token surface');
+  assert.match(card, /color: var\(--rb-text-primary\)/, 'paired token foreground');
+
+  for (const [cls, token] of [
+    ['.rb-conf--high', '--rb-status-positive'],
+    ['.rb-conf--medium', '--rb-status-warning'],
+    ['.rb-conf--low', '--rb-status-failure'],
+  ] as const) {
+    assert.match(cssRule(cls), new RegExp(`color: var\\(${token}\\)`), `${cls} uses ${token}`);
+  }
+
+  const nextRace = functionBody('NextRacePanel');
+  assert.ok(nextRace.includes('className="rb-evidence-card"'), 'root is a paired token surface');
+  assert.ok(nextRace.includes('evClassNextRace('), 'EV uses the region-owned helper');
+  assert.ok(nextRace.includes('confidenceClassNextRace('), 'confidence uses the region-owned helper');
+  assert.equal(nextRace.includes('styles.muted'), false, 'no legacy muted on a token surface');
+  assert.ok(nextRace.includes('rb-evidence-muted'), 'muted text is token-backed');
+
+  /*
+   * The region-owned helpers are token-backed, and each is used ONLY here.
+   * Two occurrences apiece: the definition plus the single call site.
+   */
+  for (const helper of ['evClassNextRace', 'confidenceClassNextRace'] as const) {
+    assert.equal(
+      [...PAGE_CODE.matchAll(new RegExp(helper, 'g'))].length,
+      2,
+      `${helper} is defined once and used once, inside NextRacePanel`
+    );
+    assert.equal(
+      /#[0-9a-fA-F]{6}/.test(functionBody(helper)),
+      false,
+      `${helper} holds no legacy literal`
+    );
+  }
+
+  /*
+   * The confidence mapping is a `Record<ConfidenceLabel, string>` rather than an
+   * if/else chain, and that TYPE is the contract: it is exhaustive at compile
+   * time, so adding a member to `ConfidenceLabel` breaks the build until the map
+   * is extended deliberately. An if/else with a default would compile and route
+   * the new band silently to the failure colour, so a refactor back to that
+   * shape must fail here.
+   */
+  const confMap = /const NEXT_RACE_CONFIDENCE_CLASSES: Record<\s*ConfidenceLabel,\s*string\s*> = \{([^}]*)\}/.exec(
+    PAGE_CODE
+  );
+  assert.ok(
+    confMap,
+    'the next-race confidence map must be typed Record<ConfidenceLabel, string> so it stays exhaustive'
+  );
+  for (const [label, cls] of [
+    ['High', 'rb-conf--high'],
+    ['Medium', 'rb-conf--medium'],
+    ['Low', 'rb-conf--low'],
+  ] as const) {
+    assert.match(confMap[1], new RegExp(`${label}: '${cls}'`), `${label} maps to ${cls}`);
+  }
+
+  /*
+   * The legacy race-card regime survives UNCHANGED. Every remaining
+   * `evColorStyle` call site must sit outside NextRacePanel, and the legacy
+   * confidence map stays for the race-card core.
+   */
+  assert.match(PAGE_CODE, /function evColorStyle\(/, 'legacy EV helper still exists');
+  assert.equal(nextRace.includes('evColorStyle('), false, 'NextRacePanel no longer uses it');
+  assert.equal(nextRace.includes('CONFIDENCE_COLORS'), false, 'nor the legacy confidence map');
+  assert.match(PAGE_CODE, /const CONFIDENCE_COLORS/, 'race-card confidence map retained');
+  assert.match(PAGE_CODE, /function componentColor\(/, 'componentColor retained');
+
+  // Part 1 ownership is untouched by part 2a.
+  for (const part1 of ['profitClass', 'evClassSummary'] as const) {
+    assert.match(PAGE_CODE, new RegExp(`function ${part1}\\(`), `${part1} intact`);
+  }
+
+  // Every class part 2a defines has a production consumer.
+  for (const cls of ['rb-evidence-card', 'rb-conf--high', 'rb-conf--medium', 'rb-conf--low']) {
+    assert.ok(PAGE_CODE.includes(cls), `${cls} must be used by page.tsx, not shipped unused`);
+  }
+});
+
+test('19b. the next-race pairs clear AA on the surface production uses', () => {
+  /*
+   * The surface token is DERIVED from `.rb-evidence-card`'s actual CSS
+   * contract, so contrast is measured against what production renders and any
+   * future raised/elevated drift fails here. Token-level calculation; it does
+   * not compare browser-computed styles.
+   */
+  const rule = cssRule('.rb-evidence-card');
+  const bg = /background:\s*([^;]+);/.exec(rule);
+  assert.ok(bg, '.rb-evidence-card must declare a background');
+  const tok = /^var\((--rb-surface-[a-z-]+)\)$/.exec(bg[1].trim());
+  assert.ok(tok, `.rb-evidence-card background must be a var(--rb-surface-*) token, got: ${bg[1]}`);
+
+  const surface = { light: lightToken(tok[1]), dark: darkToken(tok[1]) };
+
+  for (const [name, t] of [
+    ['primary (race time, pick name)', '--rb-text-primary'],
+    ['muted (label, course, no-pick)', '--rb-text-muted'],
+    ['EV positive', '--rb-status-positive'],
+    ['EV negative', '--rb-status-failure'],
+    ['EV neutral', '--rb-text-secondary'],
+    ['confidence high', '--rb-status-positive'],
+    ['confidence medium', '--rb-status-warning'],
+    ['confidence low', '--rb-status-failure'],
+  ] as const) {
+    for (const scheme of ['light', 'dark'] as const) {
+      const fg = scheme === 'light' ? lightToken(t) : darkToken(t);
+      const ratio = contrast(fg, surface[scheme]);
+      assert.ok(
+        ratio >= AA_NORMAL_TEXT,
+        `${name} on ${tok[1]} (${scheme}) is ${ratio.toFixed(2)}:1`
+      );
+    }
   }
 });
 
