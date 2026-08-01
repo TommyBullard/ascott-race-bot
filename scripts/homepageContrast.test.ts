@@ -213,7 +213,7 @@ test('5. the styles.page block itself still declares the legacy dark foreground'
   assert.ok(page.includes('maxWidth: 820'), 'styles.page keeps its container width');
 });
 
-test('5b. the five explicit foregrounds reproduce the styles.page anchor (slice 3D.4a)', () => {
+test('5b. the remaining explicit foregrounds reproduce the styles.page anchor', () => {
   /*
    * SOURCE-LEVEL EQUIVALENCE, NOT A COMPUTED-STYLE COMPARISON.
    *
@@ -234,23 +234,31 @@ test('5b. the five explicit foregrounds reproduce the styles.page anchor (slice 
   const page = styleBlock('page');
   assert.ok(page.includes(LEGACY_PRIMARY_FOREGROUND), 'the anchor must hold first');
 
-  for (const key of ['accuracyBar', 'perfPanel', 'panel'] as const) {
-    assert.ok(
-      styleBlock(key).includes(LEGACY_PRIMARY_FOREGROUND),
-      `styles.${key} must declare the same foreground as styles.page`
-    );
-  }
-
   /*
-   * `nextActionStyle` was on this list until slice 3D phase 1 migrated the
-   * NextActionWidget frame to the paired `rb-status-frame` classes. It no
-   * longer exists, so there is no legacy foreground left to reconcile — the
-   * class supplies both surface and foreground. See test 17.
+   * The set SHRINKS as regions migrate — that is the shape of the programme.
+   * `nextActionStyle` left in slice 3D phase 1; `accuracyBar` and `perfPanel`
+   * left in evidence-migration part 1. Each now owns a paired token surface,
+   * so there is no legacy foreground left to reconcile for them. `styles.panel`
+   * (the tipster panels) is the only object-style entry still on the anchor.
    */
+  assert.ok(
+    styleBlock('panel').includes(LEGACY_PRIMARY_FOREGROUND),
+    'styles.panel must declare the same foreground as styles.page'
+  );
   assert.ok(
     functionBody('liveBarStyle').includes(LEGACY_PRIMARY_FOREGROUND),
     'liveBarStyle must declare the same foreground as styles.page'
   );
+
+  // The migrated regions must NOT reacquire a legacy foreground.
+  for (const key of ['accuracyBar', 'perfPanel'] as const) {
+    assert.equal(
+      styleBlock(key).includes(LEGACY_PRIMARY_FOREGROUND),
+      false,
+      `styles.${key} is paired via rb-evidence-panel and must not re-declare the legacy colour`
+    );
+  }
+
   assert.equal(
     /function nextActionStyle\(/.test(PAGE_CODE),
     false,
@@ -354,7 +362,44 @@ test('12. exactly twelve styles.muted uses remain after the two page-level state
    * confirmed by inspection when the tranche was written, not by this test.
    */
   const remaining = [...PAGE_CODE.matchAll(/styles\.muted/g)];
-  assert.equal(remaining.length, 12, 'exactly the twelve panel-contained uses remain');
+  assert.equal(remaining.length, 10, 'exactly the ten remaining legacy uses');
+});
+
+test('12b. the styles.muted fork moved exactly the two summary-surface sites', () => {
+  /*
+   * WHY THE FORK EXISTS.
+   *
+   * `styles.muted` (`#656d76`) is safe on the legacy `#fff` tipster panels but
+   * NOT on a migrated token surface. Conversely `--rb-text-muted` resolves to
+   * `#8d97a5` in dark, which on the retained legacy white tipster surface is
+   * ~2.96:1 — below the 4.5:1 floor. The two colours therefore cannot serve
+   * both regimes, and a blanket replacement would break the tipster panels.
+   *
+   * Evidence-migration part 1 moved exactly the TWO sites that now sit on
+   * `rb-evidence-panel` (AccuracyBar's and PerformancePanel's zero-state
+   * messages). The other ten stay legacy: eight in the race-card regions that
+   * part 2 migrates, and two in the tipster panels that wait for their own
+   * tranche.
+   */
+  assert.equal(
+    [...PAGE_CODE.matchAll(/styles\.muted/g)].length,
+    10,
+    'ten legacy uses remain'
+  );
+
+  // The migrated summary surfaces no longer reference the legacy muted style.
+  for (const region of ['AccuracyBar', 'PerformancePanel'] as const) {
+    const body = functionBody(region);
+    assert.equal(
+      body.includes('styles.muted'),
+      false,
+      `${region} must not use the legacy muted style on its token surface`
+    );
+    assert.ok(
+      body.includes('rb-evidence-muted'),
+      `${region} must use the token-backed muted class`
+    );
+  }
 });
 
 /* ========================================================================== *
@@ -489,11 +534,13 @@ test('15. the containment is demonstrably necessary (pre-fix failure)', () => {
  */
 
 test('16a. the remaining legacy summary/status surfaces are explicitly self-contained', () => {
-  for (const [key, background] of [
-    ['panel', "'#fff'"],
-    ['accuracyBar', "'#f6f8fa'"],
-    ['perfPanel', "'#f6f8fa'"],
-  ] as const) {
+  /*
+   * `accuracyBar` and `perfPanel` LEFT this set in evidence-migration part 1 —
+   * they now own paired token surfaces via `rb-evidence-panel`. Test 18 owns
+   * that migration. `styles.panel` (tipster) is the only object-style surface
+   * still legacy and self-contained.
+   */
+  for (const [key, background] of [['panel', "'#fff'"]] as const) {
     const block = styleBlock(key);
 
     // Background and border survive verbatim — this tranche changed no colour.
@@ -586,6 +633,149 @@ test('16b. two legacy surfaces still inherit the page foreground (deferred)', ()
       false,
       `styles.${key} still inherits — its tranche has not run yet`
     );
+  }
+});
+
+test('18. the summary surfaces are paired token regions (evidence migration part 1)', () => {
+  /*
+   * PART 1 SCOPE: AccuracyBar and PerformancePanel only. Both now sit on
+   * `rb-evidence-panel`, which declares a token surface AND a token foreground,
+   * so nothing inside inherits a colour that might not match it.
+   *
+   * The race-card regions are deliberately NOT migrated here and keep
+   * `evColorStyle`, `CONFIDENCE_COLORS` and `componentColor` on their legacy
+   * `#fff` surface. Two semantic helpers therefore coexist ON PURPOSE. That is
+   * not a partial pairing: each helper is used exclusively inside a region that
+   * owns a matching surface regime, so neither ever puts a dark-aware token
+   * colour on a legacy light surface (~2.30:1) nor a legacy colour on a token
+   * surface (~2.92:1). Part 2 retires the legacy pair.
+   */
+  const panel = cssRule('.rb-evidence-panel');
+  assert.match(panel, /background: var\(--rb-surface-[a-z]+\)/, 'token surface');
+  assert.match(panel, /color: var\(--rb-text-primary\)/, 'paired token foreground');
+
+  /*
+   * Only the classes part 1 actually renders. A `.rb-evidence-secondary` was
+   * drafted and removed: no production consumer existed, and asserting an
+   * unused class here would have implied a wiring that was not there.
+   */
+  for (const [cls, token] of [
+    ['.rb-evidence-muted', '--rb-text-muted'],
+    ['.rb-ev--positive', '--rb-status-positive'],
+    ['.rb-ev--negative', '--rb-status-failure'],
+    ['.rb-ev--neutral', '--rb-text-secondary'],
+  ] as const) {
+    assert.match(cssRule(cls), new RegExp(`color: var\\(${token}\\)`), `${cls} uses ${token}`);
+  }
+
+  // Every class this tranche defines must have a production consumer.
+  for (const cls of [
+    'rb-evidence-panel',
+    'rb-evidence-muted',
+    'rb-ev--positive',
+    'rb-ev--negative',
+    'rb-ev--neutral',
+  ]) {
+    assert.ok(PAGE_CODE.includes(cls), `${cls} must be used by page.tsx, not shipped unused`);
+  }
+
+  // Both regions carry the paired class on their root.
+  for (const region of ['AccuracyBar', 'PerformancePanel'] as const) {
+    assert.ok(
+      functionBody(region).includes('className="rb-evidence-panel"'),
+      `${region} root is a paired token surface`
+    );
+  }
+
+  /*
+   * The region-owned helpers are token-backed and contain no legacy literal.
+   * `profitColor` is gone — all four of its call sites were inside part 1.
+   */
+  for (const helper of ['profitClass', 'evClassSummary'] as const) {
+    const body = functionBody(helper);
+    assert.match(body, /rb-ev--positive/);
+    assert.match(body, /rb-ev--negative/);
+    assert.match(body, /rb-ev--neutral/, 'zero / unknown is neutral, never a status colour');
+    assert.equal(/#[0-9a-fA-F]{6}/.test(body), false, `${helper} holds no legacy literal`);
+  }
+  assert.equal(/function profitColor\(/.test(PAGE_CODE), false, 'profitColor is retired');
+
+  /*
+   * The legacy semantic helpers survive UNCHANGED for the race-card regions,
+   * and `roiColor` stays legacy for the out-of-scope InFormPanel.
+   */
+  for (const helper of ['evColorStyle', 'roiColor'] as const) {
+    assert.match(PAGE_CODE, new RegExp(`function ${helper}\\(`), `${helper} still exists`);
+  }
+  assert.match(PAGE_CODE, /const CONFIDENCE_COLORS/, 'race-card confidence map unchanged');
+  assert.match(PAGE_CODE, /function componentColor\(/, 'componentColor unchanged');
+  assert.match(PAGE_CODE, /const EV_POSITIVE_COLOR = '#1a7f37';/);
+  assert.match(PAGE_CODE, /const EV_NEGATIVE_COLOR = '#cf222e';/);
+
+  /*
+   * Classes that must NOT ship yet. The first three belong to part 2.
+   * `.rb-evidence-secondary` is here for a different reason: it was drafted for
+   * this tranche and removed because nothing consumes it. If part 2 genuinely
+   * needs a secondary-text role it should reintroduce the class together with
+   * its first consumer, and delete this entry — not inherit a dead rule.
+   */
+  for (const notYet of [
+    '.rb-evidence-card',
+    '.rb-conf--',
+    '.rb-status-frame--official',
+    '.rb-evidence-secondary',
+  ]) {
+    assert.equal(
+      TOKENS_CSS.includes(notYet),
+      false,
+      `${notYet} must not ship without a production consumer`
+    );
+  }
+});
+
+test('18b. the migrated summary pairs clear AA on the surface production uses', () => {
+  /*
+   * The surface token is DERIVED from `.rb-evidence-panel`'s actual CSS
+   * contract rather than named here, so contrast is measured against the
+   * surface production really renders. Hardcoding `--rb-surface-raised` would
+   * keep passing if the class later moved to `--rb-surface-elevated` — a real
+   * risk, since part 2 introduces a card surface on a different token. This
+   * derivation makes any such raised/elevated drift fail here instead.
+   *
+   * This is a token-level calculation. It does not compare browser-computed
+   * styles.
+   */
+  const panelRule = cssRule('.rb-evidence-panel');
+  const backgroundDecl = /background:\s*([^;]+);/.exec(panelRule);
+  assert.ok(backgroundDecl, '.rb-evidence-panel must declare a background');
+
+  const surfaceToken = /^var\((--rb-surface-[a-z-]+)\)$/.exec(backgroundDecl[1].trim());
+  assert.ok(
+    surfaceToken,
+    `.rb-evidence-panel background must be a var(--rb-surface-*) token, got: ${backgroundDecl[1].trim()}`
+  );
+
+  const surface = {
+    light: lightToken(surfaceToken[1]),
+    dark: darkToken(surfaceToken[1]),
+  };
+
+  for (const [name, tok] of [
+    ['primary', '--rb-text-primary'],
+    ['secondary / rb-ev--neutral', '--rb-text-secondary'],
+    ['muted', '--rb-text-muted'],
+    ['positive', '--rb-status-positive'],
+    ['failure', '--rb-status-failure'],
+    ['accent (audit link)', '--rb-accent-analytical'],
+  ] as const) {
+    for (const scheme of ['light', 'dark'] as const) {
+      const fg = scheme === 'light' ? lightToken(tok) : darkToken(tok);
+      const ratio = contrast(fg, surface[scheme]);
+      assert.ok(
+        ratio >= AA_NORMAL_TEXT,
+        `${name} on ${surfaceToken[1]} (${scheme}) is ${ratio.toFixed(2)}:1`
+      );
+    }
   }
 });
 

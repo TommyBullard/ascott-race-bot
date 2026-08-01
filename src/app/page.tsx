@@ -451,15 +451,49 @@ function formatProfit(points: number): string {
   return `${sign}${Math.abs(points).toFixed(2)}pt`;
 }
 
-/** Colors a P/L value green when positive, red when negative, neutral at zero. */
-function profitColor(points: number): string {
+/**
+ * P/L or ROI -> token-backed class, for the MIGRATED SUMMARY SURFACES ONLY.
+ *
+ * SLICE 3D part 1. This REPLACES the former `profitColor`, which has been
+ * removed: all four of its call sites (AccuracyBar ×2, PerformancePanel ×2)
+ * were inside this migration, so it had no remaining consumer. `roiColor` is
+ * the separate legacy helper that still serves the out-of-scope InFormPanel,
+ * and it — with `EV_POSITIVE_COLOR` / `EV_NEGATIVE_COLOR` — is untouched.
+ *
+ * Branch conditions are identical; zero is a genuine neutral outcome, not a
+ * missing one, so it takes the neutral class rather than a status colour.
+ */
+function profitClass(points: number): string {
   if (points > 0) {
-    return EV_POSITIVE_COLOR;
+    return 'rb-ev--positive';
   }
   if (points < 0) {
-    return EV_NEGATIVE_COLOR;
+    return 'rb-ev--negative';
   }
-  return '#656d76';
+  return 'rb-ev--neutral';
+}
+
+/**
+ * EV -> token-backed class, for the MIGRATED SUMMARY SURFACES ONLY.
+ *
+ * SLICE 3D part 1 deliberately introduces this ALONGSIDE `evColorStyle` rather
+ * than replacing it. `evColorStyle` still serves four race-card call sites that
+ * sit on the legacy `#fff` card surface, which part 2 migrates.
+ *
+ * Two helpers coexist on purpose, and this is NOT a partial pairing: each one
+ * is used exclusively within a region that owns a matching surface regime, so
+ * neither ever puts a dark-aware token colour on a legacy light surface
+ * (~2.30:1) nor a legacy colour on a token surface (~2.92:1). Part 2 retires
+ * `evColorStyle` and folds its call sites into this helper.
+ */
+function evClassSummary(ev: number | null): string {
+  if (ev !== null && ev > 0) {
+    return 'rb-ev--positive';
+  }
+  if (ev !== null && ev < 0) {
+    return 'rb-ev--negative';
+  }
+  return 'rb-ev--neutral';
 }
 
 /** Formats a ROI fraction (0.12 => +12.0%), or a dash when unknown. */
@@ -724,6 +758,11 @@ const styles = {
   muted: {
     color: '#656d76',
   } as CSSProperties,
+  /*
+   * SLICE 3D part 1: surface, border, radius and foreground now come from the
+   * paired `rb-evidence-panel` class. Only GEOMETRY remains inline — the
+   * compact wrapping row, its gap and the tabular figures are unchanged.
+   */
   accuracyBar: {
     display: 'flex',
     flexWrap: 'wrap' as const,
@@ -731,43 +770,36 @@ const styles = {
     gap: 14,
     padding: '10px 14px',
     marginBottom: 16,
-    border: '1px solid #d0d7de',
-    borderRadius: 10,
-    background: '#f6f8fa',
     fontSize: 14,
     fontVariantNumeric: 'tabular-nums' as const,
-    // SLICE 3D.4a: explicit legacy foreground (previously inherited).
-    color: '#1f2328',
   } as CSSProperties,
   accuracyMetric: {
     fontWeight: 700,
   } as CSSProperties,
-  accuracySep: {
-    color: '#afb8c1',
-  } as CSSProperties,
+  /*
+   * SLICE 3D part 1: these three carry the migrated summary surfaces' text, so
+   * their colour moves to `rb-evidence-muted` at the call site and only
+   * structure remains here. `marginLeft: auto` and `flexBasis: 100%` are the
+   * load-bearing layout for the bar and are preserved exactly.
+   */
+  accuracySep: {} as CSSProperties,
   accuracyUpdated: {
     marginLeft: 'auto',
     fontSize: 12,
-    color: '#656d76',
     fontWeight: 400,
   } as CSSProperties,
   accuracyScopeLabel: {
     flexBasis: '100%',
     fontSize: 12,
-    color: '#656d76',
     fontStyle: 'italic' as const,
     fontWeight: 400,
   } as CSSProperties,
+  /* SLICE 3D part 1: paired via `rb-evidence-panel`; geometry only inline. */
   perfPanel: {
     padding: '10px 14px',
     marginBottom: 16,
-    border: '1px solid #d0d7de',
-    borderRadius: 10,
-    background: '#f6f8fa',
     fontSize: 14,
     fontVariantNumeric: 'tabular-nums' as const,
-    // SLICE 3D.4a: explicit legacy foreground (previously inherited).
-    color: '#1f2328',
   } as CSSProperties,
   perfHeading: {
     display: 'flex',
@@ -779,13 +811,13 @@ const styles = {
   perfTitle: {
     fontWeight: 700,
   } as CSSProperties,
+  /* SLICE 3D part 1: colour supplied by `rb-evidence-muted` at the call site. */
   perfScope: {
     fontSize: 12,
-    color: '#656d76',
   } as CSSProperties,
+  /* SLICE 3D part 1: colour supplied by `rb-evidence-muted` at the call site. */
   perfNote: {
     fontSize: 12,
-    color: '#656d76',
     fontStyle: 'italic' as const,
     marginBottom: 8,
   } as CSSProperties,
@@ -1578,19 +1610,19 @@ function AccuracyBar({ summary }: { summary: DashboardSummary | null }) {
 
   const scopeLabel =
     summary.source === 'race_day' ? (
-      <span style={styles.accuracyScopeLabel}>
+      <span className="rb-evidence-muted" style={styles.accuracyScopeLabel}>
         Race-day performance uses latest pre-off model run.
       </span>
     ) : null;
 
   if (summary.settled === 0) {
     return (
-      <div style={styles.accuracyBar}>
-        <span style={styles.muted}>
+      <div className="rb-evidence-panel" style={styles.accuracyBar}>
+        <span className="rb-evidence-muted">
           No settled races yet — accuracy will appear as results come in.
         </span>
         {summary.computedAt && (
-          <span style={styles.accuracyUpdated}>
+          <span className="rb-evidence-muted" style={styles.accuracyUpdated}>
             updated {formatUpdated(summary.computedAt)}
           </span>
         )}
@@ -1600,29 +1632,25 @@ function AccuracyBar({ summary }: { summary: DashboardSummary | null }) {
   }
 
   return (
-    <div style={styles.accuracyBar}>
+    <div className="rb-evidence-panel" style={styles.accuracyBar}>
       <span style={styles.accuracyMetric}>
         {summary.winners}/{summary.settled} winners
       </span>
-      <span style={styles.accuracySep}>·</span>
+      <span className="rb-evidence-muted" style={styles.accuracySep}>·</span>
       <span style={styles.accuracyMetric}>
         {summary.strikeRatePct.toFixed(1)}% strike
       </span>
-      <span style={styles.accuracySep}>·</span>
-      <span
-        style={{ ...styles.accuracyMetric, color: profitColor(summary.profitLoss) }}
-      >
+      <span className="rb-evidence-muted" style={styles.accuracySep}>·</span>
+      <span className={profitClass(summary.profitLoss)} style={styles.accuracyMetric}>
         {formatProfit(summary.profitLoss)}
       </span>
-      <span style={styles.accuracySep}>·</span>
-      <span
-        style={{ ...styles.accuracyMetric, color: profitColor(summary.roiPct) }}
-      >
+      <span className="rb-evidence-muted" style={styles.accuracySep}>·</span>
+      <span className={profitClass(summary.roiPct)} style={styles.accuracyMetric}>
         {summary.roiPct > 0 ? '+' : summary.roiPct < 0 ? '\u2212' : ''}
         {Math.abs(summary.roiPct).toFixed(1)}% ROI
       </span>
       {summary.computedAt && (
-        <span style={styles.accuracyUpdated}>
+        <span className="rb-evidence-muted" style={styles.accuracyUpdated}>
           updated {formatUpdated(summary.computedAt)}
         </span>
       )}
@@ -1683,30 +1711,31 @@ function PerformancePanel({ performance }: { performance: ModelPerformance | nul
 
   if (performance.settled_count === 0) {
     return (
-      <div style={styles.perfPanel}>
+      <div className="rb-evidence-panel" style={styles.perfPanel}>
         <div style={styles.perfHeading}>
           <span style={styles.perfTitle}>Recommendation performance</span>
-          <span style={styles.perfScope}>{scope}</span>
-          <Link
-            href={auditHref}
-            prefetch={false}
-            style={{ fontSize: 12, color: '#0969da', textDecoration: 'none' }}
-          >
+          <span className="rb-evidence-muted" style={styles.perfScope}>{scope}</span>
+          <Link href={auditHref} prefetch={false} className="rb-inline-link">
             Prediction Audit →
           </Link>
         </div>
-        {modeNote && <div style={styles.perfNote}>{modeNote}</div>}
-        <span style={styles.muted}>
+        {modeNote && (
+          <div className="rb-evidence-muted" style={styles.perfNote}>{modeNote}</div>
+        )}
+        <span className="rb-evidence-muted">
           No settled races yet — accuracy will appear as results come in.
         </span>
         {performance.recommendations_total > 0 && (
-          <span style={{ ...styles.perfScope, marginLeft: 8 }}>
+          <span
+            className="rb-evidence-muted"
+            style={{ ...styles.perfScope, marginLeft: 8 }}
+          >
             {performance.pending_count} pending of {performance.recommendations_total}{' '}
             recommendation{performance.recommendations_total === 1 ? '' : 's'}
           </span>
         )}
         {cov && cov.locked > 0 && (
-          <div style={styles.perfNote}>
+          <div className="rb-evidence-muted" style={styles.perfNote}>
             {`official no-bet ${cov.locked_no_bet} · no run at lock ${cov.no_run_available} · not locked yet ${cov.not_locked_yet ?? 0} · LOCK MISSING ${cov.lock_missing}`}
           </div>
         )}
@@ -1715,59 +1744,60 @@ function PerformancePanel({ performance }: { performance: ModelPerformance | nul
   }
 
   return (
-    <div style={styles.perfPanel}>
+    <div className="rb-evidence-panel" style={styles.perfPanel}>
       <div style={styles.perfHeading}>
         <span style={styles.perfTitle}>Recommendation performance</span>
-        <span style={styles.perfScope}>{scope}</span>
-        <span style={{ ...styles.accuracyUpdated }}>
+        <span className="rb-evidence-muted" style={styles.perfScope}>{scope}</span>
+        <span className="rb-evidence-muted" style={{ ...styles.accuracyUpdated }}>
           updated {formatUpdated(performance.computedAt)}
         </span>
-        <Link
-          href={auditHref}
-          prefetch={false}
-          style={{ fontSize: 12, color: '#0969da', textDecoration: 'none' }}
-        >
+        <Link href={auditHref} prefetch={false} className="rb-inline-link">
           Prediction Audit →
         </Link>
       </div>
-      {modeNote && <div style={styles.perfNote}>{modeNote}</div>}
+      {modeNote && (
+        <div className="rb-evidence-muted" style={styles.perfNote}>{modeNote}</div>
+      )}
       <div style={styles.perfRow}>
         <span style={styles.accuracyMetric}>
           {performance.winners}/{performance.settled_count} winners
         </span>
-        <span style={styles.accuracySep}>·</span>
+        <span className="rb-evidence-muted" style={styles.accuracySep}>·</span>
         <span style={styles.accuracyMetric}>
           {performance.strike_rate.toFixed(1)}% strike
         </span>
-        <span style={styles.accuracySep}>·</span>
-        <span style={{ ...styles.accuracyMetric, color: profitColor(performance.profit_loss) }}>
+        <span className="rb-evidence-muted" style={styles.accuracySep}>·</span>
+        <span className={profitClass(performance.profit_loss)} style={styles.accuracyMetric}>
           {formatProfit(performance.profit_loss)}
         </span>
-        <span style={styles.accuracySep}>·</span>
-        <span style={{ ...styles.accuracyMetric, color: profitColor(performance.roi) }}>
+        <span className="rb-evidence-muted" style={styles.accuracySep}>·</span>
+        <span className={profitClass(performance.roi)} style={styles.accuracyMetric}>
           {formatSignedPct(performance.roi)} ROI
         </span>
         {performance.average_ev !== null && (
           <>
-            <span style={styles.accuracySep}>·</span>
-            <span style={{ ...styles.accuracyMetric, ...evColorStyle(performance.average_ev) }}>
+            <span className="rb-evidence-muted" style={styles.accuracySep}>·</span>
+            <span
+              className={evClassSummary(performance.average_ev)}
+              style={styles.accuracyMetric}
+            >
               {formatEv(performance.average_ev)} avg EV
             </span>
           </>
         )}
-        <span style={styles.accuracySep}>·</span>
-        <span style={styles.perfScope}>
+        <span className="rb-evidence-muted" style={styles.accuracySep}>·</span>
+        <span className="rb-evidence-muted" style={styles.perfScope}>
           settled {performance.settled_count} · pending {performance.pending_count}
           {performance.no_bet_races > 0 ? ` · ${performance.no_bet_races} no-bet` : ''}
         </span>
       </div>
       {cov && cov.locked > 0 && (
-        <div style={styles.perfNote}>
+        <div className="rb-evidence-muted" style={styles.perfNote}>
           {`official no-bet ${cov.locked_no_bet} · no run at lock ${cov.no_run_available} · not locked yet ${cov.not_locked_yet ?? 0} · LOCK MISSING ${cov.lock_missing}`}
         </div>
       )}
       {performance.officialMode === 'mixed' && fallback && fallback.settled_count > 0 && (
-        <div style={styles.perfNote}>
+        <div className="rb-evidence-muted" style={styles.perfNote}>
           {`Fallback (lock-missing races only, NOT official): ${fallback.winners}/${fallback.settled_count} winners · ${formatProfit(fallback.profit_loss)}`}
         </div>
       )}

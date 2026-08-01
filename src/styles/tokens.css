@@ -1072,6 +1072,63 @@
   border-left-color: var(--rb-status-warning);
 }
 
+/* -- Evidence surfaces ----------------------------------------------------- *
+ * Paired surfaces for the race-day evidence regions.
+ *
+ * PART 1 scope: the accuracy and performance SUMMARY surfaces only. Race cards
+ * and the sticky next-race panel keep their legacy pairing until part 2.
+ *
+ * Each class declares BOTH a token surface and a compatible token foreground.
+ * That pairing is the whole point: the semantic evidence colours below are
+ * dark-scheme aware, so they may only ever sit on a surface that is aware too.
+ * A surface class without a foreground (as `.rb-card` is) would leave text
+ * inheriting a legacy colour and produce dark-on-dark.
+ *
+ * Deliberately scoped to this migration — these are not general utilities.
+ */
+.rb-evidence-panel {
+  background: var(--rb-surface-raised);
+  border: 1px solid var(--rb-border);
+  border-radius: var(--rb-radius-card);
+  color: var(--rb-text-primary);
+}
+
+/* Text roles inside a migrated evidence surface. Colour only — callers keep
+ * their own structural declarations inline.
+ *
+ * Only the roles part 1 actually renders are defined. A secondary-text class
+ * was drafted and removed: nothing in AccuracyBar or PerformancePanel consumes
+ * it, and shipping an unused class would imply a wiring that does not exist.
+ * Part 2 may add one alongside its first real consumer.
+ */
+.rb-evidence-muted {
+  color: var(--rb-text-muted);
+}
+
+/* -- Semantic evidence text ------------------------------------------------ *
+ * EV, profit and ROI carry genuine analytical meaning, so the colour is kept
+ * rather than replaced by a neutral foreground. `neutral` is the explicit
+ * "no signal" branch — a zero P/L or an unknown EV — and uses secondary text,
+ * never a status colour.
+ *
+ * These classes are used ONLY by regions that own a migrated evidence surface.
+ * The race-card regions keep their legacy inline helpers until part 2, so no
+ * single helper ever spans two surface regimes.
+ */
+.rb-ev--positive {
+  color: var(--rb-status-positive);
+  font-weight: 700;
+}
+
+.rb-ev--negative {
+  color: var(--rb-status-failure);
+  font-weight: 700;
+}
+
+.rb-ev--neutral {
+  color: var(--rb-text-secondary);
+}
+
 /* Label above a status headline: quiet, uppercase, and never the only signal. */
 .rb-status-frame__label {
   display: block;
