@@ -323,43 +323,6 @@ type ConfidenceLabel = 'High' | 'Medium' | 'Low';
  */
 const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';
 
-/**
- * TEMPORARY compatibility surface for the five NESTED race-card panels —
- * `SettlementStatusPanel`, `RaceIntelligencePanel`, `RaceExplanationPanel`,
- * `GenaiCommentaryPanel` and `MlShadowComparisonPanel`.
- *
- * WHY IT EXISTS. Evidence-migration part 2b-i moves the race-card ROOT onto the
- * paired `rb-evidence-panel` token surface. The five nested panels are rendered
- * with `styles.explanationPanel`, which is spread LAST over each panel's own
- * style object and until now set `background: 'transparent'`. Three of those
- * panels do declare `background: '#fff'` themselves, but the override strips it,
- * so as RENDERED all five were transparent while keeping hard-coded legacy
- * foregrounds (`#1f2328`, `#424a53`, `#656d76`, `#8c959f`) inside their own
- * files. Once the card root became a dark-aware token surface those foregrounds
- * would have landed on `--rb-surface-raised`, which is `#1a1f27` in the dark
- * scheme: `#1f2328` body text would render at ~1.05:1 — invisible.
- *
- * Pinning an opaque white surface here, TOGETHER with the legacy primary
- * foreground, keeps all five panels on exactly the background their colours
- * were designed and measured against, in BOTH schemes. It is the same
- * containment pattern as {@link LEGACY_LIGHT_PAGE_SURFACE}, scoped one level
- * deeper.
- *
- * THIS IS CONTAINMENT, NOT A PALETTE. It adds no token, expresses no design
- * intent, and must never be reused for a region that could migrate properly.
- *
- * REMOVAL CONDITION. Delete this constant, and the `background`/`color` pair it
- * backs on `styles.explanationPanel`, only once ALL FIVE panel files —
- * `SettlementStatusPanel`, `RaceIntelligencePanel`, `RaceExplanationPanel`,
- * `GenaiCommentaryPanel` and `MlShadowComparisonPanel` — own token-safe
- * foregrounds of their own in part 2b-ii. Removing it before then puts legacy
- * dark text back onto the dark token card.
- */
-const LEGACY_NESTED_PANEL_SURFACE = '#ffffff';
-
-/** The legacy primary foreground the nested panels were measured against. */
-const LEGACY_NESTED_PANEL_FOREGROUND = '#1f2328';
-
 const EV_POSITIVE_COLOR = '#1a7f37';
 const EV_NEGATIVE_COLOR = '#cf222e';
 
@@ -1031,27 +994,30 @@ const styles = {
   /*
    * The style spread over ALL FIVE nested race-card panels.
    *
-   * SLICE 3D part 2b-i: this object is spread LAST over each panel's own style,
-   * so its `background` decides what those panels actually render on. It used
-   * to be `transparent`, which was safe only while the card root was legacy
-   * white. The card root is now a dark-aware token surface, so a TEMPORARY
-   * complete legacy pair is pinned here instead — see
-   * {@link LEGACY_NESTED_PANEL_SURFACE} for the full rationale and the removal
-   * condition. Part 2b-ii deletes both declarations once the five panel files
-   * own token-safe foregrounds.
+   * SLICE 3D part 2b-ii: STRUCTURAL ONLY. Part 2b-i had to pin a temporary
+   * white surface plus the legacy primary foreground here, because the five
+   * panel files still carried hard-coded legacy colours while the card root had
+   * become dark-aware. Those files now declare token foregrounds of their own,
+   * so the containment is deleted and the panels simply inherit the paired
+   * `rb-evidence-panel` card again — in both schemes.
    *
-   * Everything else is unchanged: the panels keep their flush, dashed-separator
-   * geometry, and none of the five component files is touched by part 2b-i.
+   * `background: 'transparent'` is declared EXPLICITLY rather than omitted: this
+   * object is spread LAST over each panel's own style, and stating the override
+   * keeps the "nested panels do not own a surface" contract visible and
+   * testable. The dashed rule follows `--rb-border` for the same reason the
+   * card's own separators do — a fixed near-white hairline reads as a bright
+   * seam on the dark surface. (`--rb-border` is not a foreground token, so it
+   * is outside the `var(--rb-text|status|accent-*)` prohibition this file is
+   * still under.)
    */
   explanationPanel: {
     border: 'none',
-    borderTop: '1px dashed #eaeef2',
+    borderTop: '1px dashed var(--rb-border)',
     borderRadius: 0,
     padding: 0,
     paddingTop: 12,
     marginTop: 12,
-    background: LEGACY_NESTED_PANEL_SURFACE,
-    color: LEGACY_NESTED_PANEL_FOREGROUND,
+    background: 'transparent',
   } as CSSProperties,
   // Mobile / on-course polish: sticky next-race header, warning chips, and a
   // collapsible Alternatives summary. Presentational only.

@@ -25,14 +25,14 @@ import {
 
 const styles = {
   panel: {
-    borderTop: '1px dashed #d0d7de',
+    borderTop: '1px dashed var(--rb-border)',
     marginTop: 12,
     paddingTop: 12,
   } as CSSProperties,
   heading: {
     fontSize: 13,
     fontWeight: 700,
-    color: '#1f2328',
+    color: 'var(--rb-text-primary)',
     margin: '0 0 8px',
   } as CSSProperties,
   item: {
@@ -53,23 +53,23 @@ const styles = {
   } as CSSProperties,
   text: {
     fontSize: 13,
-    color: '#1f2328',
+    color: 'var(--rb-text-primary)',
     margin: '2px 0 3px',
     lineHeight: 1.45,
   } as CSSProperties,
   provenance: {
     fontSize: 11,
-    color: '#656d76',
+    color: 'var(--rb-text-muted)',
   } as CSSProperties,
   disclaimer: {
     fontSize: 11,
     fontStyle: 'italic',
-    color: '#656d76',
+    color: 'var(--rb-text-muted)',
     marginTop: 4,
   } as CSSProperties,
   empty: {
     fontSize: 12,
-    color: '#656d76',
+    color: 'var(--rb-text-muted)',
     margin: '2px 0 3px',
   } as CSSProperties,
 } as const;

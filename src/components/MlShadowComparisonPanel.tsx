@@ -67,20 +67,28 @@ function num(v: number | null | undefined, dp = 2): string {
 }
 
 const styles = {
-  panel: { borderTop: '1px dashed #d0d7de', marginTop: 12, paddingTop: 12 } as CSSProperties,
-  heading: { fontSize: 13, fontWeight: 700, color: '#1f2328', margin: '0 0 2px' } as CSSProperties,
-  labels: { fontSize: 11, fontStyle: 'italic', color: '#8250df', margin: '0 0 8px' } as CSSProperties,
-  grid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 } as CSSProperties,
-  col: { border: '1px solid #eaeef2', borderRadius: 8, padding: '8px 10px', minWidth: 0 } as CSSProperties,
-  mlCol: { border: '1px solid #e4d4f4', borderRadius: 8, padding: '8px 10px', background: '#faf5ff', minWidth: 0 } as CSSProperties,
-  colTitle: { fontSize: 10, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: '#656d76', marginBottom: 4 } as CSSProperties,
-  runner: { fontSize: 13, fontWeight: 700, color: '#1f2328', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
-  meta: { fontSize: 11, color: '#656d76', marginTop: 2 } as CSSProperties,
-  shadowChip: { display: 'inline-block', fontSize: 9, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: '#8250df', background: '#f3e8ff', border: '1px solid #e4d4f4', borderRadius: 999, padding: '0 6px', marginTop: 4 } as CSSProperties,
+  panel: { borderTop: '1px dashed var(--rb-border)', marginTop: 12, paddingTop: 12 } as CSSProperties,
+  heading: { fontSize: 13, fontWeight: 700, color: 'var(--rb-text-primary)', margin: '0 0 2px' } as CSSProperties,
+  labels: { fontSize: 11, fontStyle: 'italic', color: 'var(--rb-accent-analytical)', margin: '0 0 8px' } as CSSProperties,
+  // PART 2b-ii: `auto-fit` collapses to a single column on a narrow card and
+  // restores three side by side from tablet width up. No evidence is hidden and
+  // no media query or state is needed.
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 } as CSSProperties,
+  col: { border: '1px solid var(--rb-border)', borderRadius: 8, padding: '8px 10px', minWidth: 0 } as CSSProperties,
+  // PART 2b-ii: the `#faf5ff` tint is REMOVED. It declared a fixed light
+  // background with no foreground of its own, so once this panel's text became
+  // token-aware it would have rendered at ~1.06:1 in the dark scheme. The ML
+  // column stays distinguishable by its stronger border, its accent-coloured
+  // labels and the self-contained "not model-active" chip.
+  mlCol: { border: '1px solid var(--rb-border-strong)', borderRadius: 8, padding: '8px 10px', minWidth: 0 } as CSSProperties,
+  colTitle: { fontSize: 10, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: 'var(--rb-text-muted)', marginBottom: 4 } as CSSProperties,
+  runner: { fontSize: 13, fontWeight: 700, color: 'var(--rb-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
+  meta: { fontSize: 11, color: 'var(--rb-text-muted)', marginTop: 2 } as CSSProperties,
+  shadowChip: { display: 'inline-block', fontSize: 9, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: '#6639ba', background: '#f3e8ff', border: '1px solid #e4d4f4', borderRadius: 999, padding: '0 6px', marginTop: 4 } as CSSProperties,
   badge: { display: 'inline-block', fontSize: 11, fontWeight: 700, borderRadius: 999, padding: '2px 9px', marginTop: 8 } as CSSProperties,
   warn: { fontSize: 11, color: '#9a6700', background: '#fff8c5', border: '1px solid #eac54f', borderRadius: 6, padding: '3px 7px', marginTop: 6 } as CSSProperties,
-  empty: { fontSize: 12, color: '#656d76', marginTop: 6 } as CSSProperties,
-  disclaimer: { fontSize: 11, fontStyle: 'italic', color: '#656d76', marginTop: 8 } as CSSProperties,
+  empty: { fontSize: 12, color: 'var(--rb-text-muted)', marginTop: 6, overflowWrap: 'anywhere' } as CSSProperties,
+  disclaimer: { fontSize: 11, fontStyle: 'italic', color: 'var(--rb-text-muted)', marginTop: 8 } as CSSProperties,
 };
 
 function badgeStyle(badge: string): CSSProperties {

@@ -29,6 +29,128 @@ const PAGE_SRC = readFileSync('src/app/page.tsx', 'utf8');
 const TOKENS_CSS = readFileSync('src/styles/tokens.css', 'utf8');
 
 /**
+ * The five NESTED race-card panels, added as inputs by evidence part 2b-ii.
+ *
+ * They render inside `RaceCardView`'s token-paired surface but own their styles
+ * in their own files, so the pairing invariant this suite exists to protect can
+ * only be checked by reading them.
+ */
+const NESTED_PANELS = [
+  'SettlementStatusPanel',
+  'RaceIntelligencePanel',
+  'RaceExplanationPanel',
+  'GenaiCommentaryPanel',
+  'MlShadowComparisonPanel',
+] as const;
+
+/**
+ * Comment-stripped, for the same reason `PAGE_CODE` is: these files legitimately
+ * NAME the literals they retired (`#faf5ff`, `#8c959f`) while explaining why,
+ * and a structural assertion must not read documentation as code.
+ */
+const NESTED_SRC: Record<(typeof NESTED_PANELS)[number], string> = Object.fromEntries(
+  NESTED_PANELS.map((n) => [n, codeOf(readFileSync(`src/components/${n}.tsx`, 'utf8'))])
+) as Record<(typeof NESTED_PANELS)[number], string>;
+
+/**
+ * Every brace-balanced `name: { ... }` style entry in a component source, at any
+ * nesting depth. Bounded per entry, so a `background` on a NEIGHBOURING style
+ * can never be read as pairing the entry under test — the distinction the whole
+ * migration turns on.
+ */
+function styleEntries(src: string): Array<{ name: string; body: string }> {
+  const out: Array<{ name: string; body: string }> = [];
+  for (const m of src.matchAll(/(\w+): \{/g)) {
+    const open = m.index! + m[0].length - 1;
+    let depth = 0;
+    for (let j = open; j < src.length; j += 1) {
+      if (src[j] === '{') depth += 1;
+      else if (src[j] === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          out.push({ name: m[1], body: src.slice(open, j + 1) });
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** The four self-contained branches `badgeStyle` returns, in source order. */
+const ML_BADGE_BRANCHES = [
+  'all_agree',
+  'ml_differs_from_both',
+  'unknown',
+  'default',
+] as const;
+
+/**
+ * The object literals RETURNED from `MlShadowComparisonPanel`'s `badgeStyle`.
+ *
+ * `styleEntries` deliberately matches `name: {`, which is the shape of every
+ * entry in a `styles` object — but these four branches are written as
+ * `return { ...styles.badge, color: …, background: … }` and so carry no key to
+ * match on. They were therefore invisible to the pairing and contrast checks
+ * even though they are exactly the kind of self-contained chip those checks
+ * exist to protect. This reads them directly.
+ *
+ * SCOPED DELIBERATELY to `badgeStyle`'s own body, not to every `return {` in
+ * the file: `SettlementStatusPanel` also returns a style object, but it builds
+ * one from `c.bg` / `c.color` palette variables rather than literals, and a
+ * broader parser would start reasoning about returns that declare no colour at
+ * all. Comment-stripped input keeps prose out of the match.
+ *
+ * The branch NAME comes from the guard that selects it, so a failure message
+ * says which chip broke rather than just "branch 3".
+ */
+function badgeStyleBranches(src: string): Array<{ name: string; body: string }> {
+  const at = src.indexOf('function badgeStyle(');
+  assert.notEqual(at, -1, 'MlShadowComparisonPanel must still define badgeStyle');
+  const end = src.indexOf('\n}', at);
+  assert.ok(end > at, 'badgeStyle must have a bounded body');
+  const fn = src.slice(at, end);
+
+  const out: Array<{ name: string; body: string }> = [];
+  for (const m of fn.matchAll(/return \{/g)) {
+    const open = m.index! + m[0].length - 1;
+    let depth = 0;
+    for (let j = open; j < fn.length; j += 1) {
+      if (fn[j] === '{') depth += 1;
+      else if (fn[j] === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          // `if (badge === 'x') return {…}` names the branch; a bare
+          // `return {…}` is the fall-through default.
+          const guard = /badge === '(\w+)'\)\s*$/.exec(fn.slice(0, m.index!));
+          out.push({ name: guard ? guard[1] : 'default', body: fn.slice(open, j + 1) });
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Every self-contained chip candidate in a panel: its named style entries PLUS,
+ * for the ML panel, the four returned `badgeStyle` branches. Both pairing loops
+ * and the chip contrast loop read this, so a branch can never be checked by one
+ * and skipped by another.
+ */
+function chipCandidates(name: (typeof NESTED_PANELS)[number]) {
+  const entries = styleEntries(NESTED_SRC[name]);
+  if (name !== 'MlShadowComparisonPanel') return entries;
+  return [
+    ...entries,
+    ...badgeStyleBranches(NESTED_SRC[name]).map((b) => ({
+      name: `badgeStyle:${b.name}`,
+      body: b.body,
+    })),
+  ];
+}
+
+/**
  * Source with comments removed, for assertions about what the code DOES.
  * The page's own explanatory comments legitimately quote the values and token
  * names they explain, and a structural assertion must not read those as code.
@@ -1166,162 +1288,260 @@ test('20b. the official locked decision has structural primacy over the live dia
   );
 });
 
-test('21. the five nested panels are held on a TEMPORARY legacy pair (part 2b-ii debt)', () => {
+test('21. the five nested panels own token-safe foregrounds (evidence part 2b-ii)', () => {
   /*
-   * THIS IS CONTAINMENT, NOT A MIGRATION.
+   * THE CONTAINMENT IS GONE — THIS TEST REPLACES THE ONE THAT PINNED IT.
    *
-   * `styles.explanationPanel` is spread LAST over each nested panel's own style
-   * object, so its background decides what those panels actually render on. It
-   * used to be `transparent`, which was safe only while the card root was
-   * legacy white. Three of the five panels do declare `background: '#fff'`
-   * themselves — the override stripped it — while all five keep hard-coded
-   * legacy foregrounds inside their own component files.
+   * Part 2b-i could not migrate these five components, so it pinned a temporary
+   * complete legacy pair (`LEGACY_NESTED_PANEL_SURFACE` + `_FOREGROUND`) on
+   * `styles.explanationPanel`, holding every nested panel on the white surface
+   * its hard-coded colours were measured against. That was debt, and this is
+   * where it is paid: the panels now declare token foregrounds of their own, so
+   * they inherit the paired `rb-evidence-panel` card in both schemes.
    *
-   * Part 2b-i therefore pins an opaque white surface AND the legacy primary
-   * foreground here, so every one of those colours stays on the background it
-   * was measured against in both schemes. Part 2b-ii deletes both declarations
-   * once the five component files own token-safe foregrounds. Removing them
-   * earlier puts legacy dark text back onto the dark token card — the failure
-   * this test quantifies at the end.
+   * Nothing on the race card is legacy-contained after this point.
    */
-  assert.match(
-    PAGE_CODE,
-    /const LEGACY_NESTED_PANEL_SURFACE = '#ffffff';/,
-    'the temporary surface must be a named module-level constant'
-  );
-  assert.equal(
-    [...PAGE_CODE.matchAll(/const LEGACY_NESTED_PANEL_SURFACE\b/g)].length,
-    1,
-    'declared exactly once'
-  );
-  assert.match(PAGE_CODE, /const LEGACY_NESTED_PANEL_FOREGROUND = '#1f2328';/);
-
-  const panel = styleBlock('explanationPanel');
-  assert.match(
-    panel,
-    /background: LEGACY_NESTED_PANEL_SURFACE/,
-    'the nested surface must be opaque, never transparent'
-  );
-  assert.match(
-    panel,
-    /color: LEGACY_NESTED_PANEL_FOREGROUND/,
-    'a surface without its foreground is the exact bug this contains'
-  );
-  assert.equal(
-    /background: 'transparent'/.test(panel),
-    false,
-    'the transparent background is what made the nested panels unsafe'
-  );
-
-  // All five nested panels receive it — none may be left out.
-  const card = functionBody('RaceCardView');
-  for (const nested of [
-    'SettlementStatusPanel',
-    'RaceIntelligencePanel',
-    'RaceExplanationPanel',
-    'GenaiCommentaryPanel',
-    'MlShadowComparisonPanel',
-  ]) {
-    assert.ok(card.includes(`<${nested}`), `${nested} must still render inside the card`);
-  }
-  assert.equal(
-    [...card.matchAll(/style=\{styles\.explanationPanel\}/g)].length,
-    5,
-    'exactly the five nested panels carry the temporary pair'
-  );
-
-  // The removal condition must name every panel it depends on.
-  const removal = PAGE_SRC.slice(
-    PAGE_SRC.indexOf('REMOVAL CONDITION. Delete this constant, and the'),
-    PAGE_SRC.indexOf("const LEGACY_NESTED_PANEL_SURFACE")
-  );
-  assert.ok(removal.length > 0, 'the removal condition must be documented at the constant');
-  for (const nested of [
-    'SettlementStatusPanel',
-    'RaceIntelligencePanel',
-    'RaceExplanationPanel',
-    'GenaiCommentaryPanel',
-    'MlShadowComparisonPanel',
-  ]) {
-    assert.ok(removal.includes(nested), `the removal condition must name ${nested}`);
-  }
-  assert.match(removal, /part 2b-ii/, 'the removal condition must name the tranche that clears it');
-
-  /*
-   * Every inheriting foreground the five panels actually declare clears AA on
-   * the temporary surface. These are the real literals in those files, not a
-   * representative sample.
-   */
-  for (const [role, fg] of [
-    ['primary body text', '#1f2328'],
-    ['secondary', '#424a53'],
-    ['muted', '#656d76'],
-    ['ml shadow accent', '#8250df'],
-    ['commentary kind', '#0550ae'],
-    ['warning', '#9a6700'],
-    ['finish badge', '#0969da'],
-  ] as const) {
-    const ratio = contrast(fg, '#ffffff');
-    assert.ok(
-      ratio >= AA_NORMAL_TEXT,
-      `nested ${role} ${fg} on the temporary surface is ${ratio.toFixed(2)}:1`
+  for (const gone of ['LEGACY_NESTED_PANEL_SURFACE', 'LEGACY_NESTED_PANEL_FOREGROUND']) {
+    assert.equal(
+      PAGE_SRC.includes(gone),
+      false,
+      `${gone} was temporary containment and must not survive part 2b-ii`
     );
   }
 
   /*
-   * KNOWN SHORTFALL, PRE-EXISTING AND UNCHANGED — `#8c959f` at 3.04:1.
-   *
-   * It occurs exactly ONCE in the five panels: `RaceIntelligencePanel`'s
-   * `basis` caption line. Part 2b-i neither caused nor worsened it. Before this
-   * tranche the panel was transparent over the card's own `#fff`, so the
-   * EFFECTIVE background was already white and the ratio was already 3.04:1 —
-   * the containment reproduces the previous rendering exactly, which is the
-   * whole point of a compatibility pair.
-   *
-   * It is recorded rather than silently tolerated, and bounded on BOTH sides: a
-   * floor so a regression is caught, and a ceiling so that when part 2b-ii
-   * gives this text a token foreground the exemption fails and must be deleted
-   * rather than lingering as a permanent excuse. Same treatment as the
-   * RaceDayNav shortfall in test 14c.
+   * `styles.explanationPanel` is spread LAST over each panel's own style, so it
+   * decides what they render on. It must now be STRUCTURAL ONLY: no foreground
+   * at all, and an explicit transparent background so the panels inherit the
+   * card rather than owning a surface.
    */
-  const faint = contrast('#8c959f', '#ffffff');
-  assert.ok(faint > 3, `the known shortfall must not regress further: ${faint.toFixed(2)}:1`);
-  assert.ok(
-    faint < AA_NORMAL_TEXT,
-    'the #8c959f shortfall has been fixed — delete this exemption and assert AA instead'
-  );
-  /*
-   * The containment must reproduce the PREVIOUS effective background rather
-   * than pick a new one. Those panels rendered on the card's legacy `#fff`, so
-   * the constant has to be white — asserted from the value parsed out of the
-   * source above, not from a literal repeated here, which would prove nothing.
-   * White has luminance exactly 1, so every ratio in this test (including the
-   * shortfall) is numerically identical to what shipped before part 2b-i.
-   */
-  const declared = /const LEGACY_NESTED_PANEL_SURFACE = '(#[0-9a-fA-F]{6})';/.exec(PAGE_CODE);
-  assert.ok(declared, 'the temporary surface must be a full six-digit literal');
+  const panel = styleBlock('explanationPanel');
+  assert.equal(/\bcolor:/.test(panel), false, 'the nested style must not impose a foreground');
+  assert.match(panel, /background: 'transparent'/, 'nested panels inherit the card surface');
   assert.equal(
-    luminance(declared[1]),
-    1,
-    `the containment surface must be white, the colour the nested panels were measured against; got ${declared[1]}`
-  );
-  /*
-   * Comment-stripped: page.tsx's own prose legitimately names `#8c959f` when
-   * explaining the shortfall and the retired `componentColor`, and a structural
-   * assertion must not read documentation as code.
-   */
-  assert.equal(
-    [...PAGE_CODE.matchAll(/#8c959f/g)].length,
-    0,
-    'the shortfall belongs to RaceIntelligencePanel; page.tsx folded its own faint tier into muted'
+    /#[0-9a-fA-F]{6}/.test(panel),
+    false,
+    'no legacy literal may remain in the nested style'
   );
 
-  const cardSurfaceDark = darkToken('--rb-surface-raised');
-  const wouldHaveBeen = contrast('#1f2328', cardSurfaceDark);
-  assert.ok(
-    wouldHaveBeen < 3,
-    `containment must be demonstrably necessary; transparent would give ${wouldHaveBeen.toFixed(2)}:1`
+  /*
+   * THE PAIRING INVARIANT, CHECKED PER STYLE ENTRY.
+   *
+   * A hex foreground is allowed ONLY inside an entry that also declares its own
+   * background — a self-contained badge or chip, which the parent surface
+   * cannot affect. An unpaired hex foreground is the dark-on-dark bug this
+   * suite exists to catch; a token foreground left on a fixed light background
+   * is the same bug mirrored, and the second loop catches that.
+   */
+  for (const name of NESTED_PANELS) {
+    for (const entry of chipCandidates(name)) {
+      const fg = /color: '(#[0-9a-fA-F]{6})'/.exec(entry.body);
+      if (!fg) continue;
+      assert.ok(
+        /(background|bg): '#[0-9a-fA-F]{6}'/.test(entry.body),
+        `${name}.${entry.name} keeps the legacy foreground ${fg[1]} without its own background`
+      );
+    }
+    for (const entry of chipCandidates(name)) {
+      if (!/(background|bg): '#[0-9a-fA-F]{6}'/.test(entry.body)) continue;
+      assert.equal(
+        /color: 'var\(--rb-/.test(entry.body),
+        false,
+        `${name}.${entry.name} puts a dark-aware token colour on a fixed light background`
+      );
+    }
+  }
+
+  /*
+   * The four `badgeStyle` branches are written as `return { … }` rather than as
+   * named style entries, so they were previously invisible to the two loops
+   * above. Assert they are DISCOVERED by name — a count alone would still pass
+   * if one branch were renamed and another duplicated, and silence is the
+   * failure mode that let them go unchecked in the first place.
+   */
+  const branches = badgeStyleBranches(NESTED_SRC.MlShadowComparisonPanel);
+  assert.deepEqual(
+    branches.map((b) => b.name),
+    [...ML_BADGE_BRANCHES],
+    'every badgeStyle branch must be parsed, in source order, or the pairing loops silently skip it'
   );
+  for (const branch of branches) {
+    assert.match(
+      branch.body,
+      /color: '#[0-9a-fA-F]{6}'/,
+      `badgeStyle:${branch.name} must keep its own foreground`
+    );
+    assert.match(
+      branch.body,
+      /background: '#[0-9a-fA-F]{6}'/,
+      `badgeStyle:${branch.name} must keep its own background`
+    );
+  }
+
+  /*
+   * The `#8c959f` EXEMPTION IS DELETED, not moved. Part 2b-i recorded it with a
+   * floor AND a ceiling precisely so this tranche would be forced to resolve it
+   * rather than inherit it. It folded into `--rb-text-muted`, which clears AA on
+   * the card in both schemes (test 21b), so the literal must now be absent.
+   */
+  assert.equal(
+    NESTED_SRC.RaceIntelligencePanel.includes('#8c959f'),
+    false,
+    'the faint tier folded into --rb-text-muted; the exemption must not linger'
+  );
+
+  // All five still render inside the card, each still taking the nested style.
+  const card = functionBody('RaceCardView');
+  for (const name of NESTED_PANELS) {
+    assert.ok(card.includes(`<${name}`), `${name} must still render inside the card`);
+  }
+  assert.equal(
+    [...card.matchAll(/style=\{styles\.explanationPanel\}/g)].length,
+    5,
+    'exactly the five nested panels take the shared nested style'
+  );
+});
+
+test('21b. every nested-panel foreground clears AA on the card surface it now inherits', () => {
+  /*
+   * The surface is DERIVED from `.rb-evidence-panel`, the class the race-card
+   * root actually carries, so a future raised/elevated change fails here rather
+   * than shipping. Token-level calculation; it does not read computed styles.
+   */
+  const rule = cssRule('.rb-evidence-panel');
+  const bg = /background: var\((--rb-surface-[a-z-]+)\)/.exec(rule);
+  assert.ok(bg, '.rb-evidence-panel must declare a var(--rb-surface-*) background');
+  const surface = { light: lightToken(bg[1]), dark: darkToken(bg[1]) };
+
+  /*
+   * Every token these five files actually reference, collected FROM SOURCE
+   * rather than listed by hand — so a role added later cannot slip past this.
+   */
+  const used = new Set<string>();
+  for (const name of NESTED_PANELS) {
+    for (const m of NESTED_SRC[name].matchAll(/color: 'var\((--rb-[a-z-]+)\)'/g)) {
+      used.add(m[1]);
+    }
+  }
+  assert.ok(used.size >= 4, `expected several token roles, found ${[...used].join(', ')}`);
+
+  for (const token of [...used].sort()) {
+    for (const scheme of ['light', 'dark'] as const) {
+      const fg = scheme === 'light' ? lightToken(token) : darkToken(token);
+      const ratio = contrast(fg, surface[scheme]);
+      assert.ok(
+        ratio >= AA_NORMAL_TEXT,
+        `${token} on ${bg[1]} (${scheme}) is ${ratio.toFixed(2)}:1`
+      );
+    }
+  }
+
+  /*
+   * The self-contained chips are measured against their OWN backgrounds, the
+   * only surface that can affect them. `shadowChip` is included because part
+   * 2b-ii fixed it: it shipped at 4.28:1 and now clears the floor.
+   */
+  let chipsMeasured = 0;
+  for (const name of NESTED_PANELS) {
+    for (const entry of chipCandidates(name)) {
+      const fg = /color: '(#[0-9a-fA-F]{6})'/.exec(entry.body);
+      const bgHex = /(?:background|bg): '(#[0-9a-fA-F]{6})'/.exec(entry.body);
+      if (!fg || !bgHex) continue;
+      chipsMeasured += 1;
+      const ratio = contrast(fg[1], bgHex[1]);
+      assert.ok(
+        ratio >= AA_NORMAL_TEXT,
+        `${name}.${entry.name} chip is ${ratio.toFixed(2)}:1 (${fg[1]} on ${bgHex[1]})`
+      );
+    }
+  }
+
+  /*
+   * The four `badgeStyle` branches must be measured HERE too, not only pinned
+   * structurally in test 21. They are named individually rather than counted,
+   * so a branch that stops being parsed fails loudly instead of quietly
+   * dropping out of the contrast sweep.
+   */
+  const branchRatios = badgeStyleBranches(NESTED_SRC.MlShadowComparisonPanel).map((b) => {
+    const fg = /color: '(#[0-9a-fA-F]{6})'/.exec(b.body);
+    const bgHex = /background: '(#[0-9a-fA-F]{6})'/.exec(b.body);
+    assert.ok(fg && bgHex, `badgeStyle:${b.name} must declare both a foreground and a background`);
+    return { name: b.name, ratio: contrast(fg[1], bgHex[1]) };
+  });
+  assert.deepEqual(
+    branchRatios.map((b) => b.name),
+    [...ML_BADGE_BRANCHES],
+    'all four badgeStyle branches must reach the contrast sweep'
+  );
+  for (const b of branchRatios) {
+    assert.ok(
+      b.ratio >= AA_NORMAL_TEXT,
+      `badgeStyle:${b.name} is ${b.ratio.toFixed(2)}:1 on its own background`
+    );
+  }
+
+  assert.ok(
+    chipsMeasured >= 16,
+    `expected every self-contained chip to be measured, only found ${chipsMeasured}`
+  );
+});
+
+test('21c. the ML shadow comparison has a bounded narrow-viewport layout', () => {
+  /*
+   * The grid was a fixed `1fr 1fr 1fr` at every width, leaving roughly 84px per
+   * column inside a 390px card. `auto-fit` + `minmax` collapses it to a single
+   * column there and restores three from tablet width up, with no media query,
+   * no new class, no state and no hidden evidence.
+   */
+  const ml = NESTED_SRC.MlShadowComparisonPanel;
+
+  /*
+   * The SHAPE must be `repeat(auto-fit, minmax(<n>px, 1fr))` and the track
+   * minimum must be EXACTLY the approved 180px. Matching any `\d+px` would let
+   * `0px` (never collapses), `120px` (four columns on a narrow card) or `900px`
+   * (one column on desktop) pass while silently changing the layout the 16
+   * Playwright combinations verified. Extracting the value gives a failure
+   * message that names the offending number.
+   */
+  const minmax = /gridTemplateColumns: 'repeat\(auto-fit, minmax\((\d+)px, 1fr\)\)'/.exec(ml);
+  assert.ok(
+    minmax,
+    "the ML grid must use repeat(auto-fit, minmax(<n>px, 1fr)) so it collapses on a narrow card"
+  );
+  assert.equal(
+    minmax[1],
+    '180',
+    `the approved track minimum is 180px — one column at 390 and three from tablet up; found ${minmax[1]}px`
+  );
+  assert.ok(
+    ml.includes("gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))'"),
+    'the grid declaration must match the approved value exactly'
+  );
+  assert.equal(
+    /gridTemplateColumns: '1fr 1fr 1fr'/.test(ml),
+    false,
+    'the fixed three-column grid must not return'
+  );
+
+  /*
+   * The empty state prints `npm run ml:predict-shadow` — a long unbreakable
+   * token that would otherwise overflow a single narrow column.
+   */
+  const empty = styleEntries(ml).find((e) => e.name === 'empty');
+  assert.ok(empty, 'the ML panel must keep an empty state');
+  assert.match(empty.body, /overflowWrap: 'anywhere'/, 'the code token must be able to break');
+
+  /*
+   * The ML column no longer carries the fixed `#faf5ff` tint: with token
+   * foregrounds that surface gave ~1.06:1 in the dark scheme. It stays
+   * distinguishable structurally instead — a stronger border against the
+   * neighbouring columns, plus its accent labels and self-contained chip.
+   */
+  assert.equal(/#faf5ff/.test(ml), false, 'the fixed ML tint must not survive part 2b-ii');
+  const mlCol = styleEntries(ml).find((e) => e.name === 'mlCol');
+  assert.ok(mlCol, 'the ML column must still exist');
+  assert.match(mlCol.body, /border: '1px solid var\(--rb-border-strong\)'/, 'distinct border');
+  assert.equal(/background:/.test(mlCol.body), false, 'the ML column inherits the card');
 });
 
 test('20c. the race-card pairs clear AA on the surface production uses', () => {

@@ -47,21 +47,20 @@ const styles = {
     border: '1px solid #d0d7de',
     borderRadius: 10,
     padding: 16,
-    background: '#fff',
     fontFamily: 'system-ui, -apple-system, sans-serif',
-    color: '#1f2328',
+    color: 'var(--rb-text-primary)',
   } as CSSProperties,
   title: {
     fontSize: 13,
     fontWeight: 700,
     letterSpacing: 0.5,
     textTransform: 'uppercase' as const,
-    color: '#424a53',
+    color: 'var(--rb-text-secondary)',
     margin: '0 0 10px',
   } as CSSProperties,
   empty: {
     fontSize: 14,
-    color: '#656d76',
+    color: 'var(--rb-text-muted)',
     margin: 0,
   } as CSSProperties,
   row: {
@@ -74,14 +73,14 @@ const styles = {
   label: {
     fontSize: 12,
     fontWeight: 700,
-    color: '#656d76',
+    color: 'var(--rb-text-muted)',
     textTransform: 'uppercase' as const,
     letterSpacing: 0.4,
     minWidth: 120,
   } as CSSProperties,
   value: {
     fontSize: 14,
-    color: '#1f2328',
+    color: 'var(--rb-text-primary)',
   } as CSSProperties,
   badge: {
     display: 'inline-block',
@@ -109,12 +108,12 @@ const styles = {
   summaryToggle: {
     cursor: 'pointer',
     fontSize: 13,
-    color: '#0969da',
+    color: 'var(--rb-accent-analytical)',
   } as CSSProperties,
   list: {
     margin: '8px 0 0',
     paddingLeft: 18,
-    color: '#424a53',
+    color: 'var(--rb-text-secondary)',
     fontSize: 14,
   } as CSSProperties,
 } as const;
