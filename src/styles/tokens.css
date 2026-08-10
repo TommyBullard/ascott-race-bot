@@ -1072,6 +1072,20 @@
   border-left-color: var(--rb-status-warning);
 }
 
+/*
+ * PART 2b-i: the official T-minus-5 locked decision inside a race card.
+ *
+ * Like its siblings this modifier changes the LEFT BORDER ONLY — the frame's
+ * paired surface and foreground are unchanged, so official status is carried by
+ * a structural rule rather than by a tinted fill or a second palette. The
+ * border is reinforcement, never the sole signal: the panel's own wording
+ * ("Official locked decision (T-5)", the OFFICIAL LOCKED * badges) and its
+ * position before the live diagnostic remain the primary distinction.
+ */
+.rb-status-frame--official {
+  border-left-color: var(--rb-status-official);
+}
+
 /* -- Evidence surfaces ----------------------------------------------------- *
  * Paired surfaces for the race-day evidence regions.
  *
@@ -1139,6 +1153,44 @@
 
 .rb-conf--low {
   color: var(--rb-status-failure);
+}
+
+/*
+ * PART 2b-i adds the fourth band. `ConfidenceLevel` in the diagnostics library
+ * is `high | medium | low | unknown`, and the breakdown panel genuinely renders
+ * the unknown case (as an em dash), so this class now has a real consumer where
+ * in part 2a it had none.
+ *
+ * It maps to MUTED TEXT, not to a status colour: "unknown" is the absence of a
+ * signal and must not be dressed as a weak-but-present one. That mirrors
+ * `.rb-ev--neutral`, which takes secondary text for the same reason.
+ */
+.rb-conf--unknown {
+  color: var(--rb-text-muted);
+}
+
+/* -- Race-card text tiers and rules (part 2b-i) ---------------------------- *
+ * `rb-evidence-secondary` was drafted in part 1 and deliberately NOT shipped
+ * because nothing consumed it. Part 2b-i gives it real consumers: the
+ * confidence-breakdown summary line and the alternatives rows, both of which
+ * carried `#424a53` — a tier between primary and muted that the race card
+ * genuinely uses.
+ *
+ * The two rules replace the card's legacy `#eaeef2` separators. A hairline is
+ * not text, but a fixed near-white rule on a dark token card reads as a bright
+ * seam, so the divider follows the surface the way the border of every other
+ * migrated region does.
+ */
+.rb-evidence-secondary {
+  color: var(--rb-text-secondary);
+}
+
+.rb-evidence-header-rule {
+  border-bottom: 1px solid var(--rb-border);
+}
+
+.rb-evidence-section-rule {
+  border-top: 1px dashed var(--rb-border);
 }
 
 /* -- Semantic evidence text ------------------------------------------------ *
