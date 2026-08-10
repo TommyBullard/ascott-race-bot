@@ -323,14 +323,45 @@ type ConfidenceLabel = 'High' | 'Medium' | 'Low';
  */
 const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';
 
+/**
+ * TEMPORARY compatibility surface for the five NESTED race-card panels —
+ * `SettlementStatusPanel`, `RaceIntelligencePanel`, `RaceExplanationPanel`,
+ * `GenaiCommentaryPanel` and `MlShadowComparisonPanel`.
+ *
+ * WHY IT EXISTS. Evidence-migration part 2b-i moves the race-card ROOT onto the
+ * paired `rb-evidence-panel` token surface. The five nested panels are rendered
+ * with `styles.explanationPanel`, which is spread LAST over each panel's own
+ * style object and until now set `background: 'transparent'`. Three of those
+ * panels do declare `background: '#fff'` themselves, but the override strips it,
+ * so as RENDERED all five were transparent while keeping hard-coded legacy
+ * foregrounds (`#1f2328`, `#424a53`, `#656d76`, `#8c959f`) inside their own
+ * files. Once the card root became a dark-aware token surface those foregrounds
+ * would have landed on `--rb-surface-raised`, which is `#1a1f27` in the dark
+ * scheme: `#1f2328` body text would render at ~1.05:1 — invisible.
+ *
+ * Pinning an opaque white surface here, TOGETHER with the legacy primary
+ * foreground, keeps all five panels on exactly the background their colours
+ * were designed and measured against, in BOTH schemes. It is the same
+ * containment pattern as {@link LEGACY_LIGHT_PAGE_SURFACE}, scoped one level
+ * deeper.
+ *
+ * THIS IS CONTAINMENT, NOT A PALETTE. It adds no token, expresses no design
+ * intent, and must never be reused for a region that could migrate properly.
+ *
+ * REMOVAL CONDITION. Delete this constant, and the `background`/`color` pair it
+ * backs on `styles.explanationPanel`, only once ALL FIVE panel files —
+ * `SettlementStatusPanel`, `RaceIntelligencePanel`, `RaceExplanationPanel`,
+ * `GenaiCommentaryPanel` and `MlShadowComparisonPanel` — own token-safe
+ * foregrounds of their own in part 2b-ii. Removing it before then puts legacy
+ * dark text back onto the dark token card.
+ */
+const LEGACY_NESTED_PANEL_SURFACE = '#ffffff';
+
+/** The legacy primary foreground the nested panels were measured against. */
+const LEGACY_NESTED_PANEL_FOREGROUND = '#1f2328';
+
 const EV_POSITIVE_COLOR = '#1a7f37';
 const EV_NEGATIVE_COLOR = '#cf222e';
-
-const CONFIDENCE_COLORS: Record<ConfidenceLabel, string> = {
-  High: '#1a7f37',
-  Medium: '#9a6700',
-  Low: '#cf222e',
-};
 
 /** Edge (model_prob − market_prob) above which the model meaningfully diverges. */
 const MODEL_EDGE_THRESHOLD = 0.02;
@@ -356,10 +387,62 @@ function ladderToDisplay(label: LadderLabel): ConfidenceLabel {
   return label === 'HIGH' ? 'High' : label === 'MEDIUM' ? 'Medium' : 'Low';
 }
 
-/** Maps a diagnostic component's level to the shared confidence colour, or grey for unknown. */
-function componentColor(level: ConfidenceComponent['level']): string {
-  if (level === 'unknown') return '#8c959f';
-  return CONFIDENCE_COLORS[level === 'high' ? 'High' : level === 'medium' ? 'Medium' : 'Low'];
+/*
+ * SEMANTIC CLASSES FOR THE MIGRATED RACE-CARD CORE (evidence part 2b-i).
+ *
+ * These replace `evColorStyle`, `CONFIDENCE_COLORS` and `componentColor`, which
+ * returned hard-coded light-scheme literals and are now deleted — the race card
+ * was their last consumer. `EV_POSITIVE_COLOR` / `EV_NEGATIVE_COLOR` survive
+ * because `roiColor` (the tipster panels, still legacy) genuinely still uses
+ * them.
+ *
+ * Three regimes coexisted during part 2a; the card now joins the token side, so
+ * the split is by REGION rather than by regime: `evClassSummary` on the part 1
+ * summary panels, `evClassNextRace` on the sticky next-race card, and these on
+ * the race cards. They return the same shared classes and are kept separate
+ * only so a later change to one region cannot silently repaint another.
+ */
+function evClassRaceCard(ev: number | null): string {
+  if (ev !== null && ev > 0) {
+    return 'rb-ev--positive';
+  }
+  if (ev !== null && ev < 0) {
+    return 'rb-ev--negative';
+  }
+  return 'rb-ev--neutral';
+}
+
+/**
+ * Confidence band -> token class for the race card. `Record` rather than an
+ * if/else chain so a new `ConfidenceLabel` member fails the build here instead
+ * of silently taking the failure colour.
+ */
+const RACE_CARD_CONFIDENCE_CLASSES: Record<ConfidenceLabel, string> = {
+  High: 'rb-conf--high',
+  Medium: 'rb-conf--medium',
+  Low: 'rb-conf--low',
+};
+
+function confidenceClassRaceCard(label: ConfidenceLabel): string {
+  return RACE_CARD_CONFIDENCE_CLASSES[label];
+}
+
+/**
+ * Diagnostic component level -> token class. `ConfidenceLevel` is a CLOSED
+ * four-member union that really does include `unknown`, and the breakdown panel
+ * renders that case, so `rb-conf--unknown` ships with a genuine consumer. It
+ * maps to muted text rather than a status colour: an absent signal must not be
+ * dressed as a weak one. This map replaces `componentColor`'s `#8c959f`.
+ */
+const RACE_CARD_COMPONENT_CLASSES: Record<ConfidenceComponent['level'], string> = {
+  high: 'rb-conf--high',
+  medium: 'rb-conf--medium',
+  low: 'rb-conf--low',
+  unknown: 'rb-conf--unknown',
+};
+
+function componentClassRaceCard(level: ConfidenceComponent['level']): string {
+  return RACE_CARD_COMPONENT_CLASSES[level];
 }
 
 /**
@@ -384,29 +467,37 @@ function ConfidenceBreakdownPanel({ card, nowMs }: { card: RaceCard; nowMs: numb
   ];
 
   return (
-    <details style={styles.altList}>
-      <summary style={styles.altSummary}>Why this confidence?</summary>
-      <div style={{ fontSize: 12, color: '#424a53', marginTop: 6, lineHeight: 1.5 }}>
+    <details className="rb-evidence-section-rule" style={styles.altList}>
+      <summary className="rb-evidence-muted" style={styles.altSummary}>
+        Why this confidence?
+      </summary>
+      <div className="rb-evidence-secondary" style={{ fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>
         Original label: <strong>{diag.original_confidence_label ?? '—'}</strong>
         {' · '}
         Diagnostic view:{' '}
-        <strong style={{ color: componentColor(diag.overall.level) }}>
+        <strong className={componentClassRaceCard(diag.overall.level)}>
           {diag.overall.level === 'unknown' ? '—' : diag.overall.level.toUpperCase()}
         </strong>
-        <div style={{ marginTop: 2, color: '#656d76' }}>{diag.overall.reason}</div>
+        <div className="rb-evidence-muted" style={{ marginTop: 2 }}>{diag.overall.reason}</div>
       </div>
       {rows.map(([label, c]) => (
-        <div key={label} style={styles.altRow}>
+        <div key={label} className="rb-evidence-secondary" style={styles.altRow}>
           <span style={{ width: 68, flexShrink: 0 }}>{label}</span>
-          <span style={{ width: 52, flexShrink: 0, fontWeight: 700, color: componentColor(c.level) }}>
+          <span
+            className={componentClassRaceCard(c.level)}
+            style={{ width: 52, flexShrink: 0, fontWeight: 700 }}
+          >
             {c.level === 'unknown' ? '—' : c.level.toUpperCase()}
           </span>
-          <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', color: '#656d76' }}>
+          <span
+            className="rb-evidence-muted"
+            style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}
+          >
             {c.reason}
           </span>
         </div>
       ))}
-      <div style={{ fontSize: 11, color: '#8c959f', marginTop: 8 }}>
+      <div className="rb-evidence-muted" style={{ fontSize: 11, marginTop: 8 }}>
         Read-only explanation of the model&apos;s own confidence signals. Never changes the pick,
         stake, or probability.
       </div>
@@ -434,16 +525,14 @@ function formatEv(ev: number | null): string {
   return `${sign}${pct.toFixed(1)}%`;
 }
 
-/** Colors EV green when positive, red when negative, neutral otherwise. */
-function evColorStyle(ev: number | null): CSSProperties {
-  if (ev !== null && ev > 0) {
-    return { color: EV_POSITIVE_COLOR, fontWeight: 700 };
-  }
-  if (ev !== null && ev < 0) {
-    return { color: EV_NEGATIVE_COLOR, fontWeight: 700 };
-  }
-  return {};
-}
+/*
+ * `evColorStyle` was deleted in evidence part 2b-i. Its last three consumers
+ * (LockedDecisionPanel, the live model pick and the alternatives rows) now use
+ * `evClassRaceCard`. The weight it carried is preserved by the classes
+ * themselves: `.rb-ev--positive` and `.rb-ev--negative` declare
+ * `font-weight: 700` while `.rb-ev--neutral` declares none, reproducing the old
+ * helper's `{}` fall-through exactly.
+ */
 
 /** Formats a points P/L as a signed value to 2dp (e.g. "+3.50pt", "-1.00pt"). */
 function formatProfit(points: number): string {
@@ -676,19 +765,23 @@ const styles = {
     flexDirection: 'column' as const,
     gap: 16,
   } as CSSProperties,
+  /*
+   * SLICE 3D part 2b-i: surface, border, radius and foreground now come from
+   * the paired `rb-evidence-panel` class — the SAME class the part 1 summary
+   * panels use, because both are raised evidence regions. Only geometry
+   * remains inline. (The sticky next-race panel deliberately stays on
+   * `rb-evidence-card`/elevated so it reads as lifted above these.)
+   */
   card: {
-    border: '1px solid #d0d7de',
-    borderRadius: 10,
     padding: 16,
-    background: '#fff',
     boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
   } as CSSProperties,
+  /* SLICE 3D part 2b-i: rule supplied by `rb-evidence-header-rule`. */
   cardHeader: {
     display: 'flex',
     alignItems: 'baseline',
     justifyContent: 'space-between',
     gap: 12,
-    borderBottom: '1px solid #eaeef2',
     paddingBottom: 8,
     marginBottom: 12,
   } as CSSProperties,
@@ -697,9 +790,9 @@ const styles = {
     fontWeight: 700,
     fontVariantNumeric: 'tabular-nums' as const,
   } as CSSProperties,
+  /* SLICE 3D part 2b-i: colour supplied by `rb-evidence-muted` at the call site. */
   subtitle: {
     fontSize: 13,
-    color: '#656d76',
     marginTop: 2,
     overflowWrap: 'anywhere' as const,
   } as CSSProperties,
@@ -727,9 +820,8 @@ const styles = {
     marginBottom: 12,
     fontVariantNumeric: 'tabular-nums' as const,
   } as CSSProperties,
-  freshOk: {
-    color: '#656d76',
-  } as CSSProperties,
+  /* SLICE 3D part 2b-i: colour supplied by `rb-evidence-muted` at the call site. */
+  freshOk: {} as CSSProperties,
   freshStale: {
     color: '#9a6700',
     fontWeight: 700,
@@ -738,14 +830,17 @@ const styles = {
     borderRadius: 999,
     padding: '1px 8px',
   } as CSSProperties,
-  freshSep: {
-    color: '#afb8c1',
-  } as CSSProperties,
+  /*
+   * SLICE 3D part 2b-i: the lone `#afb8c1` faint tier folds into
+   * `rb-evidence-muted` rather than earning a third text token — one separator
+   * glyph does not justify a distinct tier.
+   */
+  freshSep: {} as CSSProperties,
+  /* SLICE 3D part 2b-i: colour supplied by `rb-evidence-muted` at the call site. */
   sectionLabel: {
     fontSize: 11,
     fontWeight: 700,
     letterSpacing: 0.5,
-    color: '#656d76',
     textTransform: 'uppercase' as const,
     marginBottom: 4,
   } as CSSProperties,
@@ -766,10 +861,14 @@ const styles = {
     marginTop: 4,
     fontVariantNumeric: 'tabular-nums' as const,
   } as CSSProperties,
-  statLabel: {
-    color: '#656d76',
-    marginRight: 4,
-  } as CSSProperties,
+  /*
+   * SLICE 3D part 2b-i: `statLabel` is DELETED. It combined a legacy colour
+   * with a 4px right margin, and an inline colour always beats a class, so it
+   * could never be overridden per-region. Part 2a forked the two next-race
+   * sites; part 2b-i moves the last six (LockedDecisionPanel ×3, the live model
+   * pick ×3) to `rb-evidence-muted` plus the same structural margin, leaving
+   * the key with no consumer.
+   */
   favBadge: {
     display: 'inline-block',
     marginLeft: 8,
@@ -789,16 +888,16 @@ const styles = {
     gap: 6,
     marginTop: 10,
   } as CSSProperties,
+  /* SLICE 3D part 2b-i: rule supplied by `rb-evidence-section-rule`. */
   altList: {
     marginTop: 12,
-    borderTop: '1px dashed #eaeef2',
     paddingTop: 8,
   } as CSSProperties,
+  /* SLICE 3D part 2b-i: colour supplied by `rb-evidence-secondary` at the call site. */
   altRow: {
     display: 'flex',
     gap: 12,
     fontSize: 13,
-    color: '#424a53',
     padding: '2px 0',
     fontVariantNumeric: 'tabular-nums' as const,
   } as CSSProperties,
@@ -929,6 +1028,21 @@ const styles = {
     padding: '2px 10px',
     fontVariantNumeric: 'tabular-nums' as const,
   } as CSSProperties,
+  /*
+   * The style spread over ALL FIVE nested race-card panels.
+   *
+   * SLICE 3D part 2b-i: this object is spread LAST over each panel's own style,
+   * so its `background` decides what those panels actually render on. It used
+   * to be `transparent`, which was safe only while the card root was legacy
+   * white. The card root is now a dark-aware token surface, so a TEMPORARY
+   * complete legacy pair is pinned here instead — see
+   * {@link LEGACY_NESTED_PANEL_SURFACE} for the full rationale and the removal
+   * condition. Part 2b-ii deletes both declarations once the five panel files
+   * own token-safe foregrounds.
+   *
+   * Everything else is unchanged: the panels keep their flush, dashed-separator
+   * geometry, and none of the five component files is touched by part 2b-i.
+   */
   explanationPanel: {
     border: 'none',
     borderTop: '1px dashed #eaeef2',
@@ -936,7 +1050,8 @@ const styles = {
     padding: 0,
     paddingTop: 12,
     marginTop: 12,
-    background: 'transparent',
+    background: LEGACY_NESTED_PANEL_SURFACE,
+    color: LEGACY_NESTED_PANEL_FOREGROUND,
   } as CSSProperties,
   // Mobile / on-course polish: sticky next-race header, warning chips, and a
   // collapsible Alternatives summary. Presentational only.
@@ -992,12 +1107,12 @@ const styles = {
     fontWeight: 700,
     overflowWrap: 'anywhere' as const,
   } as CSSProperties,
+  /* SLICE 3D part 2b-i: colour supplied by `rb-evidence-muted` at the call site. */
   altSummary: {
     cursor: 'pointer',
     fontSize: 11,
     fontWeight: 700,
     letterSpacing: 0.5,
-    color: '#656d76',
     textTransform: 'uppercase' as const,
   } as CSSProperties,
   // SLICE 3D (phase 1): `nextActionLabel`, `nextActionHeadline` and
@@ -1090,7 +1205,7 @@ function RunnerLine({ runner }: { runner: RaceCardRunner }) {
   return (
     <span>
       <strong>{runner.horse_name}</strong>
-      <span style={styles.muted}>
+      <span className="rb-evidence-muted">
         {' '}
         — {formatOdds(runner.odds)} ({formatProb(runner.market_prob)})
       </span>
@@ -1131,21 +1246,29 @@ function FreshnessRow({
 
   return (
     <div style={styles.freshnessRow}>
-      <span style={oddsStale ? styles.freshStale : styles.freshOk}>
+      <span
+        className={oddsStale ? undefined : 'rb-evidence-muted'}
+        style={oddsStale ? styles.freshStale : styles.freshOk}
+      >
         {oddsTime == null
           ? 'Odds update time unavailable'
           : `Odds updated ${oddsAge.text}${oddsStale ? ' · stale' : ''}`}
       </span>
-      <span style={styles.freshSep}>·</span>
-      <span style={modelStale ? styles.freshStale : styles.freshOk}>
+      <span className="rb-evidence-muted" style={styles.freshSep}>·</span>
+      <span
+        className={modelStale ? undefined : 'rb-evidence-muted'}
+        style={modelStale ? styles.freshStale : styles.freshOk}
+      >
         {modelTime == null
           ? 'Model has not run yet'
           : `Model updated ${modelAge.text}${modelStale ? ' · stale' : ''}`}
       </span>
       {resultTime != null && (
         <>
-          <span style={styles.freshSep}>·</span>
-          <span style={styles.freshOk}>{`Results checked ${resultAge.text}`}</span>
+          <span className="rb-evidence-muted" style={styles.freshSep}>·</span>
+          <span className="rb-evidence-muted" style={styles.freshOk}>
+            {`Results checked ${resultAge.text}`}
+          </span>
         </>
       )}
     </div>
@@ -1307,13 +1430,17 @@ function LockedDecisionPanel({ ld }: { ld: RaceCardLockedDecision }) {
   const quality = (ld.run_quality ?? '').toUpperCase();
   const qualityDegraded = quality !== '' && quality !== 'OK' && quality !== 'GOOD';
   return (
-    <div style={styles.favouriteRow}>
-      <div style={styles.sectionLabel}>Official locked decision (T−5)</div>
+    <div className="rb-status-frame rb-status-frame--official" style={{ fontSize: 14 }}>
+      <div className="rb-evidence-muted" style={styles.sectionLabel}>
+        Official locked decision (T−5)
+      </div>
       {ld.decision_status === 'locked_no_bet' && (
         <div>
           <span style={statusBadgeStyle('neg')}>OFFICIAL LOCKED NO BET</span>
           {ld.no_bet_reason && (
-            <span style={{ ...styles.muted, marginLeft: 8 }}>{ld.no_bet_reason}</span>
+            <span className="rb-evidence-muted" style={{ marginLeft: 8 }}>
+              {ld.no_bet_reason}
+            </span>
           )}
         </div>
       )}
@@ -1325,15 +1452,15 @@ function LockedDecisionPanel({ ld }: { ld: RaceCardLockedDecision }) {
               {ld.pick_horse_name ?? '—'}
             </span>
             <span>
-              <span style={styles.statLabel}>Odds</span>
+              <span className="rb-evidence-muted" style={{ marginRight: 4 }}>Odds</span>
               {formatOdds(ld.pick_odds)}
             </span>
-            <span style={evColorStyle(ld.pick_ev)}>
-              <span style={styles.statLabel}>EV</span>
+            <span className={evClassRaceCard(ld.pick_ev)}>
+              <span className="rb-evidence-muted" style={{ marginRight: 4 }}>EV</span>
               {formatEv(ld.pick_ev)}
             </span>
             <span>
-              <span style={styles.statLabel}>Confidence</span>
+              <span className="rb-evidence-muted" style={{ marginRight: 4 }}>Confidence</span>
               {ld.pick_confidence_label
                 ? displayConfidence(ld.pick_confidence_label)
                 : '—'}
@@ -1351,7 +1478,7 @@ function LockedDecisionPanel({ ld }: { ld: RaceCardLockedDecision }) {
           <span style={statusBadgeStyle('warn')}>
             OFFICIAL LOCK: NO MODEL RUN AVAILABLE
           </span>
-          <span style={{ ...styles.muted, marginLeft: 8 }}>
+          <span className="rb-evidence-muted" style={{ marginLeft: 8 }}>
             No model run existed at the capture target — unknown, not a no-bet.
           </span>
         </div>
@@ -1362,13 +1489,13 @@ function LockedDecisionPanel({ ld }: { ld: RaceCardLockedDecision }) {
             {`Data quality at lock: ${qualityDegraded ? quality : 'see note'}`}
           </span>
           {ld.data_quality_short_summary && (
-            <span style={{ ...styles.muted, marginLeft: 8 }}>
+            <span className="rb-evidence-muted" style={{ marginLeft: 8 }}>
               {ld.data_quality_short_summary}
             </span>
           )}
         </div>
       )}
-      <div style={{ fontSize: 11, color: '#656d76', marginTop: 4 }}>
+      <div className="rb-evidence-muted" style={{ fontSize: 11, marginTop: 4 }}>
         Immutable decision locked at T−5 — results never change it. The live
         model below is diagnostic only.
       </div>
@@ -1402,12 +1529,12 @@ function RaceCardView({ card, nowMs, mlShadow }: { card: RaceCard; nowMs: number
   });
 
   return (
-    <article style={styles.card}>
-      <header style={styles.cardHeader}>
+    <article className="rb-evidence-panel" style={styles.card}>
+      <header className="rb-evidence-header-rule" style={styles.cardHeader}>
         <div style={{ minWidth: 0 }}>
           <div style={styles.offTime}>{formatOffTime(card.off_time)}</div>
           {(card.course || card.race_name) && (
-            <div style={styles.subtitle}>
+            <div className="rb-evidence-muted" style={styles.subtitle}>
               {[card.course, card.race_name].filter(Boolean).join(' \u2014 ')}
             </div>
           )}
@@ -1439,11 +1566,11 @@ function RaceCardView({ card, nowMs, mlShadow }: { card: RaceCard; nowMs: number
 
       {/* Market favourite */}
       <div style={styles.favouriteRow}>
-        <div style={styles.sectionLabel}>Market favourite</div>
+        <div className="rb-evidence-muted" style={styles.sectionLabel}>Market favourite</div>
         {card.favourite ? (
           <RunnerLine runner={card.favourite} />
         ) : (
-          <span style={styles.muted}>No market data.</span>
+          <span className="rb-evidence-muted">No market data.</span>
         )}
       </div>
 
@@ -1454,13 +1581,13 @@ function RaceCardView({ card, nowMs, mlShadow }: { card: RaceCard; nowMs: number
 
       {/* Model pick */}
       <div>
-        <div style={styles.sectionLabel}>
+        <div className="rb-evidence-muted" style={styles.sectionLabel}>
           {card.lockedDecision
             ? 'Model pick — live diagnostic (official decision above)'
             : 'Model pick'}
         </div>
         {!card.lockedDecision && (
-          <div style={{ fontSize: 11, color: '#656d76', marginBottom: 4 }}>
+          <div className="rb-evidence-muted" style={{ fontSize: 11, marginBottom: 4 }}>
             Live/pre-off model diagnostic — not official locked decision.
           </div>
         )}
@@ -1479,38 +1606,35 @@ function RaceCardView({ card, nowMs, mlShadow }: { card: RaceCard; nowMs: number
             </div>
             <div style={styles.pickStats}>
               <span>
-                <span style={styles.statLabel}>Odds</span>
+                <span className="rb-evidence-muted" style={{ marginRight: 4 }}>Odds</span>
                 {formatOdds(pick.odds)}
               </span>
-              <span style={evColorStyle(pick.ev)}>
-                <span style={styles.statLabel}>EV</span>
+              <span className={evClassRaceCard(pick.ev)}>
+                <span className="rb-evidence-muted" style={{ marginRight: 4 }}>EV</span>
                 {formatEv(pick.ev)}
               </span>
               <span>
-                <span style={styles.statLabel}>Stake</span>
+                <span className="rb-evidence-muted" style={{ marginRight: 4 }}>Stake</span>
                 {pick.stake_amount.toFixed(2)}
               </span>
               <span
-                style={{
-                  color:
-                    CONFIDENCE_COLORS[
-                      ladder ? ladderToDisplay(ladder.label) : displayConfidence(pick.confidence_label)
-                    ],
-                  fontWeight: 600,
-                }}
+                className={confidenceClassRaceCard(
+                  ladder ? ladderToDisplay(ladder.label) : displayConfidence(pick.confidence_label)
+                )}
+                style={{ fontWeight: 600 }}
               >
                 {ladder ? ladderToDisplay(ladder.label) : displayConfidence(pick.confidence_label)} confidence
               </span>
             </div>
             {ladder && (
-              <div style={{ fontSize: 11, color: '#656d76', marginTop: 4, lineHeight: 1.4 }}>
+              <div className="rb-evidence-muted" style={{ fontSize: 11, marginTop: 4, lineHeight: 1.4 }}>
                 {ladder.reason}
               </div>
             )}
             <ConfidenceBreakdownPanel card={card} nowMs={nowMs} />
             {tags.length > 0 && (
               <div style={styles.tagRow}>
-                <span style={{ ...styles.sectionLabel, marginBottom: 0 }}>
+                <span className="rb-evidence-muted" style={{ ...styles.sectionLabel, marginBottom: 0 }}>
                   Why
                 </span>
                 {tags.map((t) => (
@@ -1522,25 +1646,25 @@ function RaceCardView({ card, nowMs, mlShadow }: { card: RaceCard; nowMs: number
             )}
           </>
         ) : card.hasModelRun ? (
-          <span style={styles.muted}>
+          <span className="rb-evidence-muted">
             No bet — the model ran but found no qualifying pick for this race
             (this is normal, not an error).
           </span>
         ) : (
-          <span style={styles.muted}>No model pick for this race yet.</span>
+          <span className="rb-evidence-muted">No model pick for this race yet.</span>
         )}
       </div>
 
       {/* Alternatives (EV rank 2-3): collapsed by default to keep cards compact
           on mobile. Read-only. */}
       {card.alternatives.length > 0 && (
-        <details style={styles.altList}>
-          <summary style={styles.altSummary}>
+        <details className="rb-evidence-section-rule" style={styles.altList}>
+          <summary className="rb-evidence-muted" style={styles.altSummary}>
             Alternatives ({card.alternatives.length})
           </summary>
           {card.alternatives.map((alt) => (
-            <div key={alt.runner_id} style={styles.altRow}>
-              <span style={{ width: 24, color: '#8c959f' }}>
+            <div key={alt.runner_id} className="rb-evidence-secondary" style={styles.altRow}>
+              <span className="rb-evidence-muted" style={{ width: 24 }}>
                 {alt.rank != null ? `#${alt.rank}` : ''}
               </span>
               <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
@@ -1550,7 +1674,8 @@ function RaceCardView({ card, nowMs, mlShadow }: { card: RaceCard; nowMs: number
                 {formatOdds(alt.odds)}
               </span>
               <span
-                style={{ width: 72, textAlign: 'right', ...evColorStyle(alt.ev) }}
+                className={evClassRaceCard(alt.ev)}
+                style={{ width: 72, textAlign: 'right' }}
               >
                 {formatEv(alt.ev)}
               </span>

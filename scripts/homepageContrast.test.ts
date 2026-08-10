@@ -347,27 +347,28 @@ test('9-11. the message states render via primitives, and pageMuted is gone (sli
   );
 });
 
-test('12. exactly nine styles.muted uses remain after the summary and Next Race migrations', () => {
+test('12. exactly two styles.muted uses remain, both in the legacy tipster panels', () => {
   /*
    * SCOPE OF THIS ASSERTION. It proves the COUNT and therefore non-migration:
    * `styles.muted` had fourteen uses; the two direct page-surface states moved
    * away (to `pageMuted` in slice 3D.1, then onto the message-state primitives
-   * in 3D.2), the two summary surfaces followed in evidence part 1 and the
-   * next-race panel in part 2a, and nine are still present. A blanket literal
-   * replacement would have emptied this count and broken all nine in the dark
-   * scheme, so the number is the guard.
+   * in 3D.2), the two summary surfaces followed in evidence part 1, the
+   * next-race panel in part 2a, and the seven race-card-core sites in part 2b-i.
+   * TWO are still present. A blanket literal replacement would have emptied
+   * this count and broken both in the dark scheme, so the number is the guard.
    *
-   * The nine do NOT share one surface. Seven sit inside the deferred legacy
-   * race-card surfaces and two inside the legacy tipster surfaces; what they
-   * have in common is that all nine still pair the legacy `#656d76` foreground
-   * with a compatible legacy-light background — `#fff` or `#f6f8fa`, where
-   * `#656d76` clears 4.5:1 (5.25:1 on white, 4.93:1 on `#f6f8fa`). The migrated
-   * summary and next-race regions no longer use `styles.muted` at all; test 12b
-   * owns that ownership split, and this test does not independently establish
-   * any individual site's containing surface.
+   * Both survivors sit in `TipsterStatusPanel` and `InFormPanel`, which keep
+   * `styles.panel`'s legacy `#fff` surface until their own tranche. There
+   * `#656d76` still clears 4.5:1 (5.25:1 on white). Test 12b owns the ownership
+   * record; this test does not independently establish either site's containing
+   * surface.
+   *
+   * This is the FLOOR for the evidence programme: no further site can move
+   * until the tipster panels migrate, at which point `styles.muted` is deleted
+   * outright rather than reduced again.
    */
   const remaining = [...PAGE_CODE.matchAll(/styles\.muted/g)];
-  assert.equal(remaining.length, 9, 'exactly the nine remaining legacy uses');
+  assert.equal(remaining.length, 2, 'exactly the two remaining legacy tipster uses');
 });
 
 test('12b. the styles.muted fork moved exactly the two summary-surface sites', () => {
@@ -383,22 +384,30 @@ test('12b. the styles.muted fork moved exactly the two summary-surface sites', (
    * CURRENT OWNERSHIP RECORD. The count steps down as each regime migrates:
    * twelve after slice 3D.2, ten after evidence part 1 (AccuracyBar's and
    * PerformancePanel's zero-state messages, which now sit on
-   * `rb-evidence-panel`), and NINE after part 2a, which moved NextRacePanel's
-   * single use to `rb-evidence-muted`.
+   * `rb-evidence-panel`), nine after part 2a (NextRacePanel), and TWO after
+   * part 2b-i, which moved all seven race-card-core sites — one in
+   * `RunnerLine`, three in `LockedDecisionPanel` and three in `RaceCardView` —
+   * onto `rb-evidence-muted`.
    *
-   * Of those nine, SEVEN belong to the deferred race-card core and TWO to the
-   * tipster panels — `TipsterStatusPanel` and `InFormPanel`. Part 2b migrates
-   * the seven race-card-core uses; the two tipster uses stay legacy until their
-   * own tranche.
+   * The remaining two belong to `TipsterStatusPanel` and `InFormPanel`. They
+   * are the LAST legacy holders and stay until the tipster tranche, which
+   * deletes `styles.muted` rather than shrinking it again.
    */
   assert.equal(
     [...PAGE_CODE.matchAll(/styles\.muted/g)].length,
-    9,
-    'nine legacy uses remain'
+    2,
+    'two legacy tipster uses remain'
   );
 
   // The migrated surfaces no longer reference the legacy muted style.
-  for (const region of ['AccuracyBar', 'PerformancePanel', 'NextRacePanel'] as const) {
+  for (const region of [
+    'AccuracyBar',
+    'PerformancePanel',
+    'NextRacePanel',
+    'RunnerLine',
+    'LockedDecisionPanel',
+    'RaceCardView',
+  ] as const) {
     const body = functionBody(region);
     assert.equal(
       body.includes('styles.muted'),
@@ -621,29 +630,35 @@ test('16a. the remaining legacy summary/status surfaces are explicitly self-cont
   );
 });
 
-test('16b. the race-card core still inherits the page foreground (deferred to part 2b)', () => {
+test('16b. RETIRED — no page-surface region inherits the legacy foreground any more', () => {
   /*
-   * `styles.card` is INTENTIONALLY left inheriting. It belongs to part 2b,
-   * which owns the race-card region's text as well as its surface and can
-   * therefore migrate the pair together. Until then it must keep both
-   * properties: the legacy background, and no foreground of its own.
+   * TEST 16b IS DELIBERATELY RETIRED, NOT DELETED.
    *
-   * `styles.nextRace` LEFT this set in part 2a — the next-race panel is a
-   * top-level sibling with its own surface, not a race-card descendant, so it
-   * could migrate independently. Test 19 owns it.
+   * It tracked the surfaces that still declared a legacy background AND no
+   * foreground of their own, i.e. those waiting for a paired migration. The set
+   * emptied as the programme ran: `styles.nextRace` left in part 2a, and
+   * `styles.card` — its last member — left in part 2b-i.
+   *
+   * The coverage it provided has MOVED rather than lapsed: test 20 owns the
+   * card's pairing positively (root on `rb-evidence-panel`, no legacy surface
+   * left behind). What remains here is the inverse guard, which is the part
+   * worth keeping: a region must never REACQUIRE the deferred shape. If a
+   * future tranche reintroduces a hard-coded light surface with no foreground,
+   * that is the exact bug this file exists to catch, and it fails here.
    */
-  for (const [key, background] of [['card', "'#fff'"]] as const) {
-    const block = styleBlock(key);
-    assert.ok(
-      block.includes(`background: ${background}`),
-      `styles.${key} must still declare its legacy background ${background}`
-    );
-    assert.equal(
-      /\bcolor:/.test(block),
-      false,
-      `styles.${key} still inherits — its tranche has not run yet`
-    );
-  }
+
+  // `styles.card` must not have kept — or regained — a hard-coded surface.
+  const card = styleBlock('card');
+  assert.equal(
+    /background:/.test(card),
+    false,
+    'styles.card must take its surface from rb-evidence-panel, not inline'
+  );
+  assert.equal(
+    /\bcolor:/.test(card),
+    false,
+    'styles.card must take its foreground from rb-evidence-panel, not inline'
+  );
 });
 
 test('18. the summary surfaces are paired token regions (evidence migration part 1)', () => {
@@ -711,42 +726,58 @@ test('18. the summary surfaces are paired token regions (evidence migration part
   assert.equal(/function profitColor\(/.test(PAGE_CODE), false, 'profitColor is retired');
 
   /*
-   * The legacy semantic helpers survive UNCHANGED for the race-card regions,
-   * and `roiColor` stays legacy for the out-of-scope InFormPanel.
+   * SUPERSEDED BY PART 2b-i. This block used to assert that `evColorStyle`,
+   * `CONFIDENCE_COLORS` and `componentColor` survived for the race cards. The
+   * race cards were their LAST consumers, so part 2b-i deleted all three and
+   * the assertion is now INVERTED: a dead helper left behind is the defect.
+   *
+   * `roiColor` genuinely survives — `InFormPanel` still uses it — and it is why
+   * `EV_POSITIVE_COLOR` / `EV_NEGATIVE_COLOR` also survive. The planning pass
+   * predicted those two constants would die with `evColorStyle`; checking the
+   * source showed `roiColor` consumes them, so they stayed. That consumption is
+   * asserted here so a later tranche cannot delete a constant that is still
+   * live, nor keep one after its last consumer goes.
    */
-  for (const helper of ['evColorStyle', 'roiColor'] as const) {
-    assert.match(PAGE_CODE, new RegExp(`function ${helper}\\(`), `${helper} still exists`);
+  for (const dead of ['evColorStyle', 'componentColor'] as const) {
+    assert.equal(
+      new RegExp(`function ${dead}\\(`).test(PAGE_CODE),
+      false,
+      `${dead} lost its last consumer in part 2b-i and must not linger`
+    );
   }
-  assert.match(PAGE_CODE, /const CONFIDENCE_COLORS/, 'race-card confidence map unchanged');
-  assert.match(PAGE_CODE, /function componentColor\(/, 'componentColor unchanged');
+  assert.equal(
+    /const CONFIDENCE_COLORS/.test(PAGE_CODE),
+    false,
+    'CONFIDENCE_COLORS lost its last consumer in part 2b-i'
+  );
+  assert.match(PAGE_CODE, /function roiColor\(/, 'roiColor still serves InFormPanel');
   assert.match(PAGE_CODE, /const EV_POSITIVE_COLOR = '#1a7f37';/);
   assert.match(PAGE_CODE, /const EV_NEGATIVE_COLOR = '#cf222e';/);
+  for (const constant of ['EV_POSITIVE_COLOR', 'EV_NEGATIVE_COLOR'] as const) {
+    assert.ok(
+      functionBody('roiColor').includes(constant),
+      `${constant} must keep its real consumer, or be deleted with it`
+    );
+  }
 
   /*
-   * Classes that must NOT ship yet, each barred for its own reason.
+   * Classes that must NOT ship yet.
    *
-   * `.rb-evidence-nested` and `.rb-status-frame--official` belong to PART 2b —
-   * the race-card core and its official-decision framing. Shipping either in
-   * part 2a would put a dead rule in the stylesheet ahead of the region that
-   * gives it meaning.
+   * The list has SHRUNK to one because part 2b-i shipped the others WITH real
+   * consumers, which was always the condition for admitting them:
+   * `.rb-status-frame--official` now frames LockedDecisionPanel;
+   * `.rb-evidence-secondary` now colours the confidence-breakdown summary and
+   * the alternatives rows; and `.rb-conf--unknown` became reachable because
+   * `ConfidenceLevel` is `high | medium | low | unknown` and the breakdown
+   * panel renders that fourth case. Test 20 pins each of those consumers.
    *
-   * `.rb-evidence-secondary` is barred because NOTHING CONSUMES IT. It was
-   * drafted for part 1 and removed unused. If a later tranche genuinely needs a
-   * secondary-text role it should reintroduce the class together with its first
-   * consumer, and delete this entry — not inherit a dead rule.
-   *
-   * `.rb-conf--unknown` is barred because it is UNREACHABLE on this surface.
-   * NextRacePanel's confidence is the closed `High | Medium | Low` union, and
-   * both `ladderToDisplay` and `displayConfidence` are total over it, so no
-   * unknown branch exists for it to style. Part 2b's ConfidenceBreakdownPanel
-   * does have an unknown level and may add the class alongside that consumer.
+   * `.rb-evidence-nested` stays barred: part 2b-i deliberately did NOT create
+   * it. The five nested panels are held on a TEMPORARY legacy pair instead (see
+   * test 21); part 2b-ii decides whether a nested class is the right shape once
+   * those files own token foregrounds. Shipping it now would be a dead rule
+   * ahead of the region that gives it meaning.
    */
-  for (const notYet of [
-    '.rb-evidence-nested',
-    '.rb-status-frame--official',
-    '.rb-evidence-secondary',
-    '.rb-conf--unknown',
-  ]) {
+  for (const notYet of ['.rb-evidence-nested']) {
     assert.equal(
       TOKENS_CSS.includes(notYet),
       false,
@@ -828,15 +859,20 @@ test('19. the next-race panel is a paired token region (evidence migration part 
   }
 
   /*
-   * The legacy race-card regime survives UNCHANGED. Every remaining
-   * `evColorStyle` call site must sit outside NextRacePanel, and the legacy
-   * confidence map stays for the race-card core.
+   * PART 2a's OWN CONTRACT IS UNCHANGED: NextRacePanel must not reach for a
+   * legacy helper. What changed in part 2b-i is the other half — the race cards
+   * migrated too, so `evColorStyle`, `CONFIDENCE_COLORS` and `componentColor`
+   * no longer exist for this test to find. Test 18 owns their retirement; the
+   * negative assertions below are what still belongs to part 2a, and they hold
+   * regardless of whether the legacy helpers exist.
    */
-  assert.match(PAGE_CODE, /function evColorStyle\(/, 'legacy EV helper still exists');
-  assert.equal(nextRace.includes('evColorStyle('), false, 'NextRacePanel no longer uses it');
-  assert.equal(nextRace.includes('CONFIDENCE_COLORS'), false, 'nor the legacy confidence map');
-  assert.match(PAGE_CODE, /const CONFIDENCE_COLORS/, 'race-card confidence map retained');
-  assert.match(PAGE_CODE, /function componentColor\(/, 'componentColor retained');
+  assert.equal(nextRace.includes('evColorStyle('), false, 'NextRacePanel uses no legacy EV helper');
+  assert.equal(nextRace.includes('CONFIDENCE_COLORS'), false, 'nor a legacy confidence map');
+  assert.equal(
+    /#[0-9a-fA-F]{6}/.test(nextRace),
+    false,
+    'no legacy colour literal survives anywhere in NextRacePanel'
+  );
 
   // Part 1 ownership is untouched by part 2a.
   for (const part1 of ['profitClass', 'evClassSummary'] as const) {
@@ -880,6 +916,468 @@ test('19b. the next-race pairs clear AA on the surface production uses', () => {
       assert.ok(
         ratio >= AA_NORMAL_TEXT,
         `${name} on ${tok[1]} (${scheme}) is ${ratio.toFixed(2)}:1`
+      );
+    }
+  }
+});
+
+test('20. the race-card core is a paired token region (evidence migration part 2b-i)', () => {
+  /*
+   * PART 2b-i SCOPE: the race-card ROOT and every region defined in page.tsx
+   * that renders inside it. This is a PERMANENT migration — contrast with test
+   * 21, which pins the TEMPORARY containment holding the five nested panel
+   * components until part 2b-ii.
+   *
+   * The card reuses `rb-evidence-panel`, the SAME class as the part 1 summary
+   * panels, because both are raised evidence regions; the sticky next-race
+   * panel stays on the elevated `rb-evidence-card` so it still reads as lifted
+   * above them. Reuse is deliberate — a third identical surface class would be
+   * a parallel palette, not a distinction.
+   */
+  const card = functionBody('RaceCardView');
+  assert.ok(
+    card.includes('className="rb-evidence-panel"'),
+    'the race-card root is a paired token surface'
+  );
+
+  // The inline legacy surface is gone, not merely overridden.
+  const cardStyle = styleBlock('card');
+  for (const gone of ['background:', 'border:', 'borderRadius:', 'color:']) {
+    assert.equal(
+      cardStyle.includes(gone),
+      false,
+      `styles.card must not declare ${gone} — rb-evidence-panel owns it`
+    );
+  }
+  // Geometry stays inline.
+  assert.match(cardStyle, /padding: 16/, 'card padding stays inline');
+  assert.match(cardStyle, /boxShadow:/, 'card shadow stays inline');
+
+  /*
+   * Region-owned semantic helpers. Each is defined once and used only inside
+   * the race-card core, and each returns shared token classes rather than a
+   * literal. The counts are measured against comment-stripped source, so the
+   * explanatory prose above each helper cannot satisfy them.
+   */
+  for (const [helper, uses] of [
+    ['evClassRaceCard', 4],
+    ['confidenceClassRaceCard', 2],
+    ['componentClassRaceCard', 3],
+  ] as const) {
+    assert.equal(
+      [...PAGE_CODE.matchAll(new RegExp(helper, 'g'))].length,
+      uses,
+      `${helper} must be defined once with exactly ${uses - 1} race-card call site(s)`
+    );
+    assert.equal(
+      /#[0-9a-fA-F]{6}/.test(functionBody(helper)),
+      false,
+      `${helper} holds no legacy literal`
+    );
+  }
+
+  /*
+   * Both confidence maps are typed `Record<...>` over a CLOSED union, so adding
+   * a member fails the build instead of silently taking a fall-through colour.
+   * The component map covers four levels because `ConfidenceLevel` really is
+   * `high | medium | low | unknown`.
+   */
+  const confMap = /const RACE_CARD_CONFIDENCE_CLASSES: Record<\s*ConfidenceLabel,\s*string\s*> = \{([^}]*)\}/.exec(
+    PAGE_CODE
+  );
+  assert.ok(confMap, 'the race-card confidence map must be an exhaustive Record');
+  for (const [label, cls] of [
+    ['High', 'rb-conf--high'],
+    ['Medium', 'rb-conf--medium'],
+    ['Low', 'rb-conf--low'],
+  ] as const) {
+    assert.match(confMap[1], new RegExp(`${label}: '${cls}'`), `${label} -> ${cls}`);
+  }
+
+  const compMap = /const RACE_CARD_COMPONENT_CLASSES: Record<\s*ConfidenceComponent\['level'\],\s*string\s*> = \{([^}]*)\}/.exec(
+    PAGE_CODE
+  );
+  assert.ok(compMap, 'the component map must be an exhaustive Record over ConfidenceLevel');
+  for (const [level, cls] of [
+    ['high', 'rb-conf--high'],
+    ['medium', 'rb-conf--medium'],
+    ['low', 'rb-conf--low'],
+    ['unknown', 'rb-conf--unknown'],
+  ] as const) {
+    assert.match(compMap[1], new RegExp(`${level}: '${cls}'`), `${level} -> ${cls}`);
+  }
+
+  /*
+   * `rb-conf--unknown` maps to MUTED text, not a status colour. "Unknown" is an
+   * absent signal and must not be dressed as a weak-but-present one — the same
+   * reasoning that puts `.rb-ev--neutral` on secondary text.
+   */
+  assert.match(cssRule('.rb-conf--unknown'), /color: var\(--rb-text-muted\)/);
+
+  /*
+   * No race-card region may keep a legacy foreground on the token surface.
+   * `styles.statLabel` is gone entirely: it fused a colour with a 4px margin, so
+   * it could never be overridden per-region, and all six race-card sites now
+   * carry the margin structurally with the colour from a class.
+   */
+  assert.equal(/statLabel/.test(PAGE_CODE), false, 'styles.statLabel is retired');
+  for (const region of [
+    'RaceCardView',
+    'LockedDecisionPanel',
+    'ConfidenceBreakdownPanel',
+    'RunnerLine',
+    'FreshnessRow',
+    'RaceStatusRow',
+  ] as const) {
+    assert.equal(
+      /#[0-9a-fA-F]{6}/.test(functionBody(region)),
+      false,
+      `${region} must hold no legacy colour literal on the token card`
+    );
+  }
+
+  // Every class part 2b-i defines has a real production consumer.
+  for (const cls of [
+    'rb-status-frame--official',
+    'rb-evidence-secondary',
+    'rb-conf--unknown',
+    'rb-evidence-header-rule',
+    'rb-evidence-section-rule',
+  ]) {
+    assert.ok(TOKENS_CSS.includes(`.${cls}`), `${cls} must be defined`);
+    assert.ok(PAGE_CODE.includes(cls), `${cls} must be consumed by page.tsx, not shipped unused`);
+  }
+
+  // Part 1 and part 2a ownership is untouched by part 2b-i.
+  for (const kept of [
+    'profitClass',
+    'evClassSummary',
+    'evClassNextRace',
+    'confidenceClassNextRace',
+  ] as const) {
+    assert.match(PAGE_CODE, new RegExp(`function ${kept}\\(`), `${kept} intact`);
+  }
+  assert.match(PAGE_CODE, /position: 'sticky' as const/, 'the part 2a sticky contract is intact');
+  assert.match(PAGE_CODE, /const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';/, 'containment retained');
+});
+
+test('20b. the official locked decision has structural primacy over the live diagnostic', () => {
+  /*
+   * The official T-minus-5 decision now carries `rb-status-frame` plus the new
+   * `--official` modifier. The modifier changes the LEFT BORDER ONLY: tone is a
+   * structural rule, never a tinted fill and never a second palette.
+   *
+   * The border REINFORCES; it never carries the meaning alone. The panel's
+   * wording and its position before the live diagnostic remain the primary
+   * distinction, which is what the order and label assertions below pin.
+   */
+  const official = cssRule('.rb-status-frame--official');
+  assert.match(official, /border-left-color: var\(--rb-status-official\)/);
+  const declarations = official
+    .split('\n')
+    .filter((l) => l.includes(':') && !l.includes('{'))
+    .map((l) => l.trim());
+  assert.equal(declarations.length, 1, 'the modifier changes border-left-color and nothing else');
+
+  const locked = functionBody('LockedDecisionPanel');
+  assert.ok(
+    locked.includes('className="rb-status-frame rb-status-frame--official"'),
+    'LockedDecisionPanel carries the official frame'
+  );
+
+  /*
+   * `rb-status-frame` is itself a PAIRED surface, so the frame does not leave
+   * its contents inheriting a foreground that may not match it.
+   */
+  const frame = cssRule('.rb-status-frame');
+  assert.match(frame, /background: var\(--rb-surface-[a-z-]+\)/, 'frame declares a token surface');
+  assert.match(frame, /color: var\(--rb-text-primary\)/, 'frame declares a paired foreground');
+
+  // Every lock state and its exact wording survives.
+  for (const literal of [
+    'Official locked decision (T−5)',
+    'OFFICIAL LOCKED NO BET',
+    'OFFICIAL LOCKED PICK',
+    'OFFICIAL LOCK: NO MODEL RUN AVAILABLE',
+    'No model run existed at the capture target — unknown, not a no-bet.',
+    'Data quality at lock:',
+    'Immutable decision locked at T−5 — results never change it.',
+  ]) {
+    assert.ok(locked.includes(literal), `lock wording must survive verbatim: ${literal}`);
+  }
+  for (const state of ['locked_no_bet', 'locked_pick', 'no_run_available'] as const) {
+    assert.ok(locked.includes(`'${state}'`), `${state} must remain a distinct branch`);
+  }
+
+  /*
+   * `no_run_available` must never be collapsed into a no-bet: it is an unknown,
+   * and CLAUDE.md treats the distinction as a safety property, not a nicety.
+   */
+  assert.ok(
+    locked.includes('unknown, not a no-bet'),
+    'no_run_available must stay distinct from locked_no_bet'
+  );
+
+  // The frame adds no interaction, role, live region or control.
+  for (const forbidden of ['onClick', 'onChange', 'role=', 'aria-live', '<button', 'clipboard']) {
+    assert.equal(
+      locked.includes(forbidden),
+      false,
+      `the official frame is display-only — ${forbidden} must not appear`
+    );
+  }
+
+  /*
+   * EVIDENCE ORDER IS UNCHANGED. Market favourite still precedes the official
+   * decision, which still precedes the live diagnostic, and the alternatives
+   * still follow — all of them OUTSIDE the official frame, which is closed by
+   * LockedDecisionPanel itself.
+   */
+  const card = functionBody('RaceCardView');
+  const at = (needle: string) => {
+    const i = card.indexOf(needle);
+    assert.notEqual(i, -1, `RaceCardView must still render ${needle}`);
+    return i;
+  };
+  const favourite = at('Market favourite');
+  const lockedAt = at('<LockedDecisionPanel');
+  const diagnostic = at('Model pick — live diagnostic (official decision above)');
+  const alternatives = at('Alternatives (');
+  assert.ok(favourite < lockedAt, 'market favourite stays before the official decision');
+  assert.ok(lockedAt < diagnostic, 'the official decision stays before the live diagnostic');
+  assert.ok(diagnostic < alternatives, 'alternatives stay after the diagnostic');
+
+  // Neither the favourite nor the alternatives may be pulled inside the frame.
+  assert.equal(
+    locked.includes('Market favourite'),
+    false,
+    'market favourite must stay outside the official frame'
+  );
+  assert.equal(
+    locked.includes('Alternatives ('),
+    false,
+    'alternatives must stay outside the official frame'
+  );
+
+  // The unlocked branch keeps its explicit diagnostic disclaimer.
+  assert.ok(
+    card.includes('Live/pre-off model diagnostic — not official locked decision.'),
+    'the unlocked diagnostic disclaimer survives verbatim'
+  );
+});
+
+test('21. the five nested panels are held on a TEMPORARY legacy pair (part 2b-ii debt)', () => {
+  /*
+   * THIS IS CONTAINMENT, NOT A MIGRATION.
+   *
+   * `styles.explanationPanel` is spread LAST over each nested panel's own style
+   * object, so its background decides what those panels actually render on. It
+   * used to be `transparent`, which was safe only while the card root was
+   * legacy white. Three of the five panels do declare `background: '#fff'`
+   * themselves — the override stripped it — while all five keep hard-coded
+   * legacy foregrounds inside their own component files.
+   *
+   * Part 2b-i therefore pins an opaque white surface AND the legacy primary
+   * foreground here, so every one of those colours stays on the background it
+   * was measured against in both schemes. Part 2b-ii deletes both declarations
+   * once the five component files own token-safe foregrounds. Removing them
+   * earlier puts legacy dark text back onto the dark token card — the failure
+   * this test quantifies at the end.
+   */
+  assert.match(
+    PAGE_CODE,
+    /const LEGACY_NESTED_PANEL_SURFACE = '#ffffff';/,
+    'the temporary surface must be a named module-level constant'
+  );
+  assert.equal(
+    [...PAGE_CODE.matchAll(/const LEGACY_NESTED_PANEL_SURFACE\b/g)].length,
+    1,
+    'declared exactly once'
+  );
+  assert.match(PAGE_CODE, /const LEGACY_NESTED_PANEL_FOREGROUND = '#1f2328';/);
+
+  const panel = styleBlock('explanationPanel');
+  assert.match(
+    panel,
+    /background: LEGACY_NESTED_PANEL_SURFACE/,
+    'the nested surface must be opaque, never transparent'
+  );
+  assert.match(
+    panel,
+    /color: LEGACY_NESTED_PANEL_FOREGROUND/,
+    'a surface without its foreground is the exact bug this contains'
+  );
+  assert.equal(
+    /background: 'transparent'/.test(panel),
+    false,
+    'the transparent background is what made the nested panels unsafe'
+  );
+
+  // All five nested panels receive it — none may be left out.
+  const card = functionBody('RaceCardView');
+  for (const nested of [
+    'SettlementStatusPanel',
+    'RaceIntelligencePanel',
+    'RaceExplanationPanel',
+    'GenaiCommentaryPanel',
+    'MlShadowComparisonPanel',
+  ]) {
+    assert.ok(card.includes(`<${nested}`), `${nested} must still render inside the card`);
+  }
+  assert.equal(
+    [...card.matchAll(/style=\{styles\.explanationPanel\}/g)].length,
+    5,
+    'exactly the five nested panels carry the temporary pair'
+  );
+
+  // The removal condition must name every panel it depends on.
+  const removal = PAGE_SRC.slice(
+    PAGE_SRC.indexOf('REMOVAL CONDITION. Delete this constant, and the'),
+    PAGE_SRC.indexOf("const LEGACY_NESTED_PANEL_SURFACE")
+  );
+  assert.ok(removal.length > 0, 'the removal condition must be documented at the constant');
+  for (const nested of [
+    'SettlementStatusPanel',
+    'RaceIntelligencePanel',
+    'RaceExplanationPanel',
+    'GenaiCommentaryPanel',
+    'MlShadowComparisonPanel',
+  ]) {
+    assert.ok(removal.includes(nested), `the removal condition must name ${nested}`);
+  }
+  assert.match(removal, /part 2b-ii/, 'the removal condition must name the tranche that clears it');
+
+  /*
+   * Every inheriting foreground the five panels actually declare clears AA on
+   * the temporary surface. These are the real literals in those files, not a
+   * representative sample.
+   */
+  for (const [role, fg] of [
+    ['primary body text', '#1f2328'],
+    ['secondary', '#424a53'],
+    ['muted', '#656d76'],
+    ['ml shadow accent', '#8250df'],
+    ['commentary kind', '#0550ae'],
+    ['warning', '#9a6700'],
+    ['finish badge', '#0969da'],
+  ] as const) {
+    const ratio = contrast(fg, '#ffffff');
+    assert.ok(
+      ratio >= AA_NORMAL_TEXT,
+      `nested ${role} ${fg} on the temporary surface is ${ratio.toFixed(2)}:1`
+    );
+  }
+
+  /*
+   * KNOWN SHORTFALL, PRE-EXISTING AND UNCHANGED — `#8c959f` at 3.04:1.
+   *
+   * It occurs exactly ONCE in the five panels: `RaceIntelligencePanel`'s
+   * `basis` caption line. Part 2b-i neither caused nor worsened it. Before this
+   * tranche the panel was transparent over the card's own `#fff`, so the
+   * EFFECTIVE background was already white and the ratio was already 3.04:1 —
+   * the containment reproduces the previous rendering exactly, which is the
+   * whole point of a compatibility pair.
+   *
+   * It is recorded rather than silently tolerated, and bounded on BOTH sides: a
+   * floor so a regression is caught, and a ceiling so that when part 2b-ii
+   * gives this text a token foreground the exemption fails and must be deleted
+   * rather than lingering as a permanent excuse. Same treatment as the
+   * RaceDayNav shortfall in test 14c.
+   */
+  const faint = contrast('#8c959f', '#ffffff');
+  assert.ok(faint > 3, `the known shortfall must not regress further: ${faint.toFixed(2)}:1`);
+  assert.ok(
+    faint < AA_NORMAL_TEXT,
+    'the #8c959f shortfall has been fixed — delete this exemption and assert AA instead'
+  );
+  /*
+   * The containment must reproduce the PREVIOUS effective background rather
+   * than pick a new one. Those panels rendered on the card's legacy `#fff`, so
+   * the constant has to be white — asserted from the value parsed out of the
+   * source above, not from a literal repeated here, which would prove nothing.
+   * White has luminance exactly 1, so every ratio in this test (including the
+   * shortfall) is numerically identical to what shipped before part 2b-i.
+   */
+  const declared = /const LEGACY_NESTED_PANEL_SURFACE = '(#[0-9a-fA-F]{6})';/.exec(PAGE_CODE);
+  assert.ok(declared, 'the temporary surface must be a full six-digit literal');
+  assert.equal(
+    luminance(declared[1]),
+    1,
+    `the containment surface must be white, the colour the nested panels were measured against; got ${declared[1]}`
+  );
+  /*
+   * Comment-stripped: page.tsx's own prose legitimately names `#8c959f` when
+   * explaining the shortfall and the retired `componentColor`, and a structural
+   * assertion must not read documentation as code.
+   */
+  assert.equal(
+    [...PAGE_CODE.matchAll(/#8c959f/g)].length,
+    0,
+    'the shortfall belongs to RaceIntelligencePanel; page.tsx folded its own faint tier into muted'
+  );
+
+  const cardSurfaceDark = darkToken('--rb-surface-raised');
+  const wouldHaveBeen = contrast('#1f2328', cardSurfaceDark);
+  assert.ok(
+    wouldHaveBeen < 3,
+    `containment must be demonstrably necessary; transparent would give ${wouldHaveBeen.toFixed(2)}:1`
+  );
+});
+
+test('20c. the race-card pairs clear AA on the surface production uses', () => {
+  /*
+   * The surface is DERIVED from `.rb-evidence-panel`'s actual CSS contract, so
+   * contrast is measured against what the card really renders and a future
+   * raised/elevated change fails here. The official frame is measured against
+   * its OWN surface, which is a different token.
+   *
+   * Token-level calculation; it does not compare browser-computed styles.
+   */
+  const surfaceOf = (selector: string) => {
+    const rule = cssRule(selector);
+    const bg = /background:\s*var\((--rb-surface-[a-z-]+)\)/.exec(rule);
+    assert.ok(bg, `${selector} must declare a var(--rb-surface-*) background`);
+    return { name: bg[1], light: lightToken(bg[1]), dark: darkToken(bg[1]) };
+  };
+
+  const roles = [
+    ['primary (off time, pick name, odds)', '--rb-text-primary'],
+    ['secondary (breakdown, alternatives)', '--rb-text-secondary'],
+    ['muted (labels, reasons, separators)', '--rb-text-muted'],
+    ['EV positive', '--rb-status-positive'],
+    ['EV negative', '--rb-status-failure'],
+    ['EV neutral', '--rb-text-secondary'],
+    ['confidence high', '--rb-status-positive'],
+    ['confidence medium', '--rb-status-warning'],
+    ['confidence low', '--rb-status-failure'],
+    ['confidence unknown', '--rb-text-muted'],
+  ] as const;
+
+  for (const selector of ['.rb-evidence-panel', '.rb-status-frame'] as const) {
+    const surface = surfaceOf(selector);
+    for (const [name, token] of roles) {
+      for (const scheme of ['light', 'dark'] as const) {
+        const fg = scheme === 'light' ? lightToken(token) : darkToken(token);
+        const ratio = contrast(fg, surface[scheme]);
+        assert.ok(
+          ratio >= AA_NORMAL_TEXT,
+          `${name} on ${selector} ${surface.name} (${scheme}) is ${ratio.toFixed(2)}:1`
+        );
+      }
+    }
+
+    /*
+     * The official left border is a MEANINGFUL non-text indicator, so it takes
+     * the 3:1 floor rather than 4.5:1. It is reinforcement only — wording and
+     * position remain the primary distinction — but it must still be visible.
+     */
+    for (const scheme of ['light', 'dark'] as const) {
+      const border =
+        scheme === 'light' ? lightToken('--rb-status-official') : darkToken('--rb-status-official');
+      const ratio = contrast(border, surface[scheme]);
+      assert.ok(
+        ratio >= 3,
+        `the official border on ${selector} (${scheme}) is ${ratio.toFixed(2)}:1`
       );
     }
   }
