@@ -53,14 +53,13 @@ const styles = {
     border: '1px solid #d0d7de',
     borderRadius: 10,
     padding: '10px 12px',
-    background: '#fff',
     marginBottom: 12,
   } as CSSProperties,
   label: {
     fontSize: 11,
     fontWeight: 700,
     letterSpacing: 0.5,
-    color: '#656d76',
+    color: 'var(--rb-text-muted)',
     textTransform: 'uppercase' as const,
     marginBottom: 6,
   } as CSSProperties,
@@ -72,17 +71,17 @@ const styles = {
     fontSize: 14,
   } as CSSProperties,
   muted: {
-    color: '#656d76',
+    color: 'var(--rb-text-muted)',
   } as CSSProperties,
   note: {
     fontSize: 12.5,
-    color: '#424a53',
+    color: 'var(--rb-text-secondary)',
     marginTop: 6,
     overflowWrap: 'anywhere' as const,
   } as CSSProperties,
   disclaimer: {
     fontSize: 11.5,
-    color: '#656d76',
+    color: 'var(--rb-text-muted)',
     marginTop: 6,
   } as CSSProperties,
 } as const;

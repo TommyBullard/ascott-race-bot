@@ -38,16 +38,15 @@ const styles = {
     border: '1px solid #d0d7de',
     borderRadius: 10,
     padding: 16,
-    background: '#fff',
     fontFamily: 'system-ui, -apple-system, sans-serif',
-    color: '#1f2328',
+    color: 'var(--rb-text-primary)',
   } as CSSProperties,
   title: {
     fontSize: 13,
     fontWeight: 700,
     letterSpacing: 0.5,
     textTransform: 'uppercase' as const,
-    color: '#424a53',
+    color: 'var(--rb-text-secondary)',
     margin: '0 0 10px',
   } as CSSProperties,
   row: {
@@ -60,29 +59,29 @@ const styles = {
   label: {
     fontSize: 12,
     fontWeight: 700,
-    color: '#656d76',
+    color: 'var(--rb-text-muted)',
     textTransform: 'uppercase' as const,
     letterSpacing: 0.4,
     minWidth: 140,
   } as CSSProperties,
   value: {
     fontSize: 14,
-    color: '#1f2328',
+    color: 'var(--rb-text-primary)',
     fontWeight: 600,
   } as CSSProperties,
   odds: {
     fontSize: 13,
-    color: '#656d76',
+    color: 'var(--rb-text-muted)',
     fontVariantNumeric: 'tabular-nums' as const,
   } as CSSProperties,
   basis: {
     fontSize: 12,
-    color: '#8c959f',
+    color: 'var(--rb-text-muted)',
     flexBasis: '100%',
   } as CSSProperties,
   empty: {
     fontSize: 14,
-    color: '#656d76',
+    color: 'var(--rb-text-muted)',
   } as CSSProperties,
   badge: {
     display: 'inline-block',
@@ -118,14 +117,14 @@ const styles = {
   warnList: {
     margin: '10px 0 0',
     paddingLeft: 18,
-    color: '#9a6700',
+    color: 'var(--rb-status-warning)',
     fontSize: 13,
   } as CSSProperties,
   disclaimer: {
     margin: '10px 0 0',
     fontSize: 11.5,
     lineHeight: 1.5,
-    color: '#656d76',
+    color: 'var(--rb-text-muted)',
   } as CSSProperties,
 } as const;
 
