@@ -12,6 +12,25 @@
  * Decision-support only: it never changes the recommendation, never implies real
  * bookmaker each-way terms, never calculates a payout or profit/loss, and shows
  * "—" for values that are not yet known (e.g. before any race is settled).
+ *
+ * SLICE 3D — TOP-LEVEL PANELS, PART 2. Like its sibling proof panel, this one
+ * owned TWO fixed-light surfaces: a `#fff` root and a `#f6f8fa` fill behind
+ * every metric cell. Both move to tokens here, together with every descendant
+ * foreground, in ONE change — an inner surface left behind by an outer one is
+ * exactly the dark-on-dark defect this programme exists to prevent.
+ *
+ * The cell fill takes `--rb-surface-inset` and its edge takes `--rb-border`,
+ * so each cell still reads as a recessed tile. The big cell VALUE inherits the
+ * root's token foreground and is therefore measured against the INSET surface
+ * (13.91:1 light / 16.58:1 dark), while its label takes muted text there
+ * (4.78 / 6.35) — the tightest pair in this tranche, pinned by name in 24b.
+ *
+ * The marker badge and the pending notice are SELF-CONTAINED (each declares
+ * its own fill AND its own text) and are retained exactly as they are.
+ *
+ * Colour only: the research-only boundary, heading, wording, disclaimers,
+ * settled/pending logic, em-dash rendering and the empty-day condition are all
+ * unchanged.
  */
 
 import type { CSSProperties } from 'react';
@@ -26,13 +45,16 @@ export interface PlaceAuditPanelProps {
 const DASH = '\u2014';
 
 const styles = {
+  /*
+   * GEOMETRY ONLY — surface, border, radius and foreground all arrive together
+   * from `rb-evidence-panel`. `borderRadius: 10` is dropped rather than kept
+   * because `--rb-radius-card` is 10px, so the class reproduces it exactly.
+   * Padding, font family and the bottom margin stay, and the caller's `style`
+   * prop still merges over them exactly as before.
+   */
   panel: {
-    border: '1px solid #d0d7de',
-    borderRadius: 10,
     padding: 16,
-    background: '#fff',
     fontFamily: 'system-ui, -apple-system, sans-serif',
-    color: '#1f2328',
     marginBottom: 16,
   } as CSSProperties,
   heading: {
@@ -47,8 +69,9 @@ const styles = {
     gap: 8,
     marginBottom: 12,
     fontSize: 13,
-    color: '#424a53',
+    color: 'var(--rb-text-secondary)',
   } as CSSProperties,
+  /* Self-contained and retained verbatim: 6.68:1 on its own fill. */
   markerBadge: {
     display: 'inline-block',
     padding: '1px 8px',
@@ -59,6 +82,11 @@ const styles = {
     border: '1px solid #b6e3ff',
     color: '#0550ae',
   } as CSSProperties,
+  /*
+   * Self-contained and retained verbatim: 4.52:1 on its own fill. It declares
+   * BOTH halves, so the surface behind it cannot reach it and it needs no
+   * token pairing — the pending treatment is unchanged in every respect.
+   */
   pending: {
     fontSize: 13,
     color: '#9a6700',
@@ -74,26 +102,39 @@ const styles = {
     gap: 10,
     marginBottom: 12,
   } as CSSProperties,
+  /*
+   * THE SECOND SURFACE, MIGRATED WITH THE FIRST.
+   *
+   * `#f6f8fa` is a fixed near-white tile and `#eaeef2` its fixed near-white
+   * edge. Left behind on a token root they would stay bright in the dark
+   * scheme and hold the inherited light cell value at 1.06:1 — worse than not
+   * migrating the root at all. The fill takes the recessed token and the edge
+   * takes the hairline token, so the tile follows the surface it sits on. Its
+   * own `borderRadius` is kept: that is the tile's shape, not a duplicate of
+   * the root radius the class now owns.
+   */
   cell: {
-    border: '1px solid #eaeef2',
+    border: '1px solid var(--rb-border)',
     borderRadius: 8,
     padding: '8px 10px',
-    background: '#f6f8fa',
+    background: 'var(--rb-surface-inset)',
   } as CSSProperties,
+  /* On the inset tile, not the raised panel: 4.78:1 light / 6.35:1 dark. */
   cellLabel: {
     fontSize: 11,
-    color: '#656d76',
+    color: 'var(--rb-text-muted)',
     marginBottom: 2,
   } as CSSProperties,
   cellValue: {
     fontSize: 18,
     fontWeight: 700,
   } as CSSProperties,
+  /* On the RAISED panel surface, not the inset tiles: 5.45:1 / 5.60:1. */
   disclaimers: {
     margin: 0,
     paddingLeft: 18,
     fontSize: 11.5,
-    color: '#656d76',
+    color: 'var(--rb-text-muted)',
     lineHeight: 1.5,
   } as CSSProperties,
 } as const;
@@ -121,7 +162,11 @@ export default function PlaceAuditPanel({ view, style }: PlaceAuditPanelProps) {
   ];
 
   return (
-    <section style={style ? { ...styles.panel, ...style } : styles.panel} aria-label="Place / each-way audit (research)">
+    <section
+      className="rb-evidence-panel"
+      style={style ? { ...styles.panel, ...style } : styles.panel}
+      aria-label="Place / each-way audit (research)"
+    >
       <h2 style={styles.heading}>Place / each-way audit (research)</h2>
 
       <div style={styles.markerRow}>

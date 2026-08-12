@@ -2992,3 +2992,704 @@ test('23b. every part-1 panel foreground clears AA on the surface it now takes',
     );
   }
 });
+
+/* ========================================================================== *
+ * 24-24b. proof, timeline and place audit (TOP-LEVEL PANELS, PART 2)
+ *
+ * The last three of the five top-level panels. Each owned a `#fff` root with
+ * hard-coded dark text, and TWO of them owned a SECOND fixed-light surface as
+ * well — the proof rows and the place-audit cells, both `#f6f8fa`.
+ *
+ * That inner surface is what makes this tranche different from part 1. A root
+ * can be migrated and still leave a bright well inside it holding inherited
+ * light text; on the dark scheme that pairing measures 1.06:1, which is worse
+ * than not migrating the root at all. So surface and foreground move together
+ * at BOTH levels here, and the text on an inner surface is measured against
+ * the INNER surface — not against the panel behind it.
+ * ========================================================================== */
+
+const PART2_PANELS = [
+  'ProofOfUpdatePanel',
+  'RaceTimelinePanel',
+  'PlaceAuditPanel',
+] as const;
+
+type Part2Panel = (typeof PART2_PANELS)[number];
+
+/** Comment-stripped, so prose naming a retired literal cannot satisfy a check. */
+const PART2_SRC: Record<Part2Panel, string> = Object.fromEntries(
+  PART2_PANELS.map((n) => [n, codeOf(readFileSync(`src/components/${n}.tsx`, 'utf8'))])
+) as Record<Part2Panel, string>;
+
+/** One named style entry of a part-2 component source, bounded to itself. */
+function part2Entry(name: Part2Panel, key: string): string {
+  const found = styleEntries(PART2_SRC[name]).find((e) => e.name === key);
+  assert.ok(found, `${name}.${key} must exist as a bounded style entry`);
+  return found.body;
+}
+
+/**
+ * Retired literals, PER COMPONENT — deliberately not one shared list.
+ *
+ * `#d0d7de`, `#424a53`, `#f6f8fa` and `#9a6700` are retired from some of these
+ * files while being legitimately RETAINED by others inside a self-contained
+ * badge: the timeline's neutral pill is `#424a53` on `#f6f8fa` with a
+ * `#d0d7de` edge. A single shared list would have to drop exactly the literals
+ * most worth checking, so each file states its own.
+ */
+const PART2_RETIRED: Record<Part2Panel, readonly string[]> = {
+  ProofOfUpdatePanel: [
+    '#fff',
+    '#1f2328',
+    '#d0d7de',
+    '#f6f8fa',
+    '#424a53',
+    '#57606a',
+    '#1a7f37',
+    '#9a6700',
+  ],
+  RaceTimelinePanel: ['#fff', '#1f2328', '#656d76', '#eaeef2'],
+  PlaceAuditPanel: [
+    '#fff',
+    '#1f2328',
+    '#d0d7de',
+    '#f6f8fa',
+    '#eaeef2',
+    '#424a53',
+    '#656d76',
+  ],
+};
+
+/**
+ * Exactly how many fixed colours each file may still declare.
+ *
+ * Pinned as a NUMBER, not as "> 0": the proof panel legitimately ends with
+ * ZERO, so a `> 0` floor would be false there and a `>= 0` floor would be
+ * vacuous everywhere. The timeline keeps four badge tones plus a warning chip
+ * (5 x 3 = 15); the place audit keeps a marker badge and a pending notice
+ * (2 x 3 = 6).
+ */
+const PART2_FIXED_COLOUR_COUNT: Record<Part2Panel, number> = {
+  ProofOfUpdatePanel: 0,
+  RaceTimelinePanel: 15,
+  PlaceAuditPanel: 6,
+};
+
+/** The self-contained chips each file retains, by style-entry name. */
+const PART2_CHIPS: Record<Part2Panel, readonly string[]> = {
+  ProofOfUpdatePanel: [],
+  RaceTimelinePanel: ['pos', 'neg', 'warn', 'neutral', 'warnChip'],
+  PlaceAuditPanel: ['markerBadge', 'pending'],
+};
+
+test('24. proof, timeline and place audit are a paired token region (top-level part 2)', () => {
+  /* --- A. all three roots take the paired surface, in the same change ----- */
+
+  for (const name of PART2_PANELS) {
+    assert.match(
+      PART2_SRC[name],
+      /<section\s+className="rb-evidence-panel"/,
+      `${name} root must take the paired token surface`
+    );
+
+    /*
+     * The root style is GEOMETRY ONLY. A background, foreground, border or
+     * radius here would either fight the class or strand half of the pair on
+     * it. `borderRadius` is included deliberately: `--rb-radius-card` is 10px,
+     * so the class reproduces the legacy value and a duplicate would be drift
+     * waiting to happen.
+     */
+    const root = part2Entry(name, 'panel');
+    assert.equal(/background:/.test(root), false, `${name} takes its surface from the class`);
+    assert.equal(/\bcolor:/.test(root), false, `${name} takes its foreground from the class`);
+    assert.equal(/border/i.test(root), false, `${name} takes its border and radius from the class`);
+    for (const geometry of ['padding: 16', "fontFamily: 'system-ui", 'marginBottom: 16']) {
+      assert.ok(root.includes(geometry), `${name} root must keep ${geometry}`);
+    }
+  }
+
+  /*
+   * STYLE-PROP MERGING IS PART OF THE CONTRACT, and the two panels that accept
+   * a `style` prop merge it DIFFERENTLY — one unconditionally, one only when
+   * the prop is present. Both forms are pinned exactly as written, because
+   * "adds a className" must not quietly become "rewrites how the override
+   * composes". The timeline takes no `style` prop at all and must not grow one.
+   */
+  assert.match(
+    PART2_SRC.ProofOfUpdatePanel,
+    /style=\{\{ \.\.\.styles\.panel, \.\.\.style \}\}/,
+    'the proof panel still merges its style prop over the container'
+  );
+  assert.match(
+    PART2_SRC.PlaceAuditPanel,
+    /style=\{style \? \{ \.\.\.styles\.panel, \.\.\.style \} : styles\.panel\}/,
+    'the place-audit panel still merges its style prop conditionally'
+  );
+  assert.match(
+    PART2_SRC.RaceTimelinePanel,
+    /<section className="rb-evidence-panel" style=\{styles\.panel\}>/,
+    'the timeline root is unchanged apart from the class'
+  );
+  assert.equal(
+    /style\?: CSSProperties/.test(PART2_SRC.RaceTimelinePanel),
+    false,
+    'the timeline must not have gained a style prop'
+  );
+
+  /* --- B. every text role takes the token matching its old tier ----------- */
+
+  const ROLES = [
+    ['ProofOfUpdatePanel', 'label', '--rb-text-secondary'],
+    ['ProofOfUpdatePanel', 'disclaimer', '--rb-text-muted'],
+    ['RaceTimelinePanel', 'note', '--rb-text-muted'],
+    ['RaceTimelinePanel', 'metaRow', '--rb-text-muted'],
+    ['RaceTimelinePanel', 'empty', '--rb-text-muted'],
+    ['RaceTimelinePanel', 'stale', '--rb-status-warning'],
+    ['PlaceAuditPanel', 'markerRow', '--rb-text-secondary'],
+    ['PlaceAuditPanel', 'cellLabel', '--rb-text-muted'],
+    ['PlaceAuditPanel', 'disclaimers', '--rb-text-muted'],
+  ] as const;
+
+  for (const [name, key, token] of ROLES) {
+    assert.ok(
+      part2Entry(name, key).includes(`color: 'var(${token})'`),
+      `${name}.${key} must take ${token}`
+    );
+  }
+
+  /* Structure carried alongside those colours is unchanged. */
+  for (const [name, key, geometry] of [
+    ['ProofOfUpdatePanel', 'label', 'fontWeight: 600'],
+    ['ProofOfUpdatePanel', 'disclaimer', 'lineHeight: 1.5'],
+    ['RaceTimelinePanel', 'stale', 'fontWeight: 700'],
+    ['RaceTimelinePanel', 'note', 'fontSize: 12'],
+    ['PlaceAuditPanel', 'cellLabel', 'marginBottom: 2'],
+    ['PlaceAuditPanel', 'disclaimers', 'paddingLeft: 18'],
+  ] as const) {
+    assert.ok(part2Entry(name, key).includes(geometry), `${name}.${key} must keep ${geometry}`);
+  }
+
+  /* --- C. the INNER surfaces moved with the outer one --------------------- */
+
+  /*
+   * THE DEFECT THIS TRANCHE CLOSES BEYOND PART 1.
+   *
+   * The proof rows and the place-audit cells are surfaces in their own right.
+   * Migrating only the root would leave a fixed near-white well holding the
+   * root's inherited token foreground — 1.06:1 in the dark scheme (section D
+   * of test 24b). Both take the recessed token, and the place cell's edge
+   * follows too, because a fixed near-white border on a dark tile is the same
+   * bright-seam defect as a fixed row rule.
+   */
+  const proofRow = part2Entry('ProofOfUpdatePanel', 'row');
+  assert.ok(
+    proofRow.includes("background: 'var(--rb-surface-inset)'"),
+    'the proof rows must take the recessed token surface'
+  );
+  assert.equal(/#[0-9a-fA-F]{6}/.test(proofRow), false, 'and hold no fixed colour');
+
+  const placeCell = part2Entry('PlaceAuditPanel', 'cell');
+  assert.ok(
+    placeCell.includes("background: 'var(--rb-surface-inset)'"),
+    'the place-audit cells must take the recessed token surface'
+  );
+  assert.ok(
+    placeCell.includes("border: '1px solid var(--rb-border)'"),
+    'and their edge must follow the surface too'
+  );
+  assert.equal(/#[0-9a-fA-F]{6}/.test(placeCell), false, 'and hold no fixed colour');
+
+  /*
+   * The timeline has NO inner surface — its rows are separated by a rule, not
+   * a fill. That rule is decorative: no 3:1 non-text floor is claimed for it.
+   */
+  const timelineRow = part2Entry('RaceTimelinePanel', 'row');
+  assert.ok(
+    timelineRow.includes("borderTop: '1px dashed var(--rb-border)'"),
+    'the timeline row rule must be token-backed'
+  );
+  assert.equal(/#[0-9a-fA-F]{6}/.test(timelineRow), false, 'and hold no legacy literal');
+
+  /* --- D. TONE_COLOR: a flat map, parsed by name -------------------------- */
+
+  /*
+   * `styleEntries` matches `name: {`, so a FLAT STRING RECORD is invisible to
+   * it — the same blind spot `badgeStyleBranches` exists to close for the ML
+   * panel and `CONSOLE_COUNT_COLOR` for the decision console. Parsed BY NAME
+   * and in source order, not counted: a count alone would still pass if one
+   * tone were renamed and another duplicated.
+   */
+  const proof = PART2_SRC.ProofOfUpdatePanel;
+  const toneBody = /const TONE_COLOR: Record<ProofTone, string> = \{([^}]*)\}/.exec(proof);
+  assert.ok(toneBody, 'TONE_COLOR must exist as a bounded map');
+  assert.deepEqual(
+    [...toneBody[1].matchAll(/(\w+): '(var\(--rb-[a-z-]+\))'/g)].map((m) => [m[1], m[2]]),
+    [
+      ['ok', 'var(--rb-status-positive)'],
+      ['warn', 'var(--rb-status-warning)'],
+      ['neutral', 'var(--rb-text-muted)'],
+    ],
+    'every proof tone must map to a dark-aware token, in declaration order'
+  );
+
+  /*
+   * IT MUST NOT BECOME A CHIP PALETTE. These three are BARE TEXT on the inset
+   * row; the row owns the fill. Giving each tone its own background would turn
+   * a table of evidence into a row of pills and change what the panel is.
+   */
+  assert.equal(
+    /(background|bg):/.test(toneBody[1]),
+    false,
+    'TONE_COLOR is a foreground-only map and must not grow a fill'
+  );
+  assert.ok(
+    proof.includes('color: TONE_COLOR[r.tone]'),
+    'the proof values must consume TONE_COLOR'
+  );
+
+  /* --- E. the pairing invariant, checked per style entry ------------------ */
+
+  for (const name of PART2_PANELS) {
+    const entries = styleEntries(PART2_SRC[name]);
+    for (const entry of entries) {
+      const fg = /color: '(#[0-9a-fA-F]{6})'/.exec(entry.body);
+      if (fg) {
+        assert.ok(
+          /(background|bg): '#[0-9a-fA-F]{6}'/.test(entry.body),
+          `${name}.${entry.name} keeps the legacy foreground ${fg[1]} without its own background`
+        );
+      }
+      if (/(background|bg): '#[0-9a-fA-F]{6}'/.test(entry.body)) {
+        assert.equal(
+          /color: 'var\(--rb-/.test(entry.body),
+          false,
+          `${name}.${entry.name} puts a dark-aware token colour on a fixed light background`
+        );
+      }
+    }
+
+    /*
+     * GUARDS THE PARSER ITSELF. Every hex literal left in the file must sit
+     * inside an entry the loop above actually reads, and the total is pinned
+     * per file. If a colour ever moves into a shape `styleEntries` cannot see
+     * — a returned object literal, a flat string map — this fails instead of
+     * the sweep silently shrinking.
+     */
+    const total = [...PART2_SRC[name].matchAll(/#[0-9a-fA-F]{6}/g)].length;
+    const covered = entries.reduce(
+      (n, e) => n + [...e.body.matchAll(/#[0-9a-fA-F]{6}/g)].length,
+      0
+    );
+    assert.equal(
+      covered,
+      total,
+      `${name} has ${total - covered} hex literal(s) outside any parsed style entry`
+    );
+    assert.equal(
+      total,
+      PART2_FIXED_COLOUR_COUNT[name],
+      `${name} must declare exactly ${PART2_FIXED_COLOUR_COUNT[name]} fixed colour(s)`
+    );
+  }
+
+  /* The proof panel is the one file here that ends with no fixed colour at all. */
+  assert.equal(
+    /#[0-9a-fA-F]{6}/.test(PART2_SRC.ProofOfUpdatePanel),
+    false,
+    'ProofOfUpdatePanel retains no fixed colour: it has no self-contained chip'
+  );
+
+  /* --- F. the retained chips are complete, named and in source order ------ */
+
+  for (const name of PART2_PANELS) {
+    const expected = PART2_CHIPS[name];
+    const chips = styleEntries(PART2_SRC[name]).filter((e) => expected.includes(e.name));
+    assert.deepEqual(
+      chips.map((c) => c.name),
+      [...expected],
+      `${name} must parse exactly its self-contained chips, in source order`
+    );
+    for (const chip of chips) {
+      assert.match(
+        chip.body,
+        /color: '#[0-9a-fA-F]{6}'/,
+        `${name}.${chip.name} must keep its foreground`
+      );
+      assert.match(
+        chip.body,
+        /(background|bg): '#[0-9a-fA-F]{6}'/,
+        `${name}.${chip.name} must keep its own fill`
+      );
+      assert.match(
+        chip.body,
+        /border: '(1px solid )?#[0-9a-fA-F]{6}'/,
+        `${name}.${chip.name} must keep its own edge`
+      );
+    }
+  }
+
+  /*
+   * The timeline palette must stay in the NAMED-ENTRY form. Rewritten as four
+   * `return {…}` branches it would become invisible to `styleEntries`, exactly
+   * as the ML panel's `badgeStyle` was — and only the hex-coverage guard above
+   * would catch it, so this states the requirement directly.
+   */
+  assert.match(
+    PART2_SRC.RaceTimelinePanel,
+    /const palette: Record<StatusTone, \{ bg: string; border: string; color: string \}> = \{/,
+    'the timeline badge palette must remain a named-entry record'
+  );
+
+  /* --- G. retirement, per component --------------------------------------- */
+
+  for (const name of PART2_PANELS) {
+    for (const legacy of PART2_RETIRED[name]) {
+      assert.equal(
+        new RegExp(`${legacy}(?![0-9a-fA-F])`).test(PART2_SRC[name]),
+        false,
+        `${name} must no longer declare ${legacy}`
+      );
+    }
+  }
+
+  /*
+   * AND THE LISTS MUST BE GENUINELY DIFFERENT, not three copies of one list.
+   *
+   * These three literals are RETIRED from the proof and place panels but
+   * legitimately RETAINED by the timeline's self-contained neutral pill. If a
+   * future edit collapsed the per-component lists into one shared list, either
+   * the timeline would fail the retirement check for a colour it is entitled
+   * to keep, or the shared list would have to drop these three and stop
+   * checking them anywhere. This pins both halves of that distinction.
+   */
+  for (const retained of ['#d0d7de', '#424a53', '#f6f8fa']) {
+    assert.ok(
+      PART2_SRC.RaceTimelinePanel.includes(retained),
+      `${retained} must still be RETAINED by the timeline's self-contained neutral pill`
+    );
+    assert.equal(
+      PART2_RETIRED.RaceTimelinePanel.includes(retained),
+      false,
+      `${retained} must not be on the timeline's retirement list — it is legitimately retained`
+    );
+  }
+
+  /* --- H. no new class, and none invented --------------------------------- */
+
+  const used = [
+    ...new Set(
+      PART2_PANELS.flatMap((n) =>
+        [...PART2_SRC[n].matchAll(/className="([^"]+)"/g)].flatMap((m) => m[1].split(/ +/))
+      )
+    ),
+  ];
+  assert.deepEqual(used, ['rb-evidence-panel'], 'exactly the one existing paired class is used');
+  assert.match(TOKENS_CSS, /\.rb-evidence-panel \{/, 'and it must already exist in tokens.css');
+  assert.equal(
+    /\.rb-[a-z_-]*(proof|timeline|place|audit)/.test(TOKENS_CSS),
+    false,
+    'no bespoke class was invented for these panels'
+  );
+
+  /* --- I. behaviour freeze ------------------------------------------------ */
+
+  for (const name of PART2_PANELS) {
+    for (const write of ['fetch(', 'useEffect', 'useState', 'onSubmit', 'method:', '/api/']) {
+      assert.equal(
+        PART2_SRC[name].includes(write),
+        false,
+        `${name} is presentational and read-only; it must not contain ${write}`
+      );
+    }
+  }
+
+  /* Headings and aria semantics. */
+  for (const [name, heading] of [
+    ['ProofOfUpdatePanel', '<h2 style={styles.heading}>{view.title}</h2>'],
+    ['RaceTimelinePanel', '<h2 style={styles.heading}>Race-day timeline</h2>'],
+    ['PlaceAuditPanel', '<h2 style={styles.heading}>Place / each-way audit (research)</h2>'],
+  ] as const) {
+    assert.ok(PART2_SRC[name].includes(heading), `${name} keeps its h2 exactly`);
+  }
+  for (const [name, aria] of [
+    ['ProofOfUpdatePanel', 'Proof of update (read-only)'],
+    ['PlaceAuditPanel', 'Place / each-way audit (research)'],
+  ] as const) {
+    assert.ok(PART2_SRC[name].includes(`aria-label="${aria}"`), `${name} keeps its aria-label`);
+  }
+  /* The timeline is named by its visible h2 and must NOT gain an aria-label. */
+  assert.equal(
+    /aria-label/.test(PART2_SRC.RaceTimelinePanel),
+    false,
+    'the timeline stays named by its visible heading'
+  );
+
+  /* Conditional states: every branch that decides what is rendered. */
+  assert.ok(
+    PART2_SRC.PlaceAuditPanel.includes('if (view.raceCount === 0) return null;'),
+    'the empty-day condition is unchanged'
+  );
+  assert.ok(
+    PART2_SRC.PlaceAuditPanel.includes(
+      'const val = (n: number): string => (settled ? String(n) : DASH);'
+    ),
+    'the settled/pending value rule is unchanged'
+  );
+  assert.ok(PART2_SRC.PlaceAuditPanel.includes('{!settled && ('), 'the pending notice is unchanged');
+  assert.ok(
+    PART2_SRC.RaceTimelinePanel.includes('entries.length === 0 ?'),
+    'the timeline empty condition is unchanged'
+  );
+  assert.ok(
+    PART2_SRC.RaceTimelinePanel.includes('No races.'),
+    'the timeline empty-state wording is unchanged'
+  );
+  assert.ok(
+    PART2_SRC.RaceTimelinePanel.includes('result.label !== DASH &&'),
+    'the result-badge condition is unchanged'
+  );
+  for (const [name, mapping] of [
+    ['ProofOfUpdatePanel', 'view.rows.map'],
+    ['ProofOfUpdatePanel', 'view.disclaimers.map'],
+    ['RaceTimelinePanel', 'entry.warnings.map'],
+    ['PlaceAuditPanel', 'view.warnings.map'],
+  ] as const) {
+    assert.ok(PART2_SRC[name].includes(mapping), `${name} must still map ${mapping}`);
+  }
+  assert.ok(
+    PART2_SRC.RaceTimelinePanel.includes(
+      'LOCK_TONE_TO_STATUS[LOCK_STATUS_TONE[entry.lockStatus]]'
+    ),
+    'the lock-status tone mapping is unchanged'
+  );
+
+  /* --- J. page.tsx still wires all three, and prior tranches hold --------- */
+
+  for (const wiring of [
+    '<ProofOfUpdatePanel view={proofPanelView} />',
+    '<RaceTimelinePanel entries={timeline} nowMs={nowMs} />',
+    '<PlaceAuditPanel view={placeAuditView} />',
+  ]) {
+    assert.ok(PAGE_CODE.includes(wiring), `page.tsx must still render ${wiring}`);
+  }
+
+  assert.match(
+    PAGE_CODE,
+    /const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';/,
+    'the containment surface remains active — the page frame is still legacy'
+  );
+  assert.ok(
+    styleBlock('page').includes('background: LEGACY_LIGHT_PAGE_SURFACE'),
+    'and is still applied to the page wrapper'
+  );
+  for (const forbidden of ['var(--rb-text-', 'var(--rb-status-', 'var(--rb-accent-']) {
+    assert.equal(
+      PAGE_SRC.includes(forbidden),
+      false,
+      `${forbidden} must still not appear in page.tsx — this tranche does not touch it`
+    );
+  }
+  /* PR A (part 1) is undisturbed. */
+  for (const name of PART1_PANELS) {
+    assert.match(
+      PART1_SRC[name],
+      /<section className="rb-evidence-panel" style=\{styles\.panel\}/,
+      `the PR #16 ${name} migration is undisturbed`
+    );
+  }
+  assert.match(
+    functionBody('TipsterStatusPanel'),
+    /<section className="rb-evidence-panel" style=\{styles\.tipsterPanel\}>/,
+    'the PR #14 tipster migration is undisturbed'
+  );
+  assert.match(
+    PAGE_CODE,
+    /const raceDaySecondaryLinkStyle: CSSProperties = \{[^}]*color: '#0550ae'/,
+    'and the PR #15 contrast correction is undisturbed'
+  );
+});
+
+test('24b. every part-2 panel foreground clears AA on the surface it now sits on', () => {
+  /*
+   * BOTH surfaces are DERIVED, not assumed. The raised surface comes from
+   * `.rb-evidence-panel`, the class all three roots carry. The recessed one
+   * comes from the components' OWN declarations, so if the proof rows or the
+   * place cells were ever repointed at a different token this test follows
+   * them rather than silently measuring the wrong pair.
+   */
+  const rule = cssRule('.rb-evidence-panel');
+  const rootBg = /background: var\((--rb-surface-[a-z-]+)\)/.exec(rule);
+  assert.ok(rootBg, '.rb-evidence-panel must declare a var(--rb-surface-*) background');
+
+  const insetNames = new Set(
+    (['ProofOfUpdatePanel', 'PlaceAuditPanel'] as const).map((n) => {
+      const m = /background: 'var\((--rb-surface-[a-z-]+)\)'/.exec(PART2_SRC[n]);
+      assert.ok(m, `${n} must declare a var(--rb-surface-*) inner surface`);
+      return m[1];
+    })
+  );
+  assert.equal(insetNames.size, 1, 'both inner surfaces must use the SAME recessed token');
+  const insetName = [...insetNames][0];
+  assert.equal(insetName, '--rb-surface-inset', 'the inner surface is the recessed token');
+
+  const raised = { light: lightToken(rootBg[1]), dark: darkToken(rootBg[1]) };
+  const inset = { light: lightToken(insetName), dark: darkToken(insetName) };
+
+  /* --- A. every token these three files use, collected FROM SOURCE -------- */
+
+  /*
+   * Deliberately NOT anchored to a quote on both sides. A token inside a
+   * COMPOUND value — `'1px dashed var(--rb-border)'` — would escape a
+   * fully-quoted match, and the point of this sweep is that nothing escapes
+   * it. The two non-text tokens are then removed BY NAME, and each removal is
+   * asserted to have actually removed something, so an exclusion can never
+   * quietly become a no-op that hides a real text role.
+   */
+  const used = new Set<string>();
+  for (const name of PART2_PANELS) {
+    for (const m of PART2_SRC[name].matchAll(/var\((--rb-[a-z-]+)\)/g)) used.add(m[1]);
+  }
+
+  for (const structural of ['--rb-border', insetName]) {
+    assert.ok(used.has(structural), `${structural} must be present before it is excluded`);
+    used.delete(structural);
+  }
+
+  assert.ok(
+    used.size >= 4,
+    `expected several token text roles, found ${[...used].sort().join(', ')}`
+  );
+
+  /*
+   * Every remaining token is TEXT, and these files put text on BOTH surfaces,
+   * so each must clear AA on both. Requiring both is stricter than mapping
+   * each role to one surface, and it can never under-measure.
+   */
+  for (const token of [...used].sort()) {
+    for (const [surfaceName, surface] of [
+      [rootBg[1], raised],
+      [insetName, inset],
+    ] as const) {
+      for (const scheme of ['light', 'dark'] as const) {
+        const fg = scheme === 'light' ? lightToken(token) : darkToken(token);
+        const ratio = contrast(fg, surface[scheme]);
+        assert.ok(
+          ratio >= AA_NORMAL_TEXT,
+          `${token} on ${surfaceName} (${scheme}) is ${ratio.toFixed(2)}:1`
+        );
+      }
+    }
+  }
+
+  /* --- B. the exact pairs, pinned ---------------------------------------- */
+
+  /*
+   * Computed, not estimated. Pinned to 0.05 so a token nudge that still
+   * technically clears AA cannot silently change what the evidence says.
+   */
+  const near = (actual: number, expected: number, what: string) =>
+    assert.ok(
+      Math.abs(actual - expected) < 0.05,
+      `${what} expected ~${expected}:1, measured ${actual.toFixed(2)}:1`
+    );
+
+  for (const [token, l, d] of [
+    ['--rb-text-primary', 15.88, 14.61],
+    ['--rb-text-secondary', 8.42, 9.2],
+    ['--rb-text-muted', 5.45, 5.6],
+    ['--rb-status-warning', 6.02, 7.36],
+  ] as const) {
+    near(contrast(lightToken(token), raised.light), l, `${token} on the raised surface (light)`);
+    near(contrast(darkToken(token), raised.dark), d, `${token} on the raised surface (dark)`);
+  }
+
+  for (const [token, l, d] of [
+    ['--rb-text-primary', 13.91, 16.58],
+    ['--rb-text-secondary', 7.38, 10.44],
+    ['--rb-text-muted', 4.78, 6.35],
+    ['--rb-status-positive', 5.23, 8.18],
+    ['--rb-status-warning', 5.28, 8.35],
+  ] as const) {
+    near(contrast(lightToken(token), inset.light), l, `${token} on the recessed surface (light)`);
+    near(contrast(darkToken(token), inset.dark), d, `${token} on the recessed surface (dark)`);
+  }
+
+  /*
+   * THE TIGHTEST PAIR IN THE WHOLE TRANCHE, pinned on its own.
+   *
+   * Muted text on the recessed surface in the LIGHT scheme is 4.78:1 — it
+   * clears the 4.5:1 floor with the least headroom of any role here, and it is
+   * the pairing that both the place-audit cell labels and the proof `neutral`
+   * tone land on. Any future darkening of the recessed token, or lightening of
+   * the muted token, breaks this before it breaks anything else, so it gets a
+   * named assertion rather than riding on the sweep above.
+   */
+  const tightest = contrast(lightToken('--rb-text-muted'), inset.light);
+  near(tightest, 4.78, 'muted text on the recessed surface (light) — the tightest pair');
+  assert.ok(
+    tightest >= AA_NORMAL_TEXT,
+    `the tightest pair must still clear AA, measured ${tightest.toFixed(2)}:1`
+  );
+
+  /* --- C. the self-contained chips, on their OWN fills -------------------- */
+
+  let chipsMeasured = 0;
+  for (const name of PART2_PANELS) {
+    for (const entry of styleEntries(PART2_SRC[name])) {
+      const fg = /color: '(#[0-9a-fA-F]{6})'/.exec(entry.body);
+      const fill = /(?:background|bg): '(#[0-9a-fA-F]{6})'/.exec(entry.body);
+      if (!fg || !fill) continue;
+      chipsMeasured += 1;
+      const ratio = contrast(fg[1], fill[1]);
+      assert.ok(
+        ratio >= AA_NORMAL_TEXT,
+        `${name}.${entry.name} chip is ${ratio.toFixed(2)}:1 (${fg[1]} on ${fill[1]})`
+      );
+    }
+  }
+  assert.equal(
+    chipsMeasured,
+    Object.values(PART2_CHIPS).reduce((n, c) => n + c.length, 0),
+    'every retained chip must be measured, and no more than those'
+  );
+  assert.equal(chipsMeasured, 7, 'five timeline chips and two place-audit chips');
+
+  /* --- D. why the migration had to be atomic, at BOTH levels -------------- */
+
+  /*
+   * Every legacy foreground these three panels carried as bare text fails on
+   * the surface it now sits on, in the dark scheme. The chip fills are absent
+   * from this list on purpose: they are self-contained and the surface cannot
+   * reach them.
+   */
+  for (const [legacy, surface, where, what] of [
+    ['#1f2328', raised.dark, 'raised', 'legacy root foreground'],
+    ['#656d76', raised.dark, 'raised', 'legacy timeline note, meta row and empty state'],
+    ['#9a6700', raised.dark, 'raised', 'legacy timeline stale marker'],
+    ['#57606a', raised.dark, 'raised', 'legacy proof disclaimer'],
+    ['#424a53', inset.dark, 'recessed', 'legacy proof row label'],
+    ['#656d76', inset.dark, 'recessed', 'legacy place-audit cell label'],
+    ['#1a7f37', inset.dark, 'recessed', 'legacy proof ok tone'],
+    ['#9a6700', inset.dark, 'recessed', 'legacy proof warn tone'],
+    ['#57606a', inset.dark, 'recessed', 'legacy proof neutral tone'],
+  ] as const) {
+    const ratio = contrast(legacy, surface);
+    assert.ok(
+      ratio < AA_NORMAL_TEXT,
+      `${what}: expected ${legacy} to fail on the ${where} surface (${surface}), but it was ${ratio.toFixed(2)}:1`
+    );
+  }
+
+  /*
+   * AND THE INNER SURFACE ITSELF. This is what part 2 adds over part 1: had
+   * the roots migrated while the proof rows and place cells kept `#f6f8fa`,
+   * that fixed near-white well would have held the root's inherited
+   * DARK-SCHEME foreground at close to 1:1 — a worse result than never
+   * migrating the root at all.
+   */
+  const strandedWell = contrast(darkToken('--rb-text-primary'), '#f6f8fa');
+  assert.ok(
+    strandedWell < 1.5,
+    `a retained #f6f8fa well would have held dark-scheme primary text at ${strandedWell.toFixed(2)}:1`
+  );
+});
