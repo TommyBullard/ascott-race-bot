@@ -1704,6 +1704,260 @@ test('17. the NextActionWidget frame is a paired token surface (slice 3D phase 1
   assert.equal(/onClick|navigator\.clipboard|<button/.test(PAGE_CODE), false, 'no write control');
 });
 
+test('17b. the next-action command LABEL is paired on the frame surface', () => {
+  /*
+   * THE DEFECT THIS CLOSES.
+   *
+   * Slice 3D phase 1 moved the NextActionWidget frame and its three descriptive
+   * roles onto the paired `rb-status-frame` classes, but left the
+   * suggested-command LABEL declaring the legacy `#656d76`. A paired surface
+   * with an unpaired descendant is exactly the half-migration this file exists
+   * to catch: the frame's fill follows `--rb-surface-elevated`, which turns
+   * `#222831` in the dark scheme, where `#656d76` reaches only ~2.83:1 — below
+   * the 4.5:1 normal-text floor. Test 17 pinned the frame's pairing and the
+   * command block's self-containment, and this label fell between them.
+   *
+   * SCOPE: ONE foreground. No wording, condition, structure, spacing,
+   * typography, layout or action-logic change. The sibling command block, the
+   * two tipster `styles.muted` holdouts, the containment surface and the
+   * navigation known-shortfall are all deliberately untouched, and are
+   * re-asserted below so this tranche cannot quietly disturb them.
+   */
+
+  const widget = functionBody('NextActionWidget');
+  const label = styleBlock('nextActionCmdLabel');
+
+  /* --- 1. the label takes the token-backed muted class -------------------- */
+
+  assert.match(
+    widget,
+    /<span className="rb-evidence-muted" style=\{styles\.nextActionCmdLabel\}>/,
+    'the command label must take its foreground from rb-evidence-muted'
+  );
+
+  /* --- 2. the style key SURVIVES, colour-free ----------------------------- */
+
+  /*
+   * Deliberately not deleted. Unlike a colour-only key, this one carries
+   * structure that a colour-only utility class does not supply, so it is kept
+   * and stripped of its colour instead — which is also what guarantees no
+   * inline declaration outranks the class.
+   */
+  for (const structural of ["display: 'block'", 'fontSize: 11', 'marginBottom: 4']) {
+    assert.ok(label.includes(structural), `the label must keep ${structural}`);
+  }
+  assert.equal(/\bcolor:/.test(label), false, 'no inline colour may override the class');
+
+  /* --- 3. the legacy literal has left this region ------------------------- */
+
+  /*
+   * The region is the widget body PLUS the style keys the widget itself
+   * consumes — derived from the body, not listed here. Bounding it to the JSX
+   * alone would be vacuous: the literal never lived in the markup, it lived in
+   * the style object the markup points at. Pinning the derived set also means a
+   * NEW bespoke key cannot be introduced without failing this assertion.
+   */
+  const consumedKeys = [...new Set([...widget.matchAll(/styles\.(\w+)/g)].map((m) => m[1]))];
+  assert.deepEqual(
+    [...consumedKeys].sort(),
+    ['nextActionCmd', 'nextActionCmdLabel', 'nextActionCmdRow'],
+    'the widget consumes exactly its three bespoke style keys'
+  );
+  const region = [widget, ...consumedKeys.map(styleBlock)].join('\n');
+  assert.equal(
+    /#656d76/.test(region),
+    false,
+    'the legacy muted literal must not remain anywhere in the next-action region'
+  );
+
+  /* --- 4-6. contrast, DERIVED from the rules production actually applies --- */
+
+  /*
+   * The surface is read from `.rb-status-frame` rather than hard-coded, so this
+   * measurement tracks the production rule. `nextActionFrameClass` always emits
+   * that base class, and both tone modifiers change the LEFT BORDER only, so
+   * the fill beneath this label is identical in all three tones — asserted,
+   * not assumed.
+   */
+  const frame = cssRule('.rb-status-frame');
+  const surfaceToken = /background: var\((--rb-[a-z-]+)\)/.exec(frame);
+  assert.ok(surfaceToken, '.rb-status-frame must declare a token background');
+
+  for (const modifier of ['.rb-status-frame--positive', '.rb-status-frame--warning'] as const) {
+    assert.equal(
+      /background:/.test(cssRule(modifier)),
+      false,
+      `${modifier} must tint the border only, leaving the measured fill intact`
+    );
+  }
+
+  const mutedRule = cssRule('.rb-evidence-muted');
+  const fgToken = /color: var\((--rb-[a-z-]+)\)/.exec(mutedRule);
+  assert.ok(fgToken, '.rb-evidence-muted must declare a token foreground');
+
+  const EXPECTED_RATIO = { light: 5.8, dark: 5.02 } as const;
+  for (const scheme of ['light', 'dark'] as const) {
+    const read = scheme === 'light' ? lightToken : darkToken;
+    const ratio = contrast(read(fgToken[1]), read(surfaceToken[1]));
+    assert.ok(
+      ratio >= AA_NORMAL_TEXT,
+      `the command label (${scheme}) is ${ratio.toFixed(2)}:1 on ${surfaceToken[1]}`
+    );
+    assert.ok(
+      Math.abs(ratio - EXPECTED_RATIO[scheme]) < 0.05,
+      `expected ~${EXPECTED_RATIO[scheme]}:1 in ${scheme}, measured ${ratio.toFixed(2)}:1`
+    );
+  }
+
+  /*
+   * Evidence the fix was needed, computed against the SAME production surface:
+   * the superseded pair must still be demonstrably below the floor.
+   */
+  const supersededDark = contrast('#656d76', darkToken(surfaceToken[1]));
+  assert.ok(
+    supersededDark < AA_NORMAL_TEXT,
+    `expected the superseded pair to fail, but it was ${supersededDark.toFixed(2)}:1`
+  );
+
+  /* --- 7. the command BLOCK remains independently paired ------------------ */
+
+  const cmd = styleBlock('nextActionCmd');
+  assert.ok(cmd.includes("background: '#0d1117'"), 'command block keeps its own dark surface');
+  assert.ok(cmd.includes("color: '#e6edf3'"), 'and its own paired light foreground');
+  assert.ok(
+    contrast('#e6edf3', '#0d1117') >= AA_NORMAL_TEXT,
+    'the command block must clear AA on its own self-contained terms'
+  );
+  assert.match(widget, /<code style=\{styles\.nextActionCmd\}>/, 'still an inert code element');
+  assert.equal(
+    /className=/.test(widget.slice(widget.indexOf('<code'))),
+    false,
+    'no class was added to the command block — its pairing stays independent'
+  );
+
+  /* --- 8-9. wording and conditional rendering are unchanged --------------- */
+
+  assert.ok(
+    widget.includes('Suggested (read-only — run in a terminal, not from this page):'),
+    'the label wording is unchanged'
+  );
+  assert.match(
+    widget,
+    /\{action\.suggestedCommand\}<\/code>/,
+    'the command wording still comes from the action itself'
+  );
+  assert.match(
+    widget,
+    /\{action\.suggestedCommand && \(/,
+    'the row still renders only when a command exists'
+  );
+
+  /* --- 10. no new class was introduced ------------------------------------ */
+
+  const used = [
+    ...new Set(
+      [...widget.matchAll(/className="([^"]+)"/g)].flatMap((m) => m[1].split(/ +/))
+    ),
+  ];
+  assert.ok(used.includes('rb-evidence-muted'), 'the label class must be among those used');
+  for (const cls of used) {
+    assert.match(
+      TOKENS_CSS,
+      new RegExp(`\\.${cls} \\{`),
+      `${cls} must already exist in tokens.css — this tranche defines none`
+    );
+  }
+  assert.equal(
+    /\.rb-[a-z-]*(cmd|command|next-action)/.test(TOKENS_CSS),
+    false,
+    'no bespoke class was invented for this label'
+  );
+
+  /*
+   * The reused class must stay COLOUR-ONLY. Extending a shared utility to suit
+   * one call site would silently change every other consumer of it.
+   */
+  const mutedDecls = mutedRule
+    .split('\n')
+    .filter((line) => line.includes(':'))
+    .map((line) => line.trim());
+  assert.deepEqual(
+    mutedDecls,
+    ['color: var(--rb-text-muted);'],
+    '.rb-evidence-muted must remain a colour-only utility'
+  );
+
+  /* --- 11. the two styles.muted holdouts remain tipster-owned ------------- */
+
+  assert.equal(
+    [...PAGE_CODE.matchAll(/styles\.muted/g)].length,
+    2,
+    'the tipster holdouts are untouched by this tranche'
+  );
+  assert.equal(
+    widget.includes('styles.muted'),
+    false,
+    'the widget must not borrow the legacy tipster muted style'
+  );
+  for (const tipster of ['TipsterStatusPanel', 'InFormPanel'] as const) {
+    assert.ok(
+      functionBody(tipster).includes('styles.muted'),
+      `${tipster} still owns a legacy muted use`
+    );
+  }
+
+  /* --- 12. the containment surface remains active ------------------------- */
+
+  assert.match(
+    PAGE_CODE,
+    /const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';/,
+    'the containment constant remains'
+  );
+  assert.ok(
+    styleBlock('page').includes('background: LEGACY_LIGHT_PAGE_SURFACE'),
+    'and is still applied to the page wrapper'
+  );
+
+  /* --- 13. the navigation known-shortfall is untouched -------------------- */
+
+  const navLinkAt = PAGE_CODE.indexOf('const raceDaySecondaryLinkStyle');
+  assert.notEqual(navLinkAt, -1, 'raceDaySecondaryLinkStyle must exist');
+  const navLink = PAGE_CODE.slice(navLinkAt, PAGE_CODE.indexOf('};', navLinkAt));
+  assert.ok(navLink.includes("color: '#0969da'"), 'the nav link keeps its legacy colour');
+  assert.ok(
+    contrast('#0969da', LEGACY_LIGHT_PAGE_SURFACE) < AA_NORMAL_TEXT,
+    'test 14c still owns this shortfall — this tranche must not have fixed it'
+  );
+
+  /* --- 14. the completed Slice 3D contracts survive ----------------------- */
+
+  /*
+   * The fix adds a CLASS, not a token literal, so test 7's invariant is
+   * unaffected — restated here because that is precisely the boundary a
+   * "just use the token" shortcut would have crossed.
+   */
+  for (const forbidden of ['var(--rb-text-', 'var(--rb-status-', 'var(--rb-accent-']) {
+    assert.equal(
+      PAGE_SRC.includes(forbidden),
+      false,
+      `${forbidden} must still not appear in page.tsx`
+    );
+  }
+  for (const cls of [
+    'rb-evidence-panel',
+    'rb-evidence-card',
+    'rb-evidence-secondary',
+    'rb-status-frame--official',
+  ]) {
+    assert.ok(PAGE_CODE.includes(cls), `${cls} must remain in use`);
+  }
+  assert.equal(
+    /LEGACY_NESTED_PANEL/.test(PAGE_SRC),
+    false,
+    'the retired part 2b-i containment constants must not return'
+  );
+});
+
 test('16c. the legacy primary foreground clears AA on every 3D.4a surface', () => {
   /*
    * SCOPE OF THIS ASSERTION. It calculates WCAG 2.1 contrast for the four
