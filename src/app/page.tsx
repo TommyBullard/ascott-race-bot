@@ -2364,9 +2364,29 @@ const raceDayPrimaryButtonStyle: CSSProperties = {
   textDecoration: 'none',
 };
 
+/*
+ * SLICE 3D: the race-day nav secondary links, darkened to clear AA.
+ *
+ * `#0969da` measured 4.34:1 on `LEGACY_LIGHT_PAGE_SURFACE` (`#e7ebf1`) — short
+ * of the 4.5:1 normal-text floor, and recorded as a bounded known shortfall by
+ * contrast test 14c until this tranche. `#0550ae` is the same hue darkened and
+ * reaches 6.35:1 on that surface.
+ *
+ * A LEGACY DARKENING, DELIBERATELY, NOT `rb-inline-link`. That class resolves
+ * `--rb-accent-analytical`, which flips to `#74aaf0` in the dark scheme and
+ * would land at 2.01:1 on this FIXED light containment surface — light on
+ * light. The token class only becomes correct once the containment is removed,
+ * which needs the page frame, this nav's root, the intro paragraph and the five
+ * top-level white panels to migrate first. Until then the safe fix is the
+ * literal.
+ *
+ * `textDecoration: 'none'` is carried over UNCHANGED — these links have never
+ * been underlined, and adding one would be a visual change beyond this
+ * foreground-only correction.
+ */
 const raceDaySecondaryLinkStyle: CSSProperties = {
   fontSize: 13,
-  color: '#0969da',
+  color: '#0550ae',
   textDecoration: 'none',
 };
 
