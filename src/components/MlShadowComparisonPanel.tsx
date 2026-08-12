@@ -105,7 +105,13 @@ export default function MlShadowComparisonPanel({ regular, marketFav, ml, style 
 
   return (
     <section style={{ ...styles.panel, ...style }}>
-      <h4 style={styles.heading}>ML shadow comparison</h4>
+      {/*
+        SLICE 3D part 2c: h3, not h4. It was an h4 under an h2 with no h3
+        between them; now every nested race-card panel sits at h3 beneath the
+        card's own h2. `styles.heading` already fixes fontSize, fontWeight and
+        margin, so the tag change is invisible.
+      */}
+      <h3 style={styles.heading}>ML shadow comparison</h3>
       <p style={styles.labels}>
         {ML_SHADOW_LABELS.notModelActive} · {ML_SHADOW_LABELS.researchOnly} · {ML_SHADOW_LABELS.noEffect}
       </p>

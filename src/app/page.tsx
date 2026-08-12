@@ -1497,14 +1497,34 @@ function RaceCardView({ card, nowMs, mlShadow }: { card: RaceCard; nowMs: number
   return (
     <article className="rb-evidence-panel" style={styles.card}>
       <header className="rb-evidence-header-rule" style={styles.cardHeader}>
-        <div style={{ minWidth: 0 }}>
+        {/*
+          SLICE 3D part 2c: the race identity IS the card's heading.
+
+          This wrapper already held exactly the off time and the course/race
+          name, so it becomes the `h2` rather than gaining a second copy of that
+          text \u2014 the card previously had no heading at all, which left every
+          `RaceExplanationPanel` emitting a sibling `h2` called "Model
+          explanation" with nothing above it to say which race it belonged to.
+
+          The countdown stays a SIBLING, deliberately: it re-renders every
+          second and must not sit inside an accessible name.
+
+          The three resets are load-bearing, not cosmetic. A bare `h2` would
+          bring browser-default `margin: 0.83em 0` (vertical shift inside this
+          `alignItems: baseline` header), `font-size: 1.5em` (box and baseline
+          shift) and `font-weight: bold` \u2014 and that last one would reach
+          `styles.subtitle`, which sets no weight of its own and would turn
+          bold. `styles.offTime` already pins its own size and weight, so it is
+          unaffected either way. With these three, the rendering is unchanged.
+        */}
+        <h2 style={{ minWidth: 0, margin: 0, fontSize: 'inherit', fontWeight: 'inherit' }}>
           <div style={styles.offTime}>{formatOffTime(card.off_time)}</div>
           {(card.course || card.race_name) && (
             <div className="rb-evidence-muted" style={styles.subtitle}>
               {[card.course, card.race_name].filter(Boolean).join(' \u2014 ')}
             </div>
           )}
-        </div>
+        </h2>
         <span style={countdownStyle(cd)}>{cd ? cd.text : 'no time'}</span>
       </header>
 
