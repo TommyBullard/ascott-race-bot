@@ -2550,3 +2550,445 @@ test('22. the tipster panels are a paired token region (tipster tranche)', () =>
     'the PR #13 command-label fix is undisturbed'
   );
 });
+
+/* ========================================================================== *
+ * 23-23b. the two operational panels (TOP-LEVEL PANELS, PART 1)
+ *
+ * `CommandCentrePanel` and `DecisionConsolePanel` are IMPORTED components that
+ * each owned a module-local `#fff` surface with hard-coded dark text — opaque
+ * white islands once the shell went dark. They are the first two of the five
+ * remaining top-level panels; the other three follow in part 2.
+ *
+ * Read from their own files for the same reason the nested panels are: the
+ * pairing invariant this suite protects cannot be checked from page.tsx, which
+ * this tranche deliberately does not touch at all.
+ * ========================================================================== */
+
+const PART1_PANELS = ['CommandCentrePanel', 'DecisionConsolePanel'] as const;
+
+/** Comment-stripped, so prose naming a retired literal cannot satisfy a check. */
+const PART1_SRC: Record<(typeof PART1_PANELS)[number], string> = Object.fromEntries(
+  PART1_PANELS.map((n) => [n, codeOf(readFileSync(`src/components/${n}.tsx`, 'utf8'))])
+) as Record<(typeof PART1_PANELS)[number], string>;
+
+/** One named style entry of a component source, bounded to itself. */
+function entryOf(name: (typeof PART1_PANELS)[number], key: string): string {
+  const found = styleEntries(PART1_SRC[name]).find((e) => e.name === key);
+  assert.ok(found, `${name}.${key} must exist as a bounded style entry`);
+  return found.body;
+}
+
+/** The four priorities, in the order the console declares them. */
+const CONSOLE_PRIORITIES = ['next_action', 'warning', 'monitor', 'good'] as const;
+
+/** Legacy literals both panels must no longer contain, bounded so `#fff` never matches `#fff8c5`. */
+const PART1_RETIRED = ['#fff', '#1f2328', '#d0d7de', '#57606a', '#656d76', '#8c959f', '#eaeef2'];
+
+test('23. the two operational panels are a paired token region (top-level part 1)', () => {
+  /* --- A. both roots take the paired surface, in the same change ---------- */
+
+  for (const name of PART1_PANELS) {
+    assert.match(
+      PART1_SRC[name],
+      /<section className="rb-evidence-panel" style=\{styles\.panel\}/,
+      `${name} root must take the paired token surface`
+    );
+
+    /*
+     * The root style is GEOMETRY ONLY. A background, foreground, border or
+     * radius here would either fight the class or strand half of the pair on
+     * it. `borderRadius` is included deliberately: `--rb-radius-card` is 10px,
+     * so the class reproduces the legacy value and a duplicate would be drift
+     * waiting to happen.
+     */
+    const root = entryOf(name, 'panel');
+    assert.equal(/background:/.test(root), false, `${name} takes its surface from the class`);
+    assert.equal(/\bcolor:/.test(root), false, `${name} takes its foreground from the class`);
+    assert.equal(/border/i.test(root), false, `${name} takes its border and radius from the class`);
+    for (const geometry of ["padding: '10px 14px'", "margin: '12px 0 4px'"]) {
+      assert.ok(root.includes(geometry), `${name} root must keep ${geometry}`);
+    }
+  }
+
+  /* --- B. every text role takes the token matching its old tier ----------- */
+
+  const ROLES = [
+    ['CommandCentrePanel', 'title', '--rb-text-secondary'],
+    ['CommandCentrePanel', 'reasons', '--rb-text-muted'],
+    ['CommandCentrePanel', 'rowLabel', '--rb-text-muted'],
+    ['CommandCentrePanel', 'statLabel', '--rb-text-muted'],
+    ['CommandCentrePanel', 'warn', '--rb-status-warning'],
+    ['CommandCentrePanel', 'bad', '--rb-status-failure'],
+    ['CommandCentrePanel', 'ok', '--rb-status-positive'],
+    ['DecisionConsolePanel', 'title', '--rb-text-secondary'],
+    ['DecisionConsolePanel', 'counts', '--rb-text-muted'],
+    ['DecisionConsolePanel', 'reason', '--rb-text-muted'],
+    ['DecisionConsolePanel', 'countdown', '--rb-accent-analytical'],
+    ['DecisionConsolePanel', 'moreSummary', '--rb-text-muted'],
+    ['DecisionConsolePanel', 'empty', '--rb-text-muted'],
+  ] as const;
+
+  for (const [name, key, token] of ROLES) {
+    assert.ok(
+      entryOf(name, key).includes(`color: 'var(${token})'`),
+      `${name}.${key} must take ${token}`
+    );
+  }
+
+  /*
+   * Structure carried alongside those colours is unchanged — a repaint must not
+   * quietly restyle. The tone weights differ (700 vs 600) and are pinned apart.
+   */
+  for (const [name, key, geometry] of [
+    ['CommandCentrePanel', 'rowLabel', 'width: 52'],
+    ['CommandCentrePanel', 'rowLabel', 'flexShrink: 0'],
+    ['CommandCentrePanel', 'rowLabel', 'fontSize: 10'],
+    ['CommandCentrePanel', 'statLabel', 'marginRight: 4'],
+    ['CommandCentrePanel', 'warn', 'fontWeight: 700'],
+    ['CommandCentrePanel', 'bad', 'fontWeight: 700'],
+    ['CommandCentrePanel', 'ok', 'fontWeight: 600'],
+    ['DecisionConsolePanel', 'moreSummary', "cursor: 'pointer'"],
+    ['DecisionConsolePanel', 'countdown', "whiteSpace: 'nowrap'"],
+    ['DecisionConsolePanel', 'raceName', 'fontWeight: 600'],
+  ] as const) {
+    assert.ok(entryOf(name, key).includes(geometry), `${name}.${key} must keep ${geometry}`);
+  }
+
+  /*
+   * The row separator follows the surface: a fixed near-white hairline on a
+   * dark token panel reads as a bright seam. Decorative — no 3:1 floor claimed.
+   */
+  const row = entryOf('DecisionConsolePanel', 'row');
+  assert.ok(
+    row.includes("borderTop: '1px dashed var(--rb-border)'"),
+    'the console row rule must be token-backed'
+  );
+  assert.equal(/#[0-9a-fA-F]{6}/.test(row), false, 'and hold no legacy literal');
+
+  /* --- C. the counts row is no longer a chip colour without its fill ------ */
+
+  /*
+   * THE DEFECT THIS CLOSES.
+   *
+   * The four count spans reused `CHIP_PALETTE[p].color` as BARE TEXT on the
+   * panel surface — a chip foreground with no fill behind it. On the token
+   * panel those literals fall to 2.18-3.40:1 in the dark scheme (section D of
+   * test 23b). A SEPARATE map now owns that role, so the chip pair and the
+   * bare-text role cannot be confused for one another again.
+   */
+  const console_ = PART1_SRC.DecisionConsolePanel;
+  assert.equal(
+    /color: CHIP_PALETTE\.\w+\.color/.test(console_),
+    false,
+    'no chip foreground may be used as bare text on the panel surface'
+  );
+
+  const mapBody = /const CONSOLE_COUNT_COLOR: Record<ConsolePriority, string> = \{([^}]*)\}/.exec(
+    console_
+  );
+  assert.ok(mapBody, 'CONSOLE_COUNT_COLOR must exist as a bounded map');
+
+  /*
+   * Parsed BY NAME and in source order, not counted: a count alone would still
+   * pass if one priority were renamed and another duplicated. This map is a
+   * flat string record, so `styleEntries` cannot see it — the same blind spot
+   * `badgeStyleBranches` exists to close for the ML panel's returned branches.
+   */
+  assert.deepEqual(
+    [...mapBody[1].matchAll(/(\w+): '(var\(--rb-[a-z-]+\))'/g)].map((m) => [m[1], m[2]]),
+    [
+      ['next_action', 'var(--rb-accent-analytical)'],
+      ['warning', 'var(--rb-status-failure)'],
+      ['monitor', 'var(--rb-status-warning)'],
+      ['good', 'var(--rb-status-positive)'],
+    ],
+    'every priority must map to a dark-aware token, in declaration order'
+  );
+
+  for (const priority of CONSOLE_PRIORITIES) {
+    assert.ok(
+      console_.includes(`color: CONSOLE_COUNT_COLOR.${priority}`),
+      `the ${priority} count must consume the token map`
+    );
+  }
+
+  /* --- D. the pairing invariant, checked per style entry ------------------ */
+
+  for (const name of PART1_PANELS) {
+    const entries = styleEntries(PART1_SRC[name]);
+    for (const entry of entries) {
+      const fg = /color: '(#[0-9a-fA-F]{6})'/.exec(entry.body);
+      if (fg) {
+        assert.ok(
+          /(background|bg): '#[0-9a-fA-F]{6}'/.test(entry.body),
+          `${name}.${entry.name} keeps the legacy foreground ${fg[1]} without its own background`
+        );
+      }
+      if (/(background|bg): '#[0-9a-fA-F]{6}'/.test(entry.body)) {
+        assert.equal(
+          /color: 'var\(--rb-/.test(entry.body),
+          false,
+          `${name}.${entry.name} puts a dark-aware token colour on a fixed light background`
+        );
+      }
+    }
+
+    /*
+     * GUARDS THE PARSER ITSELF. Every hex literal left in the file must sit
+     * inside an entry the loops above actually read. If a colour ever moves
+     * into a shape `styleEntries` cannot see — a returned object literal, a
+     * flat string map — this fails instead of the sweep silently shrinking.
+     */
+    const total = [...PART1_SRC[name].matchAll(/#[0-9a-fA-F]{6}/g)].length;
+    const covered = entries.reduce(
+      (n, e) => n + [...e.body.matchAll(/#[0-9a-fA-F]{6}/g)].length,
+      0
+    );
+    assert.equal(
+      covered,
+      total,
+      `${name} has ${total - covered} hex literal(s) outside any parsed style entry`
+    );
+    assert.ok(total > 0, `${name} must still declare its self-contained chips`);
+  }
+
+  /* --- E. the chips are retained, complete, and named --------------------- */
+
+  const badges = styleEntries(PART1_SRC.CommandCentrePanel).filter((e) =>
+    ['green', 'amber', 'red'].includes(e.name)
+  );
+  assert.deepEqual(
+    badges.map((b) => b.name),
+    ['green', 'amber', 'red'],
+    'all three health badges must be parsed, in source order'
+  );
+  const chips = styleEntries(PART1_SRC.DecisionConsolePanel).filter((e) =>
+    (CONSOLE_PRIORITIES as readonly string[]).includes(e.name)
+  );
+  assert.deepEqual(
+    chips.map((c) => c.name),
+    [...CONSOLE_PRIORITIES],
+    'all four priority chips must be parsed, in source order'
+  );
+  for (const chip of [...badges, ...chips]) {
+    assert.match(chip.body, /color: '#[0-9a-fA-F]{6}'/, `${chip.name} must keep its foreground`);
+    assert.match(chip.body, /bg: '#[0-9a-fA-F]{6}'/, `${chip.name} must keep its own fill`);
+    assert.match(chip.body, /border: '#[0-9a-fA-F]{6}'/, `${chip.name} must keep its own edge`);
+  }
+  // The badge word is the non-colour signal and must survive the repaint.
+  for (const label of ['GREEN', 'AMBER', 'RED']) {
+    assert.ok(
+      PART1_SRC.CommandCentrePanel.includes(`label: '${label}'`),
+      `the ${label} badge must keep its text label`
+    );
+  }
+
+  /* --- F. retirement ------------------------------------------------------ */
+
+  for (const name of PART1_PANELS) {
+    for (const legacy of PART1_RETIRED) {
+      assert.equal(
+        new RegExp(`${legacy}(?![0-9a-fA-F])`).test(PART1_SRC[name]),
+        false,
+        `${name} must no longer declare ${legacy}`
+      );
+    }
+  }
+
+  /* --- G. no new class, and none invented --------------------------------- */
+
+  const used = [
+    ...new Set(
+      PART1_PANELS.flatMap((n) =>
+        [...PART1_SRC[n].matchAll(/className="([^"]+)"/g)].flatMap((m) => m[1].split(/ +/))
+      )
+    ),
+  ];
+  assert.deepEqual(used, ['rb-evidence-panel'], 'exactly the one existing paired class is used');
+  assert.match(TOKENS_CSS, /\.rb-evidence-panel \{/, 'and it must already exist in tokens.css');
+  assert.equal(
+    /\.rb-[a-z_-]*(command|console|centre|priority)/.test(TOKENS_CSS),
+    false,
+    'no bespoke class was invented for these panels'
+  );
+
+  /* --- H. behaviour freeze ------------------------------------------------ */
+
+  for (const name of PART1_PANELS) {
+    for (const write of ['fetch(', 'useEffect', 'useState', 'onClick', 'onSubmit', 'method:', '--commit', '/api/']) {
+      assert.equal(
+        PART1_SRC[name].includes(write),
+        false,
+        `${name} is presentational and read-only; it must not contain ${write}`
+      );
+    }
+  }
+  for (const [name, aria] of [
+    ['CommandCentrePanel', 'Race-day command centre'],
+    ['DecisionConsolePanel', 'Race-day decision console'],
+  ] as const) {
+    assert.ok(PART1_SRC[name].includes(`aria-label="${aria}"`), `${name} keeps its aria-label`);
+  }
+  assert.match(console_, /CONSOLE_VISIBLE_ROWS = 3/, 'the top-three contract is unchanged');
+  assert.match(console_, /<details>/, 'the remaining rows still collapse natively');
+  assert.ok(
+    console_.includes('No races in scope — nothing needs attention.'),
+    'the empty-state wording is unchanged'
+  );
+  assert.ok(console_.includes("item.race_name ?? '(unknown race)'"), 'the name fallback is unchanged');
+  assert.ok(
+    console_.includes('item.countdown !== null && item.countdown !== item.reason'),
+    'the countdown suppression rule is unchanged'
+  );
+  assert.ok(
+    PART1_SRC.CommandCentrePanel.includes('badgeReasons.length > 0'),
+    'the reasons guard is unchanged'
+  );
+
+  /* --- I. this tranche touches neither page.tsx nor tokens.css ------------ */
+
+  for (const name of PART1_PANELS) {
+    assert.match(
+      PAGE_CODE,
+      new RegExp(`<${name} view=\\{\\w+\\} />`),
+      `${name} must still be rendered from page.tsx with no style prop`
+    );
+  }
+
+  /* --- J. the prior tranches are undisturbed ------------------------------ */
+
+  assert.match(
+    PAGE_CODE,
+    /const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';/,
+    'the containment surface remains active — the page frame is still legacy'
+  );
+  assert.ok(
+    styleBlock('page').includes('background: LEGACY_LIGHT_PAGE_SURFACE'),
+    'and is still applied to the page wrapper'
+  );
+  for (const forbidden of ['var(--rb-text-', 'var(--rb-status-', 'var(--rb-accent-']) {
+    assert.equal(
+      PAGE_SRC.includes(forbidden),
+      false,
+      `${forbidden} must still not appear in page.tsx — this tranche does not touch it`
+    );
+  }
+  assert.match(
+    functionBody('TipsterStatusPanel'),
+    /<section className="rb-evidence-panel" style=\{styles\.tipsterPanel\}>/,
+    'the PR #14 tipster migration is undisturbed'
+  );
+  assert.ok(
+    functionBody('RaceDayNav').includes('raceDaySecondaryLinkStyle'),
+    'the PR #15 nav links still take their corrected style'
+  );
+  assert.match(
+    PAGE_CODE,
+    /const raceDaySecondaryLinkStyle: CSSProperties = \{[^}]*color: '#0550ae'/,
+    'and the PR #15 contrast correction itself is undisturbed'
+  );
+});
+
+test('23b. every part-1 panel foreground clears AA on the surface it now takes', () => {
+  /*
+   * The surface is DERIVED from `.rb-evidence-panel`, the class both roots
+   * actually carry, so a future raised/elevated change fails here rather than
+   * shipping. Token-level calculation; it reads no computed style.
+   */
+  const rule = cssRule('.rb-evidence-panel');
+  const bg = /background: var\((--rb-surface-[a-z-]+)\)/.exec(rule);
+  assert.ok(bg, '.rb-evidence-panel must declare a var(--rb-surface-*) background');
+  const surface = { light: lightToken(bg[1]), dark: darkToken(bg[1]) };
+
+  /* --- A. every token these two files use, collected FROM SOURCE ---------- */
+
+  const used = new Set<string>();
+  for (const name of PART1_PANELS) {
+    for (const m of PART1_SRC[name].matchAll(/'var\((--rb-[a-z-]+)\)'/g)) used.add(m[1]);
+  }
+  /*
+   * `--rb-border` is a decorative hairline, not text. It is deliberately
+   * excluded from the AA sweep and no 3:1 floor is claimed for it.
+   */
+  used.delete('--rb-border');
+  assert.ok(
+    used.size >= 5,
+    `expected several token text roles, found ${[...used].sort().join(', ')}`
+  );
+
+  for (const token of [...used].sort()) {
+    for (const scheme of ['light', 'dark'] as const) {
+      const fg = scheme === 'light' ? lightToken(token) : darkToken(token);
+      const ratio = contrast(fg, surface[scheme]);
+      assert.ok(
+        ratio >= AA_NORMAL_TEXT,
+        `${token} on ${bg[1]} (${scheme}) is ${ratio.toFixed(2)}:1`
+      );
+    }
+  }
+
+  /* --- B. the self-contained chips, on their OWN fills -------------------- */
+
+  let chipsMeasured = 0;
+  for (const name of PART1_PANELS) {
+    for (const entry of styleEntries(PART1_SRC[name])) {
+      const fg = /color: '(#[0-9a-fA-F]{6})'/.exec(entry.body);
+      const fill = /bg: '(#[0-9a-fA-F]{6})'/.exec(entry.body);
+      if (!fg || !fill) continue;
+      chipsMeasured += 1;
+      const ratio = contrast(fg[1], fill[1]);
+      assert.ok(
+        ratio >= AA_NORMAL_TEXT,
+        `${name}.${entry.name} chip is ${ratio.toFixed(2)}:1 (${fg[1]} on ${fill[1]})`
+      );
+    }
+  }
+  assert.equal(chipsMeasured, 7, 'three health badges and four priority chips must be measured');
+
+  /* --- C. #8c959f was ALREADY FAILING, in the light scheme ---------------- */
+
+  /*
+   * Not part of the atomicity list below, because it is the one legacy value
+   * here that would have PASSED on the dark token surface (5.45:1). It failed
+   * on the surface it actually had: 10px is normal text, so the 4.5:1 floor
+   * applied, and it measured 3.04:1 on `#fff`. Part 2b-ii resolved the same
+   * literal in RaceIntelligencePanel the same way; recording it as a fixed
+   * pre-existing defect stops it being mistaken for a change this tranche made.
+   */
+  const wasFailing = contrast('#8c959f', '#ffffff');
+  assert.ok(
+    wasFailing < AA_NORMAL_TEXT,
+    `#8c959f was expected to fail on white, but measured ${wasFailing.toFixed(2)}:1`
+  );
+  assert.equal(
+    PART1_SRC.CommandCentrePanel.includes('#8c959f'),
+    false,
+    'the faint tier folded into --rb-text-muted; the failing literal must be gone'
+  );
+
+  /* --- D. why the migration had to be atomic ------------------------------ */
+
+  /*
+   * Every legacy foreground these two panels carried as BARE TEXT fails on the
+   * surface they now take, in the dark scheme. Moving the root without them —
+   * or them without the root — produces exactly the half-migration this suite
+   * exists to catch. The chip fills are absent from this list on purpose: they
+   * are self-contained and the surface cannot reach them.
+   */
+  const darkSurface = darkToken(bg[1]);
+  for (const [legacy, what] of [
+    ['#1f2328', 'legacy root foreground'],
+    ['#57606a', 'legacy titles, reasons, counts, reason'],
+    ['#656d76', 'legacy stat label, summary, empty state'],
+    ['#0550ae', 'legacy countdown and NEXT ACTION count'],
+    ['#cf222e', 'legacy bad tone and WARNING count'],
+    ['#1a7f37', 'legacy ok tone and GOOD count'],
+    ['#9a6700', 'legacy warn tone and MONITOR count'],
+  ] as const) {
+    const ratio = contrast(legacy, darkSurface);
+    assert.ok(
+      ratio < AA_NORMAL_TEXT,
+      `${what}: expected ${legacy} to fail on ${darkSurface}, but it was ${ratio.toFixed(2)}:1`
+    );
+  }
+});

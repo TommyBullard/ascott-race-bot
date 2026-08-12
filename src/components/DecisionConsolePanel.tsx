@@ -10,6 +10,17 @@
  * Mobile-first: the TOP THREE most urgent rows are always visible; the rest
  * collapse behind a native <details> toggle (no JS state). Decision-support
  * only — priorities are operational display hints, never betting instructions.
+ *
+ * SLICE 3D — TOP-LEVEL PANELS, PART 1. The root now takes the paired
+ * `rb-evidence-panel` class, and every descendant foreground moved to a
+ * dark-aware token in the same change. The priority chips stay self-contained.
+ *
+ * The one subtle case is the COUNTS ROW, which used to reuse each chip's
+ * foreground as bare text on the panel surface — a chip colour with no fill
+ * behind it. Those four now come from `CONSOLE_COUNT_COLOR`, a separate map,
+ * so a chip pair and a bare-text role can never again be mistaken for the same
+ * thing. Colour only: no layout, wording, aria-label, ordering, priority
+ * derivation or read-only behaviour changed here.
  */
 
 import type { CSSProperties } from 'react';
@@ -27,6 +38,14 @@ export interface DecisionConsolePanelProps {
 /** How many rows stay visible above the fold (mobile requirement). */
 export const CONSOLE_VISIBLE_ROWS = 3;
 
+/*
+ * THE CHIP PAIRS — SELF-CONTAINED, AND DELIBERATELY RETAINED.
+ *
+ * Every entry declares BOTH a foreground and a fill, so the surface behind it
+ * cannot affect it: NEXT ACTION 6.68:1, WARNING 4.67:1, MONITOR 4.52:1,
+ * GOOD 4.56:1 on their own fills. These values are for the CHIP ONLY. Nothing
+ * outside a filled pill may read them — see `CONSOLE_COUNT_COLOR`.
+ */
 const CHIP_PALETTE: Record<ConsolePriority, { color: string; bg: string; border: string }> = {
   next_action: { color: '#0550ae', bg: '#ddf4ff', border: '#b6e3ff' },
   warning: { color: '#cf222e', bg: '#ffebe9', border: '#ffcecb' },
@@ -34,14 +53,35 @@ const CHIP_PALETTE: Record<ConsolePriority, { color: string; bg: string; border:
   good: { color: '#1a7f37', bg: '#dafbe1', border: '#aceebb' },
 };
 
+/*
+ * THE SAME FOUR PRIORITIES AS BARE TEXT, ON THE PANEL SURFACE.
+ *
+ * The counts row summarises the priorities in words on the panel itself, with
+ * no fill behind it. It previously reused `CHIP_PALETTE[p].color`, which is
+ * only safe on that chip's own fill: on the token panel those literals land at
+ * 2.18 / 3.09 / 3.40 / 3.26:1 in the dark scheme. A SEPARATE map keeps the two
+ * roles apart by construction rather than by discipline, so migrating one can
+ * never silently leave the other behind.
+ *
+ * The semantics are unchanged — analytical blue for the next action, failure
+ * for a warning, warning for monitoring, positive for good.
+ */
+const CONSOLE_COUNT_COLOR: Record<ConsolePriority, string> = {
+  next_action: 'var(--rb-accent-analytical)',
+  warning: 'var(--rb-status-failure)',
+  monitor: 'var(--rb-status-warning)',
+  good: 'var(--rb-status-positive)',
+};
+
 const styles = {
+  /*
+   * GEOMETRY ONLY — surface, border, radius and foreground all arrive together
+   * from `rb-evidence-panel`. `borderRadius: 10` is dropped rather than kept
+   * because `--rb-radius-card` is 10px, so the class reproduces it exactly.
+   */
   panel: {
-    border: '1px solid #d0d7de',
-    borderRadius: 10,
     padding: '10px 14px',
-    background: '#fff',
     fontFamily: 'system-ui, -apple-system, sans-serif',
-    color: '#1f2328',
     margin: '12px 0 4px',
   } as CSSProperties,
   headRow: {
@@ -50,16 +90,22 @@ const styles = {
     gap: 10,
     flexWrap: 'wrap' as const,
   } as CSSProperties,
+  /* Secondary tier, matching the Command Centre's title and the tipster panels'. */
   title: {
     fontSize: 12,
     fontWeight: 700,
     letterSpacing: 0.5,
     textTransform: 'uppercase' as const,
-    color: '#57606a',
+    color: 'var(--rb-text-secondary)',
   } as CSSProperties,
+  /*
+   * A fallback tier only: all four children set their own semantic colour from
+   * `CONSOLE_COUNT_COLOR`. It is kept — rather than dropped as dead — so that a
+   * future unclassed child inherits a readable token instead of nothing.
+   */
   counts: {
     fontSize: 11.5,
-    color: '#57606a',
+    color: 'var(--rb-text-muted)',
     display: 'flex',
     gap: 10,
     flexWrap: 'wrap' as const,
@@ -72,12 +118,18 @@ const styles = {
     padding: '4px 0',
     fontSize: 13,
     lineHeight: 1.5,
-    borderTop: '1px dashed #eaeef2',
+    /*
+     * The separator follows the surface. A fixed near-white hairline on a dark
+     * token panel reads as a bright seam. It is DECORATIVE — no 3:1 non-text
+     * floor is claimed for it, and none is needed: the rows are also separated
+     * by spacing and by their own leading chip.
+     */
+    borderTop: '1px dashed var(--rb-border)',
   } as CSSProperties,
   raceName: { fontWeight: 600, minWidth: 0, overflowWrap: 'anywhere' as const } as CSSProperties,
-  reason: { color: '#57606a', overflowWrap: 'anywhere' as const } as CSSProperties,
+  reason: { color: 'var(--rb-text-muted)', overflowWrap: 'anywhere' as const } as CSSProperties,
   countdown: {
-    color: '#0550ae',
+    color: 'var(--rb-accent-analytical)',
     fontVariantNumeric: 'tabular-nums' as const,
     whiteSpace: 'nowrap' as const,
   } as CSSProperties,
@@ -86,11 +138,11 @@ const styles = {
     fontSize: 11,
     fontWeight: 700,
     letterSpacing: 0.5,
-    color: '#656d76',
+    color: 'var(--rb-text-muted)',
     textTransform: 'uppercase' as const,
     padding: '6px 0 2px',
   } as CSSProperties,
-  empty: { fontSize: 13, color: '#656d76', marginTop: 6 } as CSSProperties,
+  empty: { fontSize: 13, color: 'var(--rb-text-muted)', marginTop: 6 } as CSSProperties,
 };
 
 function chipStyle(priority: ConsolePriority): CSSProperties {
@@ -128,16 +180,16 @@ export default function DecisionConsolePanel({ view }: DecisionConsolePanelProps
   const rest = items.slice(CONSOLE_VISIBLE_ROWS);
 
   return (
-    <section style={styles.panel} aria-label="Race-day decision console">
+    <section className="rb-evidence-panel" style={styles.panel} aria-label="Race-day decision console">
       <div style={styles.headRow}>
         <span style={styles.title}>Decision Console</span>
         <span style={styles.counts}>
-          <span style={{ color: CHIP_PALETTE.next_action.color }}>
+          <span style={{ color: CONSOLE_COUNT_COLOR.next_action }}>
             NEXT ACTION: {counts.next_action}
           </span>
-          <span style={{ color: CHIP_PALETTE.warning.color }}>WARNING: {counts.warning}</span>
-          <span style={{ color: CHIP_PALETTE.monitor.color }}>MONITOR: {counts.monitor}</span>
-          <span style={{ color: CHIP_PALETTE.good.color }}>GOOD: {counts.good}</span>
+          <span style={{ color: CONSOLE_COUNT_COLOR.warning }}>WARNING: {counts.warning}</span>
+          <span style={{ color: CONSOLE_COUNT_COLOR.monitor }}>MONITOR: {counts.monitor}</span>
+          <span style={{ color: CONSOLE_COUNT_COLOR.good }}>GOOD: {counts.good}</span>
         </span>
       </div>
       {items.length === 0 && (

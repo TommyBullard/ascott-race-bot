@@ -11,6 +11,17 @@
  * visible without scrolling on a phone. "Platform feed" reports the read
  * API's reachability only — never a direct database probe. Decision-support
  * only; never betting advice.
+ *
+ * SLICE 3D — TOP-LEVEL PANELS, PART 1. This panel used to own a hard-coded
+ * `#fff` surface with hard-coded dark text: an opaque white island once the
+ * shell went dark. The root now takes the paired `rb-evidence-panel` class and
+ * every descendant foreground moved to a dark-aware token IN THE SAME CHANGE,
+ * because a surface moved without its foregrounds is precisely the
+ * dark-on-dark defect this programme exists to prevent. The badge chips are
+ * self-contained (their own fill AND text) and are retained as they are.
+ *
+ * Colour only: no layout, wording, aria-label, endpoint, effect, state or
+ * classification changed here.
  */
 
 import type { CSSProperties } from 'react';
@@ -20,6 +31,15 @@ export interface CommandCentrePanelProps {
   view: CommandCentreView;
 }
 
+/*
+ * SELF-CONTAINED, AND DELIBERATELY RETAINED.
+ *
+ * Each entry declares BOTH a foreground and a fill, so the surface behind it
+ * cannot affect it and it needs no token pairing: GREEN 4.56:1, AMBER 4.52:1,
+ * RED 4.67:1 on their own fills. This is the same treatment the nested
+ * race-card panels' chips already carry. The badge is never the only signal —
+ * `label` supplies the word, and `badgeReasons` the plain-language explanation.
+ */
 const BADGE_PALETTE: Record<CommandBadge, { color: string; bg: string; border: string; label: string }> = {
   green: { color: '#1a7f37', bg: '#dafbe1', border: '#aceebb', label: 'GREEN' },
   amber: { color: '#9a6700', bg: '#fff8c5', border: '#eed888', label: 'AMBER' },
@@ -27,13 +47,18 @@ const BADGE_PALETTE: Record<CommandBadge, { color: string; bg: string; border: s
 };
 
 const styles = {
+  /*
+   * GEOMETRY ONLY.
+   *
+   * Surface, border, radius and foreground now arrive TOGETHER from
+   * `rb-evidence-panel`. Declaring any of them here would either fight the class
+   * or strand one half of the pair on it — the exact failure this migration
+   * exists to prevent. `borderRadius: 10` is dropped rather than kept because
+   * `--rb-radius-card` is 10px, so the class reproduces it exactly.
+   */
   panel: {
-    border: '1px solid #d0d7de',
-    borderRadius: 10,
     padding: '10px 14px',
-    background: '#fff',
     fontFamily: 'system-ui, -apple-system, sans-serif',
-    color: '#1f2328',
     margin: '12px 0 4px',
   } as CSSProperties,
   headRow: {
@@ -42,16 +67,22 @@ const styles = {
     gap: 10,
     flexWrap: 'wrap' as const,
   } as CSSProperties,
+  /*
+   * The panel's own label takes the SECONDARY tier, matching the tipster
+   * panels' titles. Its legacy `#57606a` sat between the two token tiers; the
+   * title is the one role here that reads as structure rather than supporting
+   * copy, so it takes the stronger of the two.
+   */
   title: {
     fontSize: 12,
     fontWeight: 700,
     letterSpacing: 0.5,
     textTransform: 'uppercase' as const,
-    color: '#57606a',
+    color: 'var(--rb-text-secondary)',
   } as CSSProperties,
   reasons: {
     fontSize: 11.5,
-    color: '#57606a',
+    color: 'var(--rb-text-muted)',
     lineHeight: 1.4,
     marginTop: 2,
     overflowWrap: 'anywhere' as const,
@@ -65,20 +96,35 @@ const styles = {
     lineHeight: 1.7,
     fontVariantNumeric: 'tabular-nums' as const,
   } as CSSProperties,
+  /*
+   * `#8c959f` IS NOT CARRIED OVER, AND WAS ALREADY A DEFECT.
+   *
+   * At 10px it is normal text, so the 4.5:1 floor applies — and it measured
+   * only 3.04:1 on the white surface this panel used to own. It was failing in
+   * the LIGHT scheme, today, before any of this migration. It folds into
+   * `--rb-text-muted` (5.45:1 light / 5.60:1 dark on the new surface), the same
+   * resolution evidence part 2b-ii applied to the identical literal in
+   * RaceIntelligencePanel.
+   */
   rowLabel: {
     fontSize: 10,
     fontWeight: 700,
     letterSpacing: 0.5,
     textTransform: 'uppercase' as const,
-    color: '#8c959f',
+    color: 'var(--rb-text-muted)',
     width: 52,
     flexShrink: 0,
   } as CSSProperties,
   stat: { whiteSpace: 'nowrap' as const } as CSSProperties,
-  statLabel: { color: '#656d76', marginRight: 4 } as CSSProperties,
-  warn: { color: '#9a6700', fontWeight: 700 } as CSSProperties,
-  bad: { color: '#cf222e', fontWeight: 700 } as CSSProperties,
-  ok: { color: '#1a7f37', fontWeight: 600 } as CSSProperties,
+  statLabel: { color: 'var(--rb-text-muted)', marginRight: 4 } as CSSProperties,
+  /*
+   * The three tone values are BARE TEXT on the panel surface — they carry no
+   * background of their own, unlike the badge chips below — so they must move
+   * to dark-aware tokens with the surface. Weights are unchanged.
+   */
+  warn: { color: 'var(--rb-status-warning)', fontWeight: 700 } as CSSProperties,
+  bad: { color: 'var(--rb-status-failure)', fontWeight: 700 } as CSSProperties,
+  ok: { color: 'var(--rb-status-positive)', fontWeight: 600 } as CSSProperties,
 };
 
 function badgeChipStyle(badge: CommandBadge): CSSProperties {
@@ -111,7 +157,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: 'ok
 export default function CommandCentrePanel({ view }: CommandCentrePanelProps) {
   const { badge, badgeReasons, health, locks, results } = view;
   return (
-    <section style={styles.panel} aria-label="Race-day command centre">
+    <section className="rb-evidence-panel" style={styles.panel} aria-label="Race-day command centre">
       <div style={styles.headRow}>
         <span style={styles.title}>Command Centre</span>
         <span style={badgeChipStyle(badge)}>{BADGE_PALETTE[badge].label}</span>
