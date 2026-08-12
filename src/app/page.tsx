@@ -1087,10 +1087,21 @@ const styles = {
   nextActionCmdRow: {
     marginTop: 8,
   } as CSSProperties,
+  /*
+   * SLICE 3D: colour supplied by `rb-evidence-muted` at the call site.
+   *
+   * This label sits INSIDE the paired `rb-status-frame` surface, which since
+   * phase 1 has been `--rb-surface-elevated`. It nevertheless kept the legacy
+   * `#656d76`, which reaches only 2.83:1 on that surface in the dark scheme —
+   * the partial-pairing failure this programme exists to prevent. The token
+   * muted foreground clears AA in both schemes (5.80:1 light, 5.02:1 dark).
+   *
+   * Structure stays inline; ONLY the foreground moved. The sibling command
+   * block is self-contained and deliberately unchanged.
+   */
   nextActionCmdLabel: {
     display: 'block',
     fontSize: 11,
-    color: '#656d76',
     marginBottom: 4,
   } as CSSProperties,
   nextActionCmd: {
@@ -2350,7 +2361,14 @@ function NextActionWidget({ action }: { action: NextAction }) {
       is how the design system already tints a block; the three tone
       classifications themselves are unchanged.
 
-      The command block below is DELIBERATELY untouched. It keeps its own
+      The command LABEL completes that pairing. Phase 1 migrated the frame's
+      three descriptive roles but left this one label on the legacy `#656d76`,
+      which fell to 2.83:1 on the elevated token surface in the dark scheme.
+      It now takes `rb-evidence-muted`, matching how every other muted role on
+      a migrated surface is coloured. Wording, condition and structure are
+      unchanged.
+
+      The command BLOCK below is DELIBERATELY untouched. It keeps its own
       self-contained dark pairing, `styles.nextActionCmd`, `overflowX: auto` and
       `wordBreak: break-all`, and remains an inert <code> element with no
       button, handler or copy control.
@@ -2361,7 +2379,7 @@ function NextActionWidget({ action }: { action: NextAction }) {
       <div className="rb-status-frame__detail">{action.detail}</div>
       {action.suggestedCommand && (
         <div style={styles.nextActionCmdRow}>
-          <span style={styles.nextActionCmdLabel}>
+          <span className="rb-evidence-muted" style={styles.nextActionCmdLabel}>
             Suggested (read-only — run in a terminal, not from this page):
           </span>
           <code style={styles.nextActionCmd}>{action.suggestedCommand}</code>
