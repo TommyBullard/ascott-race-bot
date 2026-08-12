@@ -212,7 +212,13 @@ export default function RaceExplanationPanel({
 
   return (
     <section style={{ ...styles.panel, ...style }} aria-label="Race model explanation">
-      <h2 style={styles.title}>Model explanation</h2>
+      {/*
+        SLICE 3D part 2c: h3, not h2. The race card now carries its own `h2`
+        (the race identity), so this sits one level below it instead of
+        competing with the page's top-level sections. `styles.title` already
+        fixes fontSize, fontWeight and margin, so the tag change is invisible.
+      */}
+      <h3 style={styles.title}>Model explanation</h3>
 
       {!hasAnything ? (
         <p style={styles.empty}>

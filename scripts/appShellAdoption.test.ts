@@ -39,6 +39,12 @@ import { MODEL_FLOW_STEPS } from '../src/components/ModelFlowVisual';
 // Rendered directly in 29a-3 to prove the semantics the homepage's error and
 // empty states rely on, without adding a DOM library or a router mock.
 import { EmptyState, ErrorState } from '../src/components/UiPrimitives';
+// Rendered directly in 36 for the same reason: the three nested race-card
+// panels emit real headings, and the outline is worth proving from markup
+// rather than from source strings.
+import RaceExplanationPanel from '../src/components/RaceExplanationPanel';
+import GenaiCommentaryPanel from '../src/components/GenaiCommentaryPanel';
+import MlShadowComparisonPanel from '../src/components/MlShadowComparisonPanel';
 
 const HOMEPAGE_SRC = readFileSync('src/app/page.tsx', 'utf8');
 const HOW_IT_WORKS_SRC = readFileSync('src/app/how-it-works/page.tsx', 'utf8');
@@ -1373,5 +1379,175 @@ test('35. the operational surface is absent from the frontend', () => {
   // Migrations and deployment config are not referenced from the UI at all.
   for (const src of [...Object.values(SHELL_COMPONENT_SRC), ...Object.values(ADOPTED_SRC)]) {
     assert.equal(/supabase\/migrations|vercel\.json|railway/i.test(src), false);
+  }
+});
+
+test('36. the race-card heading outline is repaired (evidence part 2c)', () => {
+  /*
+   * THE DEFECT THIS CLOSES.
+   *
+   * Every race card used to emit `<h2>Model explanation</h2>` from
+   * `RaceExplanationPanel` with NO card-level heading above it, so a seven-race
+   * page had seven identical sibling `h2`s and nothing naming the race they
+   * belonged to. Below them the levels then skipped: GenAI at `h3`, ML shadow
+   * at `h4`.
+   *
+   * Part 2c gives each card its own `h2` — the race identity that was already
+   * visible but unheaded — and levels the three nested panels at `h3`.
+   *
+   * SCOPE: semantics only. No wording, colour, surface, order, aria-label,
+   * layout, state or logic changes, and nothing is added to
+   * `RaceIntelligencePanel`, `SettlementStatusPanel`, `LockedDecisionPanel` or
+   * `ConfidenceBreakdownPanel`, which stay non-heading by design.
+   */
+
+  /* --- A. the three nested panels, proven from RENDERED MARKUP ----------- */
+
+  const explanation = renderToStaticMarkup(h(RaceExplanationPanel, {}));
+  assert.match(explanation, /<h3[^>]*>Model explanation<\/h3>/, 'explanation heading is h3');
+  assert.equal(/<h2\b/.test(explanation), false, 'RaceExplanationPanel must no longer emit an h2');
+  assert.match(
+    explanation,
+    /aria-label="Race model explanation"/,
+    'its named region is unchanged by the level change'
+  );
+
+  const genai = renderToStaticMarkup(h(GenaiCommentaryPanel, {}));
+  assert.match(genai, /<h3[^>]*>AI commentary \(shadow\)<\/h3>/, 'GenAI heading stays h3');
+  assert.match(
+    genai,
+    /aria-label="AI shadow commentary \(read-only\)"/,
+    'its named region is unchanged'
+  );
+
+  const ml = renderToStaticMarkup(
+    h(MlShadowComparisonPanel, { regular: null, marketFav: null, ml: null })
+  );
+  assert.match(ml, /<h3[^>]*>ML shadow comparison<\/h3>/, 'ML shadow heading is h3');
+  assert.equal(/<h4\b/.test(ml), false, 'MlShadowComparisonPanel must no longer emit an h4');
+
+  // Together the three contribute exactly one h3 each and no other heading.
+  for (const [name, html] of [
+    ['RaceExplanationPanel', explanation],
+    ['GenaiCommentaryPanel', genai],
+    ['MlShadowComparisonPanel', ml],
+  ] as const) {
+    assert.equal(count(html, '<h3'), 1, `${name} emits exactly one h3`);
+    for (const other of ['<h1', '<h2', '<h4', '<h5', '<h6']) {
+      assert.equal(count(html, other), 0, `${name} must emit no ${other.slice(1)}`);
+    }
+  }
+
+  /* --- B. the race-card h2, bounded to RaceCardView --------------------- */
+
+  /*
+   * `RaceCardView` is module-private and the homepage static-renders to its
+   * loading skeleton, so there is no card in `ADOPTED['/']` to inspect. Rather
+   * than export the component purely for a test, the structure is pinned
+   * against its own bounded, comment-stripped body; the per-card DOM counts are
+   * verified in the browser matrix.
+   */
+  const card = sliceBetween(codeOf(HOMEPAGE_SRC), 'function RaceCardView(', '\n}');
+
+  const heading = sliceBetween(card, '<h2', '</h2>');
+  assert.match(heading, /minWidth: 0/, 'the identity wrapper keeps its flex-shrink guard');
+  for (const reset of ["margin: 0", "fontSize: 'inherit'", "fontWeight: 'inherit'"]) {
+    assert.ok(
+      heading.includes(reset),
+      `the card h2 must neutralise the browser default via ${reset}`
+    );
+  }
+
+  // The heading carries the EXISTING visible identity — both fragments, inside.
+  assert.match(heading, /formatOffTime\(card\.off_time\)/, 'the off time is inside the h2');
+  assert.match(
+    heading,
+    /\[card\.course, card\.race_name\]/,
+    'the course and race name are inside the h2'
+  );
+
+  // The countdown stays a sibling: it re-renders every second and must not
+  // become part of an accessible name.
+  assert.equal(
+    heading.includes('countdownStyle'),
+    false,
+    'the countdown must stay outside the heading'
+  );
+  assert.match(card, /<\/h2>\s*<span style=\{countdownStyle\(cd\)\}>/, 'countdown follows the h2');
+
+  // Exactly one h2 in the card, and no other heading level anywhere in it.
+  assert.equal(count(card, '<h2'), 1, 'a race card emits exactly one h2');
+  for (const other of ['<h1', '<h3', '<h4', '<h5', '<h6']) {
+    assert.equal(count(card, other), 0, `RaceCardView itself must emit no ${other.slice(1)}`);
+  }
+
+  /*
+   * The identity is not duplicated: each fragment is rendered once in the whole
+   * card body, and the old standalone wrapper is gone.
+   */
+  assert.equal(count(card, 'formatOffTime(card.off_time)'), 1, 'off time rendered once');
+  assert.equal(count(card, '[card.course, card.race_name]'), 1, 'race identity rendered once');
+  assert.equal(
+    card.includes('<div style={{ minWidth: 0 }}>'),
+    false,
+    'the superseded non-heading identity wrapper must be gone'
+  );
+
+  // Visible text, not an aria-label standing in for a heading.
+  assert.equal(heading.includes('aria-label'), false, 'the h2 must be named by its visible text');
+  assert.equal(
+    /rb-visually-hidden|sr-only/.test(heading),
+    false,
+    'no hidden heading may be fabricated'
+  );
+
+  /* --- C. the top-level h2s are untouched -------------------------------- */
+
+  for (const [file, title] of [
+    ['src/components/ProofOfUpdatePanel.tsx', '{view.title}'],
+    ['src/components/RaceTimelinePanel.tsx', 'Race-day timeline'],
+    ['src/components/PlaceAuditPanel.tsx', 'Place / each-way audit (research)'],
+  ] as const) {
+    const src = readFileSync(file, 'utf8');
+    assert.match(
+      src,
+      new RegExp(`<h2[^>]*>${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</h2>`),
+      `${file} must keep its top-level h2`
+    );
+  }
+
+  /*
+   * Deliberately NOT a global h2 count. A seven-card page has three top-level
+   * h2s plus seven "Model explanation" h2s BEFORE this change, and three plus
+   * seven card titles AFTER — ten either way. A total would have passed
+   * unchanged while the outline was broken, so the contract is per-region.
+   */
+
+  /* --- D. no heading-level prop was introduced --------------------------- */
+
+  for (const file of [
+    'src/components/RaceExplanationPanel.tsx',
+    'src/components/GenaiCommentaryPanel.tsx',
+    'src/components/MlShadowComparisonPanel.tsx',
+  ]) {
+    const src = codeOf(readFileSync(file, 'utf8'));
+    assert.equal(
+      /\blevel\s*[?:]/.test(src),
+      false,
+      `${file} is homepage-only; a caller-chosen heading level would be unused indirection`
+    );
+  }
+
+  /* --- E. the panels that must NOT gain a heading ------------------------ */
+
+  for (const file of [
+    'src/components/RaceIntelligencePanel.tsx',
+    'src/components/SettlementStatusPanel.tsx',
+  ]) {
+    assert.equal(
+      /<h[1-6]\b/.test(readFileSync(file, 'utf8')),
+      false,
+      `${file} stays non-heading — part 2c adds no heading for styling`
+    );
   }
 });
