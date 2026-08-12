@@ -8,6 +8,24 @@
  * changed. NO data fetching, NO API calls, NO backend coupling, NO write
  * controls. Decision-support only — it never changes the recommendation, never
  * predicts a winner, and shows "—" / "unknown" for missing values.
+ *
+ * SLICE 3D — TOP-LEVEL PANELS, PART 2. The root used to own a hard-coded
+ * `#fff` surface with hard-coded dark text — an opaque white island once the
+ * shell went dark. It now takes the paired `rb-evidence-panel` class, and
+ * every descendant foreground moved to a dark-aware token IN THE SAME CHANGE.
+ *
+ * Unlike its two siblings in this tranche, this panel has no inner surface to
+ * migrate: its rows are separated by a rule, not by a fill. That rule follows
+ * the surface (`--rb-border`) because a fixed near-white hairline reads as a
+ * bright seam on a dark panel. It is DECORATIVE — no 3:1 non-text floor is
+ * claimed for it, and none is needed: the rows are also separated by spacing
+ * and each one leads with its own time and badges.
+ *
+ * The status badges and the warning chip are SELF-CONTAINED (each declares its
+ * own fill AND its own text) and are retained exactly as they are.
+ *
+ * Colour only: no heading, wording, layout, lock-status mapping, result
+ * condition, warning, effect, state or read-only behaviour changed here.
  */
 
 import type { CSSProperties } from 'react';
@@ -48,7 +66,16 @@ function formatClock(iso: string | null): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-/** Pill style tinted by tone (mirrors the dashboard status palette). */
+/**
+ * Pill style tinted by tone (mirrors the dashboard status palette).
+ *
+ * SELF-CONTAINED, AND DELIBERATELY RETAINED VERBATIM. Every entry declares
+ * BOTH a foreground and a fill, so the surface behind it cannot affect it and
+ * it needs no token pairing: pos 4.56:1, neg 4.67:1, warn 4.52:1, neutral
+ * 8.44:1 on their own fills. No token foreground is put on any of these fixed
+ * light fills — that would be the half-migration this tranche exists to avoid.
+ * Tone is never the only signal: `label` supplies the word in every case.
+ */
 function badgeStyle(tone: StatusTone): CSSProperties {
   const palette: Record<StatusTone, { bg: string; border: string; color: string }> = {
     pos: { bg: '#dafbe1', border: '#aceebb', color: '#1a7f37' },
@@ -70,13 +97,14 @@ function badgeStyle(tone: StatusTone): CSSProperties {
 }
 
 const styles = {
+  /*
+   * GEOMETRY ONLY — surface, border, radius and foreground all arrive together
+   * from `rb-evidence-panel`. `borderRadius: 10` is dropped rather than kept
+   * because `--rb-radius-card` is 10px, so the class reproduces it exactly.
+   */
   panel: {
-    border: '1px solid #d0d7de',
-    borderRadius: 10,
     padding: 16,
-    background: '#fff',
     fontFamily: 'system-ui, -apple-system, sans-serif',
-    color: '#1f2328',
     marginBottom: 16,
   } as CSSProperties,
   heading: {
@@ -85,7 +113,7 @@ const styles = {
   } as CSSProperties,
   note: {
     fontSize: 12,
-    color: '#656d76',
+    color: 'var(--rb-text-muted)',
     margin: '0 0 12px',
   } as CSSProperties,
   list: {
@@ -93,8 +121,12 @@ const styles = {
     flexDirection: 'column' as const,
     gap: 10,
   } as CSSProperties,
+  /*
+   * The separator follows the surface. A fixed near-white hairline on a dark
+   * token panel reads as a bright seam. DECORATIVE — no 3:1 floor is claimed.
+   */
   row: {
-    borderTop: '1px dashed #eaeef2',
+    borderTop: '1px dashed var(--rb-border)',
     paddingTop: 10,
   } as CSSProperties,
   rowTop: {
@@ -118,12 +150,17 @@ const styles = {
     flexWrap: 'wrap' as const,
     gap: 12,
     fontSize: 12.5,
-    color: '#656d76',
+    color: 'var(--rb-text-muted)',
     marginTop: 4,
     fontVariantNumeric: 'tabular-nums' as const,
   } as CSSProperties,
+  /*
+   * BARE TEXT on the panel surface — it carries no fill of its own, unlike the
+   * warning chip below — so it must move to a dark-aware token with the root.
+   * 6.02:1 light / 7.36:1 dark. The weight is unchanged.
+   */
   stale: {
-    color: '#9a6700',
+    color: 'var(--rb-status-warning)',
     fontWeight: 700,
   } as CSSProperties,
   warnRow: {
@@ -132,6 +169,7 @@ const styles = {
     gap: 6,
     marginTop: 6,
   } as CSSProperties,
+  /* Self-contained and retained verbatim: 4.52:1 on its own fill. */
   warnChip: {
     display: 'inline-block',
     padding: '1px 8px',
@@ -144,7 +182,7 @@ const styles = {
   } as CSSProperties,
   empty: {
     fontSize: 14,
-    color: '#656d76',
+    color: 'var(--rb-text-muted)',
     margin: 0,
   } as CSSProperties,
 } as const;
@@ -197,7 +235,7 @@ function TimelineRow({ entry, nowMs }: { entry: TimelineEntry; nowMs: number }) 
 
 export default function RaceTimelinePanel({ entries, nowMs }: RaceTimelinePanelProps) {
   return (
-    <section style={styles.panel}>
+    <section className="rb-evidence-panel" style={styles.panel}>
       <h2 style={styles.heading}>Race-day timeline</h2>
       <p style={styles.note}>
         Read-only operational status from stored data. Freshness for completed
