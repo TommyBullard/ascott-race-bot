@@ -241,6 +241,44 @@ function styleBlock(key: string): string {
 }
 
 /**
+ * Every entry of the MODULE-LEVEL `styles` object in page.tsx, bounded to itself.
+ *
+ * Deliberately NOT the file-wide `name: {` scan `styleEntries` uses for the
+ * component sources. page.tsx also holds function-local palette objects
+ * (`tagStyle`, `statusBadgeStyle`, `countdownStyle`) whose branches are keyed
+ * `pos:` / `neutral:` and pair a colour with a `bg:` rather than a
+ * `background:`. A file-wide scan would read those self-contained chips as
+ * unpaired foregrounds. Slicing the `styles` object first, and requiring the
+ * two-space indentation of a top-level entry, keeps this to the entries it
+ * claims to describe.
+ */
+function pageStyleEntries(): Array<{ name: string; body: string }> {
+  const at = PAGE_CODE.indexOf('const styles = {');
+  assert.notEqual(at, -1, 'page.tsx must declare a module-level styles object');
+  const end = PAGE_CODE.indexOf('\n};', at);
+  assert.ok(end > at, 'the styles object must be bounded');
+  const block = PAGE_CODE.slice(at, end);
+
+  const out: Array<{ name: string; body: string }> = [];
+  for (const m of block.matchAll(/^ {2}(\w+): \{$/gm)) {
+    const open = m.index! + m[0].length - 1;
+    let depth = 0;
+    for (let j = open; j < block.length; j += 1) {
+      if (block[j] === '{') depth += 1;
+      else if (block[j] === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          out.push({ name: m[1], body: block.slice(open, j + 1) });
+          break;
+        }
+      }
+    }
+  }
+  assert.ok(out.length > 20, 'the styles object must parse into its entries');
+  return out;
+}
+
+/**
  * One CSS rule body from `tokens.css`, bounded to itself.
  *
  * Rules in this stylesheet are written one selector per block with the closing
@@ -359,27 +397,35 @@ test('5b. the remaining explicit foregrounds reproduce the styles.page anchor', 
   /*
    * The set SHRINKS as regions migrate — that is the shape of the programme.
    * `nextActionStyle` left in slice 3D phase 1; `accuracyBar` and `perfPanel`
-   * left in evidence-migration part 1. Each now owns a paired token surface,
-   * so there is no legacy foreground left to reconcile for them. `styles.panel`
-   * (the tipster panels) is the only object-style entry still on the anchor.
+   * left in evidence-migration part 1; `styles.panel` (the tipster panels) left
+   * in the tipster tranche, which DELETED it rather than re-anchoring it.
+   * `liveBarStyle` is the only remaining holder of the anchor, and it is
+   * self-contained (it declares its own background), so it is safe where it is.
    */
-  assert.ok(
-    styleBlock('panel').includes(LEGACY_PRIMARY_FOREGROUND),
-    'styles.panel must declare the same foreground as styles.page'
-  );
   assert.ok(
     functionBody('liveBarStyle').includes(LEGACY_PRIMARY_FOREGROUND),
     'liveBarStyle must declare the same foreground as styles.page'
   );
 
   // The migrated regions must NOT reacquire a legacy foreground.
-  for (const key of ['accuracyBar', 'perfPanel'] as const) {
+  for (const key of ['accuracyBar', 'perfPanel', 'tipsterPanel'] as const) {
     assert.equal(
       styleBlock(key).includes(LEGACY_PRIMARY_FOREGROUND),
       false,
       `styles.${key} is paired via rb-evidence-panel and must not re-declare the legacy colour`
     );
   }
+
+  /*
+   * `styles.panel` is gone, not merely unanchored. Test 22 owns the tipster
+   * panels' positive pairing; asserting the key's absence here is what stops
+   * the legacy surface returning under its old name.
+   */
+  assert.equal(
+    /(^|\s)panel: \{/.test(PAGE_CODE),
+    false,
+    'the legacy tipster panel surface must not return'
+  );
 
   assert.equal(
     /function nextActionStyle\(/.test(PAGE_CODE),
@@ -437,8 +483,49 @@ test('7. no dark-aware token foreground exists anywhere in the homepage', () => 
  * 8-12. page-surface muted text, without disturbing panel-contained muted text
  * ========================================================================== */
 
-test('8. styles.muted is unchanged', () => {
-  assert.match(PAGE_CODE, /muted: \{\s*color: '#656d76',\s*\} as CSSProperties,/);
+test('8. styles.muted is RETIRED, with no legacy replacement', () => {
+  /*
+   * SUPERSEDES "styles.muted is unchanged".
+   *
+   * The key existed to give the page a muted tier on hard-coded light surfaces.
+   * The tipster panels were its last two consumers; once they took
+   * `rb-evidence-panel`, `#656d76` fell to 3.15:1 there in the dark scheme, so
+   * the key was deleted outright rather than shrunk again.
+   */
+  assert.equal(
+    /(^|\s)muted: \{/.test(PAGE_CODE),
+    false,
+    'the styles.muted definition must be gone, not merely unused'
+  );
+  assert.equal(
+    /styles\.muted(?![A-Za-z0-9_])/.test(PAGE_CODE),
+    false,
+    'and no call site may reference it'
+  );
+
+  /*
+   * No legacy muted key may be reintroduced under another name: a colour-only
+   * entry holding a hard-coded foreground is the exact shape that was retired.
+   * Bounded per entry, so a colour beside a `background` in a self-contained
+   * palette is not mistaken for one.
+   */
+  for (const { name, body } of pageStyleEntries()) {
+    if (/background:/.test(body)) continue;
+    assert.equal(
+      /color: '#[0-9a-fA-F]{6}'/.test(body),
+      false,
+      `styles.${name} declares a hard-coded foreground with no surface of its own`
+    );
+  }
+
+  /*
+   * `#656d76` itself is NOT globally removed, and must not be asserted away:
+   * `countdownStyle` and `liveBarStyle` still use it, both SELF-CONTAINED (each
+   * declares its own background), which is why they are safe and out of scope.
+   * Pinning the count stops a new unpaired consumer appearing unnoticed.
+   */
+  const remaining = [...PAGE_CODE.matchAll(/#656d76/g)];
+  assert.equal(remaining.length, 3, 'exactly the countdown neutral chip and LiveModeBar x2');
 });
 
 test('9-11. the message states render via primitives, and pageMuted is gone (slice 3D.2)', () => {
@@ -469,59 +556,24 @@ test('9-11. the message states render via primitives, and pageMuted is gone (sli
   );
 });
 
-test('12. exactly two styles.muted uses remain, both in the legacy tipster panels', () => {
+test('12. RETIRED — the styles.muted count contract reached zero', () => {
   /*
-   * SCOPE OF THIS ASSERTION. It proves the COUNT and therefore non-migration:
-   * `styles.muted` had fourteen uses; the two direct page-surface states moved
-   * away (to `pageMuted` in slice 3D.1, then onto the message-state primitives
-   * in 3D.2), the two summary surfaces followed in evidence part 1, the
-   * next-race panel in part 2a, and the seven race-card-core sites in part 2b-i.
-   * TWO are still present. A blanket literal replacement would have emptied
-   * this count and broken both in the dark scheme, so the number is the guard.
+   * SUPERSEDES the count contract, which stepped 14 -> 12 -> 10 -> 9 -> 2 as
+   * each regime migrated. The tipster tranche took the final two, so a count
+   * assertion here could now only ever read zero — a contract that cannot fail
+   * is worse than none, so the number is gone and the RETIREMENT is what is
+   * asserted (test 8 owns the definition; this owns the consumers).
    *
-   * Both survivors sit in `TipsterStatusPanel` and `InFormPanel`, which keep
-   * `styles.panel`'s legacy `#fff` surface until their own tranche. There
-   * `#656d76` still clears 4.5:1 (5.25:1 on white). Test 12b owns the ownership
-   * record; this test does not independently establish either site's containing
-   * surface.
-   *
-   * This is the FLOOR for the evidence programme: no further site can move
-   * until the tipster panels migrate, at which point `styles.muted` is deleted
-   * outright rather than reduced again.
-   */
-  const remaining = [...PAGE_CODE.matchAll(/styles\.muted/g)];
-  assert.equal(remaining.length, 2, 'exactly the two remaining legacy tipster uses');
-});
-
-test('12b. the styles.muted fork moved exactly the two summary-surface sites', () => {
-  /*
-   * WHY THE FORK EXISTS.
-   *
-   * `styles.muted` (`#656d76`) is safe on the legacy `#fff` tipster panels but
-   * NOT on a migrated token surface. Conversely `--rb-text-muted` resolves to
-   * `#8d97a5` in dark, which on the retained legacy white tipster surface is
-   * ~2.96:1 — below the 4.5:1 floor. The two colours therefore cannot serve
-   * both regimes, and a blanket replacement would break the tipster panels.
-   *
-   * CURRENT OWNERSHIP RECORD. The count steps down as each regime migrates:
-   * twelve after slice 3D.2, ten after evidence part 1 (AccuracyBar's and
-   * PerformancePanel's zero-state messages, which now sit on
-   * `rb-evidence-panel`), nine after part 2a (NextRacePanel), and TWO after
-   * part 2b-i, which moved all seven race-card-core sites — one in
-   * `RunnerLine`, three in `LockedDecisionPanel` and three in `RaceCardView` —
-   * onto `rb-evidence-muted`.
-   *
-   * The remaining two belong to `TipsterStatusPanel` and `InFormPanel`. They
-   * are the LAST legacy holders and stay until the tipster tranche, which
-   * deletes `styles.muted` rather than shrinking it again.
+   * What remains is the inverse guard, which is the part worth keeping: no
+   * region may reacquire a legacy muted style.
    */
   assert.equal(
-    [...PAGE_CODE.matchAll(/styles\.muted/g)].length,
-    2,
-    'two legacy tipster uses remain'
+    /styles\.muted(?![A-Za-z0-9_])/.test(PAGE_CODE),
+    false,
+    'no region may reintroduce the retired legacy muted style'
   );
 
-  // The migrated surfaces no longer reference the legacy muted style.
+  // Every region that ever held one now uses the token-backed class instead.
   for (const region of [
     'AccuracyBar',
     'PerformancePanel',
@@ -529,15 +581,11 @@ test('12b. the styles.muted fork moved exactly the two summary-surface sites', (
     'RunnerLine',
     'LockedDecisionPanel',
     'RaceCardView',
+    'TipsterStatusPanel',
+    'InFormPanel',
   ] as const) {
-    const body = functionBody(region);
-    assert.equal(
-      body.includes('styles.muted'),
-      false,
-      `${region} must not use the legacy muted style on its token surface`
-    );
     assert.ok(
-      body.includes('rb-evidence-muted'),
+      functionBody(region).includes('rb-evidence-muted'),
       `${region} must use the token-backed muted class`
     );
   }
@@ -676,33 +724,24 @@ test('15. the containment is demonstrably necessary (pre-fix failure)', () => {
 
 test('16a. the remaining legacy summary/status surfaces are explicitly self-contained', () => {
   /*
-   * `accuracyBar` and `perfPanel` LEFT this set in evidence-migration part 1 —
-   * they now own paired token surfaces via `rb-evidence-panel`. Test 18 owns
-   * that migration. `styles.panel` (tipster) is the only object-style surface
-   * still legacy and self-contained.
+   * THE OBJECT-STYLE MEMBERS OF THIS SET ARE NOW EMPTY.
+   *
+   * `accuracyBar` and `perfPanel` left in evidence-migration part 1; `panel`
+   * (the tipster panels) left in the tipster tranche, which deleted it. Test 18
+   * owns the first migration and test 22 the second.
+   *
+   * Coverage has MOVED, not lapsed. The inverse guard below is the part worth
+   * keeping, and it is strictly broader than the inventory it replaces: NO
+   * entry in the styles object may hold a hard-coded light surface. That is
+   * what a returning legacy island would look like.
    */
-  for (const [key, background] of [['panel', "'#fff'"]] as const) {
-    const block = styleBlock(key);
-
-    // Background and border survive verbatim — this tranche changed no colour.
-    assert.ok(
-      block.includes(`background: ${background}`),
-      `styles.${key} must still declare its legacy background ${background}`
-    );
-    assert.ok(
-      block.includes("border: '1px solid #d0d7de'"),
-      `styles.${key} must still declare its legacy border`
-    );
-
-    // ...and it now owns the foreground it previously inherited.
-    assert.ok(
-      block.includes(LEGACY_PRIMARY_FOREGROUND),
-      `styles.${key} must declare the explicit legacy foreground`
-    );
-
-    // No token foreground was smuggled in alongside it.
-    for (const forbidden of ['var(--rb-text-', 'var(--rb-status-', 'var(--rb-accent-']) {
-      assert.equal(block.includes(forbidden), false, `styles.${key} must not use ${forbidden}`);
+  for (const { name, body } of pageStyleEntries()) {
+    for (const legacySurface of ["background: '#fff'", "background: '#ffffff'"]) {
+      assert.equal(
+        body.includes(legacySurface),
+        false,
+        `styles.${name} must not declare the legacy white surface`
+      );
     }
   }
 
@@ -853,12 +892,16 @@ test('18. the summary surfaces are paired token regions (evidence migration part
    * race cards were their LAST consumers, so part 2b-i deleted all three and
    * the assertion is now INVERTED: a dead helper left behind is the defect.
    *
-   * `roiColor` genuinely survives — `InFormPanel` still uses it — and it is why
-   * `EV_POSITIVE_COLOR` / `EV_NEGATIVE_COLOR` also survive. The planning pass
-   * predicted those two constants would die with `evColorStyle`; checking the
-   * source showed `roiColor` consumes them, so they stayed. That consumption is
-   * asserted here so a later tranche cannot delete a constant that is still
-   * live, nor keep one after its last consumer goes.
+   * SUPERSEDED AGAIN BY THE TIPSTER TRANCHE. This block previously asserted
+   * that `roiColor`, `EV_POSITIVE_COLOR` and `EV_NEGATIVE_COLOR` SURVIVED,
+   * because `InFormPanel` genuinely still consumed them. The tipster panels
+   * were that last consumer, so the same rule — a constant lives exactly as
+   * long as a real consumer does — now requires the opposite assertion.
+   *
+   * `src/app/leaderboard/page.tsx` declares its own separate `roiColor`. It is
+   * a different module on a different route and is deliberately untouched, so
+   * these assertions are scoped to page.tsx and must never be widened to the
+   * whole repository.
    */
   for (const dead of ['evColorStyle', 'componentColor'] as const) {
     assert.equal(
@@ -872,15 +915,20 @@ test('18. the summary surfaces are paired token regions (evidence migration part
     false,
     'CONFIDENCE_COLORS lost its last consumer in part 2b-i'
   );
-  assert.match(PAGE_CODE, /function roiColor\(/, 'roiColor still serves InFormPanel');
-  assert.match(PAGE_CODE, /const EV_POSITIVE_COLOR = '#1a7f37';/);
-  assert.match(PAGE_CODE, /const EV_NEGATIVE_COLOR = '#cf222e';/);
+  assert.equal(
+    /function roiColor\(/.test(PAGE_CODE),
+    false,
+    'roiColor lost its last consumer in the tipster tranche and must not linger'
+  );
   for (const constant of ['EV_POSITIVE_COLOR', 'EV_NEGATIVE_COLOR'] as const) {
-    assert.ok(
-      functionBody('roiColor').includes(constant),
-      `${constant} must keep its real consumer, or be deleted with it`
+    assert.equal(
+      new RegExp(`${constant}(?![A-Za-z0-9_])`).test(PAGE_CODE),
+      false,
+      `${constant} died with roiColor and must not linger`
     );
   }
+  // Its token-backed successor exists and is the shape the others already have.
+  assert.match(PAGE_CODE, /function roiClassTipster\(/, 'roiClassTipster replaces it');
 
   /*
    * Classes that must NOT ship yet.
@@ -1821,12 +1869,23 @@ test('17b. the next-action command LABEL is paired on the frame surface', () => 
 
   /* --- 7. the command BLOCK remains independently paired ------------------ */
 
+  /*
+   * REVIEW OBSERVATION O1 (PR #13). This pair was previously computed from two
+   * literals restated in the test, which could never fail. Both halves are now
+   * PARSED OUT of the production style block, so the ratio tracks the source:
+   * change either colour and the measurement changes with it. The intended
+   * values are still pinned separately, immediately below.
+   */
   const cmd = styleBlock('nextActionCmd');
-  assert.ok(cmd.includes("background: '#0d1117'"), 'command block keeps its own dark surface');
-  assert.ok(cmd.includes("color: '#e6edf3'"), 'and its own paired light foreground');
+  const cmdBg = /background: '(#[0-9a-fA-F]{6})'/.exec(cmd);
+  const cmdFg = /color: '(#[0-9a-fA-F]{6})'/.exec(cmd);
+  assert.ok(cmdBg, 'the command block must declare its own surface');
+  assert.ok(cmdFg, 'and its own foreground');
+  assert.equal(cmdBg[1], '#0d1117', 'command block keeps its own dark surface');
+  assert.equal(cmdFg[1], '#e6edf3', 'and its own paired light foreground');
   assert.ok(
-    contrast('#e6edf3', '#0d1117') >= AA_NORMAL_TEXT,
-    'the command block must clear AA on its own self-contained terms'
+    contrast(cmdFg[1], cmdBg[1]) >= AA_NORMAL_TEXT,
+    `the command block must clear AA on its own self-contained terms; got ${contrast(cmdFg[1], cmdBg[1]).toFixed(2)}:1`
   );
   assert.match(widget, /<code style=\{styles\.nextActionCmd\}>/, 'still an inert code element');
   assert.equal(
@@ -1867,8 +1926,39 @@ test('17b. the next-action command LABEL is paired on the frame surface', () => 
       `${cls} must already exist in tokens.css — this tranche defines none`
     );
   }
+  /*
+   * REVIEW OBSERVATION O2 (PR #13). The previous pattern was
+   * `/\.rb-[a-z-]*(cmd|command|next-action)/`, whose `[a-z-]*` cannot cross a
+   * BEM `__` separator, so `.rb-status-frame__cmd` slipped straight through.
+   * `[a-z_-]*` closes that. The segment is still anchored to an `rb-` class
+   * selector and the name fragments are unchanged, so unrelated classes are not
+   * caught — `.rb-command-centre` would be, and deliberately so; nothing of
+   * that name exists or should.
+   */
+  const BESPOKE_LABEL_CLASS = /\.rb-[a-z_-]*(cmd|command|next-action)/;
+  for (const wouldBeBespoke of [
+    '.rb-evidence-cmd {',
+    '.rb-evidence-command {',
+    '.rb-next-action-label {',
+    '.rb-status-frame__cmd {',
+    '.rb-status-frame__command {',
+    '.rb-status-frame__next-action {',
+  ]) {
+    assert.ok(
+      BESPOKE_LABEL_CLASS.test(wouldBeBespoke),
+      `the guard must catch ${wouldBeBespoke.trim()}`
+    );
+  }
+  // ...and must not fire on the classes this page legitimately uses.
+  for (const legitimate of ['.rb-evidence-muted {', '.rb-status-frame__label {', '.rb-ev--neutral {']) {
+    assert.equal(
+      BESPOKE_LABEL_CLASS.test(legitimate),
+      false,
+      `the guard must not overmatch ${legitimate.trim()}`
+    );
+  }
   assert.equal(
-    /\.rb-[a-z-]*(cmd|command|next-action)/.test(TOKENS_CSS),
+    BESPOKE_LABEL_CLASS.test(TOKENS_CSS),
     false,
     'no bespoke class was invented for this label'
   );
@@ -1887,22 +1977,24 @@ test('17b. the next-action command LABEL is paired on the frame surface', () => 
     '.rb-evidence-muted must remain a colour-only utility'
   );
 
-  /* --- 11. the two styles.muted holdouts remain tipster-owned ------------- */
+  /* --- 11. the legacy muted style stays retired --------------------------- */
 
-  assert.equal(
-    [...PAGE_CODE.matchAll(/styles\.muted/g)].length,
-    2,
-    'the tipster holdouts are untouched by this tranche'
-  );
+  /*
+   * SUPERSEDED BY THE TIPSTER TRANCHE. This block asserted that the two
+   * `styles.muted` holdouts remained tipster-owned; that tranche migrated both
+   * and deleted the key, so the contract inverts. Tests 8 and 12 own the
+   * retirement in full — what matters here is only that this widget did not
+   * acquire the legacy style on its way past.
+   */
   assert.equal(
     widget.includes('styles.muted'),
     false,
-    'the widget must not borrow the legacy tipster muted style'
+    'the widget must not borrow the retired legacy muted style'
   );
   for (const tipster of ['TipsterStatusPanel', 'InFormPanel'] as const) {
     assert.ok(
-      functionBody(tipster).includes('styles.muted'),
-      `${tipster} still owns a legacy muted use`
+      functionBody(tipster).includes('rb-evidence-muted'),
+      `${tipster} takes the token-backed muted class`
     );
   }
 
@@ -1920,13 +2012,21 @@ test('17b. the next-action command LABEL is paired on the frame surface', () => 
 
   /* --- 13. the navigation known-shortfall is untouched -------------------- */
 
+  /*
+   * REVIEW OBSERVATION O1 (PR #13), second half. The nav foreground is now
+   * PARSED from `raceDaySecondaryLinkStyle` rather than restated, so the
+   * measurement follows the source instead of being a constant. The intended
+   * value is still pinned on the line above it.
+   */
   const navLinkAt = PAGE_CODE.indexOf('const raceDaySecondaryLinkStyle');
   assert.notEqual(navLinkAt, -1, 'raceDaySecondaryLinkStyle must exist');
   const navLink = PAGE_CODE.slice(navLinkAt, PAGE_CODE.indexOf('};', navLinkAt));
-  assert.ok(navLink.includes("color: '#0969da'"), 'the nav link keeps its legacy colour');
+  const navFg = /color: '(#[0-9a-fA-F]{6})'/.exec(navLink);
+  assert.ok(navFg, 'the nav link must declare a foreground');
+  assert.equal(navFg[1], '#0969da', 'the nav link keeps its legacy colour');
   assert.ok(
-    contrast('#0969da', LEGACY_LIGHT_PAGE_SURFACE) < AA_NORMAL_TEXT,
-    'test 14c still owns this shortfall — this tranche must not have fixed it'
+    contrast(navFg[1], LEGACY_LIGHT_PAGE_SURFACE) < AA_NORMAL_TEXT,
+    `test 14c still owns this shortfall — this tranche must not have fixed it; got ${contrast(navFg[1], LEGACY_LIGHT_PAGE_SURFACE).toFixed(2)}:1`
   );
 
   /* --- 14. the completed Slice 3D contracts survive ----------------------- */
@@ -1981,4 +2081,340 @@ test('16c. the legacy primary foreground clears AA on every 3D.4a surface', () =
       `${what}: #1f2328 on ${background} is ${ratio.toFixed(2)}:1`
     );
   }
+});
+
+test('22. the tipster panels are a paired token region (tipster tranche)', () => {
+  /*
+   * THE DEFECT THIS CLOSES.
+   *
+   * `TipsterStatusPanel` and `InFormPanel` were the LAST region on this page
+   * running a hard-coded `#fff` surface with hard-coded dark text — an opaque
+   * white island once the shell went dark. They shared every legacy key
+   * (`panel`, `panelTitle`, `muted`, `tipsterStat`), so neither could move
+   * alone without forking those keys or half-migrating its sibling. This
+   * tranche moves both in one change.
+   *
+   * Section D measures, from the production rules, that every token role clears
+   * AA on the new surface AND that each legacy value they carried would fail
+   * there in the dark scheme — which is what makes the atomicity necessary
+   * rather than merely tidy.
+   */
+
+  const status = functionBody('TipsterStatusPanel');
+  const inForm = functionBody('InFormPanel');
+  const PANELS = [
+    ['TipsterStatusPanel', status],
+    ['InFormPanel', inForm],
+  ] as const;
+
+  /* --- A. both roots take the paired surface, in the same change ---------- */
+
+  for (const [name, body] of PANELS) {
+    assert.match(
+      body,
+      /<section className="rb-evidence-panel" style=\{styles\.tipsterPanel\}>/,
+      `${name} root must take the paired token surface`
+    );
+    assert.equal(
+      /styles\.panel(?![A-Za-z0-9_])/.test(body),
+      false,
+      `${name} must not keep the retired legacy panel surface`
+    );
+  }
+
+  /*
+   * The root style is GEOMETRY ONLY. A background or foreground here would
+   * either fight the class or strand a colour on it — the precise failure this
+   * programme exists to prevent.
+   */
+  const rootStyle = styleBlock('tipsterPanel');
+  assert.equal(/background:/.test(rootStyle), false, 'the root takes its surface from the class');
+  assert.equal(/\bcolor:/.test(rootStyle), false, 'and its foreground from the class');
+  for (const geometry of ['padding: 16', 'marginBottom: 16']) {
+    assert.ok(rootStyle.includes(geometry), `the root must keep ${geometry}`);
+  }
+
+  /* --- B. every text role takes the class matching its old tier ----------- */
+
+  // The two former `styles.muted` sites.
+  assert.match(
+    status,
+    /<div key=\{line\} className="rb-evidence-muted">/,
+    'the status lines take the token muted class'
+  );
+  assert.match(
+    inForm,
+    /<span className="rb-evidence-muted">/,
+    'the empty-state hint takes the token muted class'
+  );
+
+  // Titles and the pick column were `#424a53` — the secondary tier.
+  for (const [name, body] of PANELS) {
+    assert.match(
+      body,
+      /<div className="rb-evidence-secondary" style=\{styles\.tipsterPanelTitle\}>/,
+      `${name} title takes the token secondary class`
+    );
+  }
+  assert.match(
+    inForm,
+    /<span className="rb-evidence-secondary" style=\{styles\.tipsterPickCell\}>/,
+    "the pick column takes the token secondary class"
+  );
+
+  // The streak stat was `#656d76` — the muted tier — and keeps its structure.
+  assert.match(
+    inForm,
+    /<span className="rb-evidence-muted" style=\{styles\.tipsterStatCell\}>/,
+    'the streak stat takes the token muted class'
+  );
+
+  /*
+   * The status chip stays a FILLED pill and stays COMPLETELY paired: a token
+   * surface inline, a token foreground at the call site. Half of that pairing
+   * on its own would strand the other half in one scheme or the other.
+   */
+  const chip = styleBlock('tipsterStatusChip');
+  assert.match(chip, /background: 'var\(--rb-surface-[a-z]+\)'/, 'the chip keeps a token fill');
+  assert.equal(/\bcolor: '#/.test(chip), false, 'and holds no legacy foreground');
+  assert.equal(
+    (status.match(/className="rb-evidence-secondary" style=\{styles\.tipsterStatusChip\}/g) ?? [])
+      .length,
+    4,
+    'all four status chips carry the paired foreground class'
+  );
+  for (const geometry of ['fontSize: 12', 'fontWeight: 600', 'borderRadius: 999', "padding: '2px 10px'"]) {
+    assert.ok(chip.includes(geometry), `the chip must keep ${geometry}`);
+  }
+
+  /*
+   * The row separator follows the surface. A BORDER token is permitted inline
+   * in this file; the legacy `#f0f3f6` hairline is gone.
+   */
+  const row = styleBlock('tipsterRowLine');
+  assert.match(row, /borderTop: '1px solid var\(--rb-border\)'/, 'the row rule is token-backed');
+  assert.equal(/#[0-9a-fA-F]{6}/.test(row), false, 'and holds no legacy literal');
+  for (const geometry of ["gap: 12", "padding: '6px 0'", 'fontSize: 13']) {
+    assert.ok(row.includes(geometry), `the row must keep ${geometry}`);
+  }
+
+  /* --- C. the ROI helper preserves the retired branch conditions ---------- */
+
+  /*
+   * `roiColor` returned `EV_POSITIVE_COLOR` / `EV_NEGATIVE_COLOR` / `#656d76`
+   * from these exact three branches. Only the RETURNED VALUE changes here — the
+   * conditions are asserted verbatim, including operand order, the `!== null`
+   * guard and the strict comparisons, so a threshold or null-handling change
+   * cannot slip through as a repaint. Non-finite input keeps falling through to
+   * neutral, because neither comparison holds for NaN.
+   */
+  const roi = functionBody('roiClassTipster');
+  const branches = [...roi.matchAll(/if \(([^)]*)\) \{\s*return '([a-z-]+)';/g)].map((m) => [
+    m[1],
+    m[2],
+  ]);
+  assert.deepEqual(
+    branches,
+    [
+      ['roi !== null && roi > 0', 'rb-ev--positive'],
+      ['roi !== null && roi < 0', 'rb-ev--negative'],
+    ],
+    'the positive and negative branches must be the retired conditions verbatim'
+  );
+  // CRLF-tolerant: this file is stored with Windows line endings.
+  assert.match(
+    roi,
+    /\r?\n {2}return 'rb-ev--neutral';\r?\n\}/,
+    'null / zero / non-finite fall through to neutral, outside both guards'
+  );
+  assert.equal(
+    (roi.match(/return /g) ?? []).length,
+    3,
+    'exactly three outcomes, as before — no fourth case was introduced'
+  );
+  assert.equal(/#[0-9a-fA-F]{6}/.test(roi), false, 'the helper holds no legacy literal');
+
+  // Both ROI figures are classed by it, and their formatting is untouched.
+  for (const field of ['recentRoi30d', 'longRunRoi']) {
+    assert.ok(
+      inForm.includes(`className={roiClassTipster(t.${field})}`),
+      `${field} takes its semantic from the class helper`
+    );
+    assert.ok(inForm.includes(`formatRoi(t.${field})`), `${field} keeps its existing formatting`);
+  }
+  assert.equal(
+    /color: roi/.test(inForm),
+    false,
+    'no inline ROI colour may survive alongside the class'
+  );
+
+  /* --- D. measured contrast, derived from the production rules ------------ */
+
+  const panelRule = cssRule('.rb-evidence-panel');
+  const surfaceToken = /background: var\((--rb-[a-z-]+)\)/.exec(panelRule);
+  assert.ok(surfaceToken, '.rb-evidence-panel must declare a token background');
+
+  const ROLES = [
+    ['primary (inherited body text)', '.rb-evidence-panel', /color: var\((--rb-[a-z-]+)\)/],
+    ['secondary (titles, pick, chips)', '.rb-evidence-secondary', /color: var\((--rb-[a-z-]+)\)/],
+    ['muted (status lines, streak)', '.rb-evidence-muted', /color: var\((--rb-[a-z-]+)\)/],
+    ['ROI positive', '.rb-ev--positive', /color: var\((--rb-[a-z-]+)\)/],
+    ['ROI negative', '.rb-ev--negative', /color: var\((--rb-[a-z-]+)\)/],
+    ['ROI neutral', '.rb-ev--neutral', /color: var\((--rb-[a-z-]+)\)/],
+  ] as const;
+
+  for (const [role, selector, pattern] of ROLES) {
+    const token = pattern.exec(cssRule(selector));
+    assert.ok(token, `${selector} must declare a token foreground`);
+    for (const scheme of ['light', 'dark'] as const) {
+      const read = scheme === 'light' ? lightToken : darkToken;
+      const ratio = contrast(read(token[1]), read(surfaceToken[1]));
+      assert.ok(
+        ratio >= AA_NORMAL_TEXT,
+        `${role} (${scheme}) is ${ratio.toFixed(2)}:1 on ${surfaceToken[1]}`
+      );
+    }
+  }
+
+  /*
+   * The chip sits on its own recessed token, so it is measured against that
+   * surface rather than the panel's — the pair that actually renders.
+   */
+  const chipSurface = /background: 'var\((--rb-[a-z-]+)\)'/.exec(chip);
+  assert.ok(chipSurface, 'the chip must declare a token surface');
+  const chipFg = /color: var\((--rb-[a-z-]+)\)/.exec(cssRule('.rb-evidence-secondary'));
+  for (const scheme of ['light', 'dark'] as const) {
+    const read = scheme === 'light' ? lightToken : darkToken;
+    const ratio = contrast(read(chipFg![1]), read(chipSurface[1]));
+    assert.ok(ratio >= AA_NORMAL_TEXT, `status chip (${scheme}) is ${ratio.toFixed(2)}:1`);
+  }
+
+  /*
+   * WHY THE MIGRATION HAD TO BE ATOMIC. Every legacy foreground these panels
+   * carried fails on the surface they now take, in the dark scheme. Keeping any
+   * one of them while moving the surface would have produced exactly the
+   * half-migration this suite exists to catch.
+   *
+   * The row separator is deliberately NOT in this list: it is a decorative
+   * hairline, not a meaningful non-text boundary, so no 3:1 floor is claimed
+   * for it.
+   */
+  const darkSurface = darkToken(surfaceToken[1]);
+  for (const [legacy, what] of [
+    ['#656d76', 'legacy muted (status lines, stats)'],
+    ['#424a53', 'legacy secondary (titles, pick, chip text)'],
+    ['#1a7f37', 'legacy EV_POSITIVE_COLOR (ROI)'],
+    ['#cf222e', 'legacy EV_NEGATIVE_COLOR (ROI)'],
+  ] as const) {
+    const ratio = contrast(legacy, darkSurface);
+    assert.ok(
+      ratio < AA_NORMAL_TEXT,
+      `${what}: expected ${legacy} to fail on ${darkSurface}, but it was ${ratio.toFixed(2)}:1`
+    );
+  }
+
+  /* --- E. retirement, and no new class ------------------------------------ */
+
+  for (const key of [
+    'muted',
+    'panel',
+    'panelTitle',
+    'tipsterStat',
+    'tipsterPick',
+    'tipsterRow',
+    'tipsterStatusCount',
+  ]) {
+    assert.equal(
+      new RegExp(`styles\\.${key}(?![A-Za-z0-9_])`).test(PAGE_CODE),
+      false,
+      `styles.${key} must have no consumer left`
+    );
+    assert.equal(
+      new RegExp(`(^|\\s)${key}: \\{`).test(PAGE_CODE),
+      false,
+      `styles.${key} must not linger as a dead definition`
+    );
+  }
+  for (const helper of ['roiColor', 'EV_POSITIVE_COLOR', 'EV_NEGATIVE_COLOR']) {
+    assert.equal(
+      new RegExp(`${helper}(?![A-Za-z0-9_])`).test(PAGE_CODE),
+      false,
+      `${helper} must be gone from page.tsx`
+    );
+  }
+
+  /*
+   * Every class these panels use must ALREADY exist in tokens.css: this tranche
+   * defines none. The stylesheet is asserted unchanged in spirit by requiring
+   * each name to resolve to a real rule.
+   */
+  const used = [
+    ...new Set(
+      [status, inForm].flatMap((body) => [
+        ...[...body.matchAll(/className="([^"]+)"/g)].flatMap((m) => m[1].split(/ +/)),
+      ])
+    ),
+  ];
+  assert.ok(used.length >= 3, 'the panels must actually use token classes');
+  for (const cls of [...used, 'rb-ev--positive', 'rb-ev--negative', 'rb-ev--neutral']) {
+    assert.match(
+      TOKENS_CSS,
+      new RegExp(`\\.${cls} \\{`),
+      `${cls} must already exist in tokens.css — this tranche defines none`
+    );
+  }
+  assert.equal(
+    /\.rb-[a-z_-]*tipster/.test(TOKENS_CSS),
+    false,
+    'no bespoke tipster class was invented'
+  );
+
+  // The page-wide invariant: no dark-aware text/status/accent literal enters here.
+  for (const forbidden of ['var(--rb-text-', 'var(--rb-status-', 'var(--rb-accent-']) {
+    assert.equal(PAGE_SRC.includes(forbidden), false, `${forbidden} must not appear in page.tsx`);
+  }
+
+  /* --- F. behaviour freeze ------------------------------------------------ */
+
+  for (const endpoint of ['/api/tipsters/in-form', '/api/tipsters/status']) {
+    assert.ok(PAGE_CODE.includes(endpoint), `${endpoint} must be unchanged`);
+  }
+  for (const [name, body] of PANELS) {
+    assert.match(
+      body,
+      /=== null\) \{\s*return null;\s*\}/,
+      `${name} must keep its conditional null rendering`
+    );
+    for (const write of ['fetch(', 'useEffect', 'useState', 'onClick', 'method:']) {
+      assert.equal(
+        body.includes(write),
+        false,
+        `${name} is presentational and read-only; it must not contain ${write}`
+      );
+    }
+  }
+
+  /* --- G. the prior tranches are undisturbed ------------------------------ */
+
+  assert.match(
+    PAGE_CODE,
+    /const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';/,
+    'the containment surface remains active — the page frame is still legacy'
+  );
+  assert.ok(
+    styleBlock('page').includes('background: LEGACY_LIGHT_PAGE_SURFACE'),
+    'and is still applied to the page wrapper'
+  );
+  for (const cls of [
+    'rb-evidence-card',
+    'rb-status-frame--official',
+    'rb-status-frame__label',
+  ]) {
+    assert.ok(PAGE_CODE.includes(cls), `${cls} must remain in use`);
+  }
+  assert.match(
+    functionBody('NextActionWidget'),
+    /<span className="rb-evidence-muted" style=\{styles\.nextActionCmdLabel\}>/,
+    'the PR #13 command-label fix is undisturbed'
+  );
 });
