@@ -632,48 +632,167 @@ test('14. the migrated page-surface foregrounds clear 4.5:1 on the containment s
   }
 });
 
-test('14c. KNOWN SHORTFALL — one legacy foreground remains just below AA', () => {
+test('14c. the race-day nav secondary links clear AA on the containment surface', () => {
   /*
-   * NOT FIXED IN THIS TRANCHE, AND DELIBERATELY SO.
+   * SUPERSEDES THE KNOWN-SHORTFALL EXEMPTION.
    *
-   * `#0969da` (race-day nav secondary links) lands at ~4.34:1 on the containment
-   * surface — short of the 4.5:1 normal-text floor. It is a PRE-EXISTING legacy
-   * value, and containment strictly IMPROVED it (from ~3.50:1 in the uncontained
-   * dark scheme), so it is not a regression; it simply is not yet over the line.
-   * Changing a link colour is a palette decision belonging to the NAVIGATION
-   * visual tranche, which owns that region and its surface together.
+   * This test used to record `#0969da` at ~4.34:1 on the containment surface as
+   * a bounded, deliberately-unfixed shortfall, with an upper bound that would
+   * fail the moment the navigation tranche corrected it. That has now happened:
+   * the links are `#0550ae`, which reaches ~6.35:1 on the same surface. The
+   * exemption — the ~4.3 floor, the `< 4.5` bound and the "known shortfall"
+   * framing — is DELETED rather than retained, and what replaces it is a
+   * permanent passing contract.
    *
-   * `#cf222e` WAS on this list and has been REMOVED — resolved, not merely
-   * moved. Slice 3D.2 replaced the inline error paragraph with `ErrorState`,
-   * whose text is `--rb-text-primary` / `--rb-text-secondary` on
-   * `--rb-surface-raised` (both proven >= 4.5:1 in each scheme by
-   * appShell.test.ts 18/18c). The failure colour now appears only as a border,
-   * where it also clears 4.5:1 — far above the 3:1 non-text floor. The failing
-   * TEXT pair no longer exists.
+   * `#cf222e` was removed from the old list earlier and is not reinstated here:
+   * slice 3D.2 replaced the inline error paragraph with `ErrorState`, so the
+   * failing TEXT pair no longer exists. No known-shortfall entry remains, which
+   * is why this test no longer maintains a list at all.
    *
-   * `#cf222e` itself is NOT globally removed: `EV_NEGATIVE_COLOR` still colours
-   * EV, profit/loss and ROI figures, all of which sit inside white or `#f6f8fa`
-   * panels rather than on the containment surface.
-   *
-   * Pinning the measured value means it cannot silently WORSEN, and the upper
-   * bound makes this test fail — prompting its own deletion — once the
-   * navigation tranche legitimately fixes it.
+   * A LEGACY DARKENING, NOT `rb-inline-link`. Asserted below, because the token
+   * class would be actively wrong here while the containment stands.
    */
-  for (const [fg, what, floor] of [
-    ['#0969da', 'race-day nav secondary links', 4.3],
-  ] as const) {
-    const ratio = contrast(fg, LEGACY_LIGHT_PAGE_SURFACE);
-    assert.ok(ratio >= floor, `${what} regressed: ${fg} is now ${ratio.toFixed(2)}:1`);
-    assert.ok(
-      ratio < AA_NORMAL_TEXT,
-      `${what} now clears AA at ${ratio.toFixed(2)}:1 — remove it from this known-shortfall list`
-    );
-    // Containment must never make a pair worse than the dark scheme it replaced.
-    assert.ok(
-      ratio > contrast(fg, darkToken('--rb-bg-app')),
-      `${what}: containment must improve on the uncontained dark pairing`
+
+  /* --- the foreground, parsed from the production style ------------------- */
+
+  const navAt = PAGE_CODE.indexOf('const raceDaySecondaryLinkStyle');
+  assert.notEqual(navAt, -1, 'raceDaySecondaryLinkStyle must exist');
+  const navLink = PAGE_CODE.slice(navAt, PAGE_CODE.indexOf('};', navAt));
+
+  const navFg = /color: '(#[0-9a-fA-F]{6})'/.exec(navLink);
+  assert.ok(navFg, 'the link style must declare a foreground');
+  assert.equal(navFg[1], '#0550ae', 'the corrected legacy darkening');
+  assert.equal(
+    navLink.includes('#0969da'),
+    false,
+    'the superseded value must not remain in this style'
+  );
+
+  /*
+   * The OTHER `#0969da` on the page belongs to `countdownStyle`, which is
+   * self-contained (`#ddf4ff` fill) and is not this link. Pinning it here stops
+   * an unrelated occurrence either satisfying or defeating this contract.
+   */
+  assert.ok(
+    functionBody('countdownStyle').includes("color: '#0969da'"),
+    'the countdown chip keeps its own separate legacy colour'
+  );
+
+  /* --- the surface, parsed from the ACTIVE containment application -------- */
+
+  /*
+   * Read from `styles.page` rather than restated: the links inherit whatever
+   * that wrapper actually paints, so if the containment were removed or
+   * repointed this measurement would follow it instead of silently passing
+   * against a stale literal.
+   */
+  const page = styleBlock('page');
+  assert.ok(
+    page.includes('background: LEGACY_LIGHT_PAGE_SURFACE'),
+    'the containment must still be applied to the page wrapper'
+  );
+  const surfaceLiteral = /const LEGACY_LIGHT_PAGE_SURFACE = '(#[0-9a-fA-F]{6})';/.exec(PAGE_CODE);
+  assert.ok(surfaceLiteral, 'the containment constant must still be declared');
+  assert.equal(surfaceLiteral[1], LEGACY_LIGHT_PAGE_SURFACE, 'and unchanged by this tranche');
+
+  /* --- the measurement ---------------------------------------------------- */
+
+  const ratio = contrast(navFg[1], surfaceLiteral[1]);
+  assert.ok(
+    ratio >= AA_NORMAL_TEXT,
+    `race-day nav secondary links: ${navFg[1]} on ${surfaceLiteral[1]} is ${ratio.toFixed(2)}:1`
+  );
+  assert.ok(
+    Math.abs(ratio - 6.35) < 0.05,
+    `expected ~6.35:1, measured ${ratio.toFixed(2)}:1`
+  );
+
+  /* --- the token class stays out until the containment goes --------------- */
+
+  const inlineLink = /color: var\((--rb-[a-z-]+)\)/.exec(cssRule('.rb-inline-link'));
+  assert.ok(inlineLink, '.rb-inline-link must declare a token foreground');
+  const wouldBe = contrast(darkToken(inlineLink[1]), surfaceLiteral[1]);
+  assert.ok(
+    wouldBe < AA_NORMAL_TEXT,
+    `rb-inline-link must remain unusable here: its dark value is ${wouldBe.toFixed(2)}:1 on the fixed light surface`
+  );
+  assert.equal(
+    /rb-inline-link/.test(functionBody('RaceDayNav')),
+    false,
+    'so neither call site may adopt it while the containment stands'
+  );
+});
+
+test('14d. the corrected nav links keep their structure, wording and destinations', () => {
+  /*
+   * This tranche changed ONE declaration. Everything else about the two links
+   * is pinned here so a colour correction cannot quietly become a nav change.
+   */
+  const nav = functionBody('RaceDayNav');
+  const navAt = PAGE_CODE.indexOf('const raceDaySecondaryLinkStyle');
+  const navLink = PAGE_CODE.slice(navAt, PAGE_CODE.indexOf('};', navAt));
+
+  // Exactly two consumers, and the element types are unchanged.
+  assert.equal(
+    [...nav.matchAll(/style=\{raceDaySecondaryLinkStyle\}/g)].length,
+    2,
+    'exactly the previous-day anchor and the audit Link'
+  );
+  assert.match(
+    nav,
+    /<a href=\{nav\.previousDay\.href\} style=\{raceDaySecondaryLinkStyle\}>/,
+    'the previous-day link stays a full-document anchor'
+  );
+  assert.match(
+    nav,
+    /<Link href=\{nav\.audit\.href\} prefetch=\{false\} style=\{raceDaySecondaryLinkStyle\}>/,
+    'the audit link stays a prefetch-disabled Link'
+  );
+
+  // Labels come from the view builder, not from literals introduced here.
+  for (const label of ['{nav.previousDay.label}', '{nav.audit.label}']) {
+    assert.ok(nav.includes(label), `${label} must still be rendered from the nav view`);
+  }
+
+  /*
+   * DECORATION UNCHANGED. These links declare `textDecoration: 'none'` and have
+   * never been underlined — no global anchor rule exists, and the only
+   * underline rules in tokens.css belong to `.rb-skip-link`,
+   * `.rb-nav__link[aria-current]` and `.rb-inline-link`, none of which applies
+   * here. Asserting the value it actually has is what stops this tranche
+   * silently adding or removing a decoration.
+   */
+  assert.ok(
+    navLink.includes("textDecoration: 'none'"),
+    'the decoration is carried over exactly as it was'
+  );
+  assert.ok(navLink.includes('fontSize: 13'), 'and the size is unchanged');
+
+  // No state styling was introduced: an inline style cannot express one, and no
+  // rule was added for these links either.
+  for (const state of [':hover', ':focus', ':active']) {
+    assert.equal(
+      TOKENS_CSS.includes(`.rb-race-day${state}`),
+      false,
+      `no ${state} treatment was invented for these links`
     );
   }
+  assert.equal(
+    /\.rb-[a-z_-]*(race-day|nav-secondary)/.test(TOKENS_CSS),
+    false,
+    'no new class was added for this correction'
+  );
+
+  /* --- the regions this tranche deliberately did NOT touch ---------------- */
+
+  assert.ok(
+    nav.includes("color: '#1f2328'"),
+    'the RaceDayNav root keeps its legacy foreground — out of scope'
+  );
+  assert.ok(
+    PAGE_CODE.includes("color: '#57606a'"),
+    'the intro paragraph keeps its legacy foreground — out of scope'
+  );
 });
 
 test('15. the containment is demonstrably necessary (pre-fix failure)', () => {
@@ -2010,23 +2129,36 @@ test('17b. the next-action command LABEL is paired on the frame surface', () => 
     'and is still applied to the page wrapper'
   );
 
-  /* --- 13. the navigation known-shortfall is untouched -------------------- */
+  /* --- 13. the navigation links are not this widget's business ------------ */
 
   /*
-   * REVIEW OBSERVATION O1 (PR #13), second half. The nav foreground is now
-   * PARSED from `raceDaySecondaryLinkStyle` rather than restated, so the
-   * measurement follows the source instead of being a constant. The intended
-   * value is still pinned on the line above it.
+   * REVIEW OBSERVATION O1 (PR #13), second half: the nav foreground is PARSED
+   * from `raceDaySecondaryLinkStyle` rather than restated, so the measurement
+   * follows the source.
+   *
+   * SUPERSEDED IN PART BY THE NAV-CONTRAST TRANCHE. This block used to assert
+   * the link was still `#0969da` and still BELOW AA — a scope guard proving the
+   * NextAction tranche had not strayed into navigation. A later tranche has now
+   * legitimately corrected that colour, so the "still failing" expectation is
+   * gone; keeping it would have blocked the very fix it was written to defer.
+   *
+   * What remains is the part that still belongs here: this widget must not own
+   * or influence the nav link, and the link must be readable. Test 14c owns the
+   * exact value and the measured ratio.
    */
   const navLinkAt = PAGE_CODE.indexOf('const raceDaySecondaryLinkStyle');
   assert.notEqual(navLinkAt, -1, 'raceDaySecondaryLinkStyle must exist');
   const navLink = PAGE_CODE.slice(navLinkAt, PAGE_CODE.indexOf('};', navLinkAt));
   const navFg = /color: '(#[0-9a-fA-F]{6})'/.exec(navLink);
   assert.ok(navFg, 'the nav link must declare a foreground');
-  assert.equal(navFg[1], '#0969da', 'the nav link keeps its legacy colour');
   assert.ok(
-    contrast(navFg[1], LEGACY_LIGHT_PAGE_SURFACE) < AA_NORMAL_TEXT,
-    `test 14c still owns this shortfall — this tranche must not have fixed it; got ${contrast(navFg[1], LEGACY_LIGHT_PAGE_SURFACE).toFixed(2)}:1`
+    contrast(navFg[1], LEGACY_LIGHT_PAGE_SURFACE) >= AA_NORMAL_TEXT,
+    `the nav link must be readable on the containment surface; got ${contrast(navFg[1], LEGACY_LIGHT_PAGE_SURFACE).toFixed(2)}:1`
+  );
+  assert.equal(
+    widget.includes('raceDaySecondaryLinkStyle'),
+    false,
+    'NextActionWidget must not reach into the navigation link style'
   );
 
   /* --- 14. the completed Slice 3D contracts survive ----------------------- */
