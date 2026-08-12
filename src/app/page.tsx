@@ -293,10 +293,14 @@ type ConfidenceLabel = 'High' | 'Medium' | 'Low';
  * two, but nothing here follows the token at runtime. That is the point: the
  * whole purpose of this constant is to stay light when the token goes dark.
  *
- * WHY THIS EXISTS. This page is still a legacy light-only design: it renders
- * hard-coded light surfaces (`styles.card`, `styles.panel`, `styles.nextRace`
- * at `#fff`; `styles.accuracyBar`, `styles.perfPanel` at `#f6f8fa`; plus
- * tinted banners) with hard-coded dark foregrounds. Two facts follow:
+ * WHY THIS EXISTS. This page began as a legacy light-only design: it rendered
+ * hard-coded light surfaces (the race cards, the tipster panels and the
+ * next-race panel at `#fff`; the accuracy bar and performance panel at
+ * `#f6f8fa`; plus tinted banners) with hard-coded dark foregrounds. Every one
+ * of those has since completed a paired migration — the tipster panels were the
+ * last — but the page frame itself, the race-day navigation and the intro
+ * paragraph still declare legacy foregrounds, so the containment stands. Two
+ * facts follow:
  *
  *   - Leaving this wrapper TRANSPARENT lets it sit on the shell's `.rb-app`
  *     background, which is `#12161c` under `prefers-color-scheme: dark`.
@@ -323,8 +327,12 @@ type ConfidenceLabel = 'High' | 'Medium' | 'Low';
  */
 const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';
 
-const EV_POSITIVE_COLOR = '#1a7f37';
-const EV_NEGATIVE_COLOR = '#cf222e';
+/*
+ * `EV_POSITIVE_COLOR` / `EV_NEGATIVE_COLOR` are DELETED here by the tipster
+ * migration. `roiColor` was their last consumer on this page, and it has been
+ * superseded by `roiClassTipster`. (`src/app/leaderboard/page.tsx` declares its
+ * own separate `roiColor`; that route is a different module and untouched.)
+ */
 
 /** Edge (model_prob − market_prob) above which the model meaningfully diverges. */
 const MODEL_EDGE_THRESHOLD = 0.02;
@@ -508,9 +516,10 @@ function formatProfit(points: number): string {
  *
  * SLICE 3D part 1. This REPLACES the former `profitColor`, which has been
  * removed: all four of its call sites (AccuracyBar ×2, PerformancePanel ×2)
- * were inside this migration, so it had no remaining consumer. `roiColor` is
- * the separate legacy helper that still serves the out-of-scope InFormPanel,
- * and it — with `EV_POSITIVE_COLOR` / `EV_NEGATIVE_COLOR` — is untouched.
+ * were inside this migration, so it had no remaining consumer. The tipster
+ * tranche has since retired the parallel legacy helper `roiColor` too, along
+ * with `EV_POSITIVE_COLOR` / `EV_NEGATIVE_COLOR`; `roiClassTipster` is its
+ * token-backed successor.
  *
  * Branch conditions are identical; zero is a genuine neutral outcome, not a
  * missing one, so it takes the neutral class rather than a status colour.
@@ -605,15 +614,33 @@ function formatRoi(roi: number | null): string {
   return `${sign}${Math.abs(pct).toFixed(1)}%`;
 }
 
-/** Colors a ROI fraction green/red/neutral. */
-function roiColor(roi: number | null): string {
+/**
+ * ROI fraction -> token-backed semantic class, for the TIPSTER PANELS ONLY.
+ *
+ * SUPERSEDES `roiColor`, which returned `EV_POSITIVE_COLOR` (`#1a7f37`),
+ * `EV_NEGATIVE_COLOR` (`#cf222e`) and `#656d76`. Those are light-scheme
+ * literals: on the panels' new `rb-evidence-panel` surface they would read at
+ * 3.26:1, 3.09:1 and 3.15:1 in the dark scheme — which is exactly why the
+ * surface and every foreground inside it had to migrate together.
+ *
+ * THE BRANCH CONDITIONS ARE COPIED VERBATIM. `> 0` is positive, `< 0` is
+ * negative, and everything else — null, zero, and any non-finite value, since
+ * neither comparison holds for NaN — falls through to neutral, as before. No
+ * threshold, comparison operator or null handling changes here, and the ROI
+ * value itself is still computed upstream and formatted by `formatRoi`.
+ *
+ * Region-scoped by name, like `evClassRaceCard` / `evClassNextRace` /
+ * `evClassSummary`, so a later change here cannot silently repaint another
+ * region.
+ */
+function roiClassTipster(roi: number | null): string {
   if (roi !== null && roi > 0) {
-    return EV_POSITIVE_COLOR;
+    return 'rb-ev--positive';
   }
   if (roi !== null && roi < 0) {
-    return EV_NEGATIVE_COLOR;
+    return 'rb-ev--negative';
   }
-  return '#656d76';
+  return 'rb-ev--neutral';
 }
 
 /** Formats the local off time as HH:MM, or a dash when unknown. */
@@ -864,9 +891,12 @@ const styles = {
     padding: '2px 0',
     fontVariantNumeric: 'tabular-nums' as const,
   } as CSSProperties,
-  muted: {
-    color: '#656d76',
-  } as CSSProperties,
+  /*
+   * `muted` is DELETED by the tipster migration. It was the last legacy text
+   * key on this page: `#656d76` reaches only 3.15:1 on the panels' new token
+   * surface in the dark scheme, so both of its remaining call sites moved to
+   * `rb-evidence-muted` and the key has no consumer left to justify it.
+   */
   /*
    * SLICE 3D part 1: surface, border, radius and foreground now come from the
    * paired `rb-evidence-panel` class. Only GEOMETRY remains inline — the
@@ -936,30 +966,47 @@ const styles = {
     alignItems: 'baseline',
     gap: 14,
   } as CSSProperties,
-  panel: {
-    border: '1px solid #d0d7de',
-    borderRadius: 10,
+  /*
+   * THE TIPSTER PANELS (evidence migration, tipster tranche).
+   *
+   * `panel`, `panelTitle`, `tipsterRow`, `tipsterStat`, `tipsterPick` and
+   * `tipsterStatusCount` are all DELETED. Each carried a legacy light-scheme
+   * colour, and the two panels were the last region on this page still running
+   * a `#fff` surface with hard-coded dark text — an opaque white island in the
+   * dark scheme. Surface, border, radius and foreground now come from the
+   * paired `rb-evidence-panel` class, exactly as the summary surfaces and the
+   * race cards already do.
+   *
+   * What remains here is GEOMETRY ONLY, under region-scoped names so a later
+   * change to one panel cannot silently restyle an unrelated one. Every
+   * padding, gap, size and weight below is carried over unchanged.
+   */
+  tipsterPanel: {
     padding: 16,
     marginBottom: 16,
-    background: '#fff',
-    // SLICE 3D.4a: explicit legacy foreground (previously inherited). Shared by
-    // TipsterStatusPanel and InFormPanel — one definition, two regions.
-    color: '#1f2328',
   } as CSSProperties,
-  panelTitle: {
+  /* Colour supplied by `rb-evidence-secondary` at the call site. */
+  tipsterPanelTitle: {
     fontSize: 13,
     fontWeight: 700,
     letterSpacing: 0.5,
     textTransform: 'uppercase' as const,
-    color: '#424a53',
     marginBottom: 10,
   } as CSSProperties,
-  tipsterRow: {
+  /*
+   * The row separator follows the surface. The legacy `#f0f3f6` was a
+   * near-white hairline chosen for a `#fff` panel; on the raised token surface
+   * it is invisible in light and a bright seam in dark. `var(--rb-border)` is
+   * the same mechanism every other migrated divider uses, and a BORDER token is
+   * permitted inline here — only text, status and accent token literals are
+   * barred from this file (see test 7).
+   */
+  tipsterRowLine: {
     display: 'flex',
     alignItems: 'baseline',
     gap: 12,
     padding: '6px 0',
-    borderTop: '1px solid #f0f3f6',
+    borderTop: '1px solid var(--rb-border)',
     fontSize: 13,
     fontVariantNumeric: 'tabular-nums' as const,
   } as CSSProperties,
@@ -967,14 +1014,14 @@ const styles = {
     fontWeight: 700,
     minWidth: 130,
   } as CSSProperties,
-  tipsterStat: {
-    color: '#656d76',
+  /* Colour supplied by `rb-evidence-muted` or `roiClassTipster` at the call site. */
+  tipsterStatCell: {
     whiteSpace: 'nowrap' as const,
   } as CSSProperties,
-  tipsterPick: {
+  /* Colour supplied by `rb-evidence-secondary` at the call site. */
+  tipsterPickCell: {
     marginLeft: 'auto',
     textAlign: 'right' as const,
-    color: '#424a53',
   } as CSSProperties,
   tipsterStatusCounts: {
     display: 'flex',
@@ -982,11 +1029,18 @@ const styles = {
     gap: 8,
     marginTop: 10,
   } as CSSProperties,
-  tipsterStatusCount: {
+  /*
+   * The status chip stays a FILLED pill, and stays completely paired: a token
+   * surface here plus `rb-evidence-secondary` at the call site. The legacy
+   * `#eaeef2` fill / `#424a53` text pair is replaced rather than half-migrated
+   * — keeping either half would have stranded the other in the dark scheme.
+   * `--rb-surface-inset` is the recessed token, which is what `#eaeef2` was
+   * against a white panel: a step down from the surface behind it.
+   */
+  tipsterStatusChip: {
     fontSize: 12,
     fontWeight: 600,
-    color: '#424a53',
-    background: '#eaeef2',
+    background: 'var(--rb-surface-inset)',
     borderRadius: 999,
     padding: '2px 10px',
     fontVariantNumeric: 'tabular-nums' as const,
@@ -1998,33 +2052,41 @@ function TipsterStatusPanel({ status }: { status: TipsterStatusSummary | null })
   const hasCandidateCounts = status.candidatesPending !== null;
 
   return (
-    <section style={styles.panel}>
-      <div style={styles.panelTitle}>Tipster status</div>
+    /*
+      TIPSTER TRANCHE: this panel and `InFormPanel` move together, because they
+      shared every legacy key. The root takes the paired `rb-evidence-panel`
+      surface; each text role takes the token class matching the tier it already
+      had. Wording, counts, conditions and the null early-return are untouched.
+    */
+    <section className="rb-evidence-panel" style={styles.tipsterPanel}>
+      <div className="rb-evidence-secondary" style={styles.tipsterPanelTitle}>
+        Tipster status
+      </div>
       {lines.map((line) => (
-        <div key={line} style={styles.muted}>
+        <div key={line} className="rb-evidence-muted">
           {line}
         </div>
       ))}
       {(status.approvedSelections !== null || hasCandidateCounts) && (
         <div style={styles.tipsterStatusCounts}>
           {status.approvedSelections !== null && (
-            <span style={styles.tipsterStatusCount}>
+            <span className="rb-evidence-secondary" style={styles.tipsterStatusChip}>
               {status.approvedSelections} approved selection
               {status.approvedSelections === 1 ? '' : 's'}
             </span>
           )}
           {hasCandidateCounts && (
-            <span style={styles.tipsterStatusCount}>
+            <span className="rb-evidence-secondary" style={styles.tipsterStatusChip}>
               {status.candidatesPending} pending review
             </span>
           )}
           {status.candidatesApproved !== null && status.candidatesApproved > 0 && (
-            <span style={styles.tipsterStatusCount}>
+            <span className="rb-evidence-secondary" style={styles.tipsterStatusChip}>
               {status.candidatesApproved} candidate{status.candidatesApproved === 1 ? '' : 's'} approved
             </span>
           )}
           {status.candidatesRejected !== null && status.candidatesRejected > 0 && (
-            <span style={styles.tipsterStatusCount}>
+            <span className="rb-evidence-secondary" style={styles.tipsterStatusChip}>
               {status.candidatesRejected} rejected
             </span>
           )}
@@ -2045,10 +2107,19 @@ function InFormPanel({ tipsters }: { tipsters: InFormTipster[] | null }) {
   }
 
   return (
-    <section style={styles.panel}>
-      <div style={styles.panelTitle}>In-form tipsters</div>
+    /*
+      TIPSTER TRANCHE: migrated with `TipsterStatusPanel` in the same change,
+      because the two shared every legacy key. The ROI figures move their
+      semantic from an inline `color` to `roiClassTipster`, whose branch
+      conditions are `roiColor`'s verbatim; the structural `whiteSpace: nowrap`
+      stays inline, separately. Wording, values and formatting are unchanged.
+    */
+    <section className="rb-evidence-panel" style={styles.tipsterPanel}>
+      <div className="rb-evidence-secondary" style={styles.tipsterPanelTitle}>
+        In-form tipsters
+      </div>
       {tipsters.length === 0 ? (
-        <span style={styles.muted}>
+        <span className="rb-evidence-muted">
           No model-active tipsters yet. These are approved, proofed needles that
           the model weights — separate from candidate tips, which stay in review
           until approved. Run discovery with real proofed figures to populate the
@@ -2059,19 +2130,19 @@ function InFormPanel({ tipsters }: { tipsters: InFormTipster[] | null }) {
           const pick = t.todaysPicks[0];
           const extra = t.todaysPicks.length - 1;
           return (
-            <div key={t.tipster_id} style={styles.tipsterRow}>
+            <div key={t.tipster_id} style={styles.tipsterRowLine}>
               <span style={styles.tipsterName}>{t.name}</span>
-              <span style={{ ...styles.tipsterStat, color: roiColor(t.recentRoi30d) }}>
+              <span className={roiClassTipster(t.recentRoi30d)} style={styles.tipsterStatCell}>
                 30d {formatRoi(t.recentRoi30d)}
               </span>
-              <span style={{ ...styles.tipsterStat, color: roiColor(t.longRunRoi) }}>
+              <span className={roiClassTipster(t.longRunRoi)} style={styles.tipsterStatCell}>
                 all-time {formatRoi(t.longRunRoi)}
               </span>
-              <span style={styles.tipsterStat}>
+              <span className="rb-evidence-muted" style={styles.tipsterStatCell}>
                 streak{' '}
                 {t.longestLosingStreak === null ? '\u2014' : t.longestLosingStreak}
               </span>
-              <span style={styles.tipsterPick}>
+              <span className="rb-evidence-secondary" style={styles.tipsterPickCell}>
                 {pick
                   ? `today: ${pick.horse_name}${extra > 0 ? ` +${extra}` : ''}`
                   : 'no pick today'}
