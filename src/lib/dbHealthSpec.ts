@@ -37,18 +37,53 @@ export interface IndexSpec {
  */
 export const REQUIRED_TABLES: readonly TableSpec[] = [
   {
+    /*
+     * PROGRAMME 0 added the identity + enrichment columns below. All are
+     * NULLABLE and are written only by FUTURE ingestion — the 719 races that
+     * predate the migration keep their uuid identity and carry null for every
+     * one of them.
+     *
+     * `race_class`, `distance` and `going` already existed on the live table
+     * (unpopulated); Programme 0 starts writing them rather than duplicating
+     * them. `is_handicap` is a LEGACY column, false on every audited row, and
+     * is deliberately absent from this contract: `handicap_flag` is the active
+     * field and the only one new logic may use.
+     */
     name: 'races',
     columns: [
       'id', 'meeting_date', 'course', 'country', 'race_name', 'off_time',
       'handicap_flag', 'status', 'official_result_time',
+      // Programme 0 — provider identity (nullable)
+      'provider_race_id', 'provider_course_id',
+      // Programme 0 — route identity (nullable)
+      'course_key', 'race_slug',
+      // Programme 0 — card attributes (nullable); race_class/distance/going
+      // pre-existed on the table and are now populated by ingestion.
+      'race_type', 'distance_f', 'distance', 'going', 'race_class',
+      'age_band', 'pattern', 'field_size', 'is_abandoned',
     ],
   },
   {
+    /*
+     * PROGRAMME 0 added `provider_horse_id` and began writing `trainer_id`,
+     * `jockey_id` and `age`, all three of which already existed on the live
+     * table but were never populated.
+     *
+     * The legacy columns confirmed present but empty by the production audit
+     * (`trainer_name`, `jockey_name`, `finish_position`, `betfair_sp`,
+     * `official_sp`) are intentionally omitted: this contract lists what the
+     * app reads or writes, and nothing writes those. They remain in the
+     * database untouched — omission here is not a request to drop them.
+     */
     name: 'runners',
     columns: [
       'id', 'race_id', 'horse_name', 'trainer', 'jockey', 'draw', 'saddlecloth',
       'official_rating', 'weight_lbs', 'runner_status', 'finish_pos',
       'bsp_decimal', 'sp_decimal',
+      // Programme 0 — provider identity (nullable, new column)
+      'provider_horse_id',
+      // Programme 0 — pre-existing columns now written by ingestion
+      'trainer_id', 'jockey_id', 'age',
     ],
   },
   {

@@ -44,6 +44,17 @@ export function toPriceOrNull(value: unknown): number | null {
 }
 
 /**
+ * A provider string trimmed to a real value, or null. Blank/whitespace-only and
+ * absent both become null — an empty provider field is missing data, never the
+ * empty string, so it must not be stored as one.
+ */
+export function trimmedOrNull(value: string | undefined | null): string | null {
+  if (typeof value !== 'string') return null;
+  const t = value.trim();
+  return t === '' ? null : t;
+}
+
+/**
  * Normalises a horse name for cross-source matching: lower-cased, trailing
  * country suffix like "(IRE)" stripped, punctuation removed, whitespace
  * collapsed. e.g. "Frankel (GB)" -> "frankel".
@@ -87,6 +98,78 @@ export function normalizeCourse(name: string | undefined | null): string {
   return COURSE_ALIASES[base] ?? base;
 }
 
+/**
+ * ROUTE-SAFE course key — a thin DERIVATIVE of {@link normalizeCourse}, not a
+ * second normaliser.
+ *
+ * `normalizeCourse` produces a space-separated matching name ("great yarmouth")
+ * because that is what entity matching wants. A URL segment wants hyphens. This
+ * takes the existing normalised value verbatim and only swaps the separator, so
+ * the two can never disagree about aliases, "(AW)" stripping or punctuation —
+ * change `normalizeCourse` and this follows automatically.
+ *
+ * Deterministic and pure. e.g. "Lingfield (AW)" -> "lingfield";
+ * "Royal Ascot" -> "ascot"; "Great Yarmouth" -> "great-yarmouth".
+ */
+export function courseKey(name: string | undefined | null): string {
+  return normalizeCourse(name).replace(/ /g, '-');
+}
+
+/** Fallback slug body when a race has no usable name. */
+const UNKNOWN_RACE_SLUG = 'unknown-race';
+
+/**
+ * ROUTE-SAFE race slug: scheduled `HHMM` + slugified race name.
+ *
+ * WHAT THIS GUARANTEES — PER-ROW SLUG IMMUTABILITY, AND ONLY THAT.
+ *
+ * `liveSync.syncRacecards` looks a race up by (course, off_time) and INSERTS
+ * only when it is absent; settlement updates just `status` and
+ * `official_result_time`. So once a slug is stored on a row, no current write
+ * path rewrites it. That is the whole of the guarantee, and it is asserted by
+ * test so it cannot be lost silently.
+ *
+ * WHAT THIS DOES NOT GUARANTEE — ONE ROW, OR ONE URL, PER REAL RACE.
+ *
+ * Race resolution still uses the RAW `course` display string plus `off_time`.
+ * `provider_race_id` is captured by Programme 0 but is NOT read by any lookup.
+ * So if the same provider race arrives later with a corrected off time — or a
+ * corrected course label — the lookup misses the existing row and a SECOND row
+ * is inserted, with its own uuid and its own slug. The partial
+ * `provider_race_id` index is deliberately non-unique and does not prevent
+ * this.
+ *
+ * That duplication behaviour PREDATES Programme 0 and is unchanged by it.
+ * Programme 0 captures provider identity; it does not resolve on it. Moving
+ * resolution to provider_race_id-first is a change to lookup behaviour and is
+ * deferred to a later, independently reviewed programme.
+ *
+ * Deliberately NOT derived from a race number or array position: those depend
+ * on how many races were fetched, which is not stable across calls.
+ *
+ * `offTimeIso` is the resolved ISO instant; HHMM is taken in UTC so the value
+ * is identical on server and client. Returns '' when the instant is unusable —
+ * the caller then stores null rather than an invented handle.
+ */
+export function raceSlug(
+  offTimeIso: string | undefined | null,
+  raceName: string | undefined | null,
+): string {
+  const ms = offTimeIso ? Date.parse(offTimeIso) : NaN;
+  if (!Number.isFinite(ms)) return '';
+  const d = new Date(ms);
+  const hhmm = `${String(d.getUTCHours()).padStart(2, '0')}${String(
+    d.getUTCMinutes(),
+  ).padStart(2, '0')}`;
+
+  const body = (raceName ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return `${hhmm}-${body === '' ? UNKNOWN_RACE_SLUG : body}`;
+}
+
 /** True when a race name/class denotes a handicap. */
 export function isHandicap(...texts: (string | undefined)[]): boolean {
   return texts.some((t) => typeof t === 'string' && HANDICAP_RE.test(t));
@@ -123,7 +206,21 @@ export function resolveOffTime(
   return { offTimeIso: iso, meetingDate };
 }
 
-/** A race row ready to upsert into `races` (no id; caller assigns/looks up). */
+/**
+ * A race row ready to insert into `races` (no id; caller assigns/looks up).
+ *
+ * PROGRAMME 0 widened this from 7 fields to 17. The original seven are
+ * unchanged in name, type and meaning; the additions are provider identity,
+ * route identity, and the card attributes ingestion previously discarded.
+ *
+ * FUTURE DATA ONLY: nothing backfills the 719 existing races. They keep their
+ * uuid identity and carry null for every new field, and every consumer must
+ * treat null as "never recorded" rather than as a value.
+ *
+ * `is_handicap` is deliberately absent: `handicap_flag` is the active column
+ * (populated on all 719 rows) and `is_handicap` is a legacy field that is false
+ * on every row. New logic must never read or write it.
+ */
 export interface RaceUpsert {
   meeting_date: string;
   course: string;
@@ -132,9 +229,48 @@ export interface RaceUpsert {
   off_time: string;
   handicap_flag: boolean;
   status: string;
+  /** External Racing API race id. Null when the card omitted it. */
+  provider_race_id: string | null;
+  /** External Racing API course id. */
+  provider_course_id: string | null;
+  /** Route-safe course key derived from `course`. */
+  course_key: string | null;
+  /** Route-safe URL handle, frozen at first insert. */
+  race_slug: string | null;
+  /** Provider race-type vocabulary (Flat / Hurdle / Chase / ...). */
+  race_type: string | null;
+  /** Race distance in furlongs, numeric, for modelling. */
+  distance_f: number | null;
+  /** Human-readable distance, only when the provider supplies one. */
+  distance: string | null;
+  /** Going description as stated on the card. */
+  going: string | null;
+  /** Provider race class. */
+  race_class: string | null;
+  /** Provider age band (e.g. "3yo+"). */
+  age_band: string | null;
+  /** Provider pattern/grade (Group 1, Listed, ...). */
+  pattern: string | null;
+  /** Declared field size from the card (not a count of runner rows). */
+  field_size: number | null;
+  /** Provider abandonment flag; null when the card did not state one. */
+  is_abandoned: boolean | null;
 }
 
-/** A runner row ready to upsert into `runners` (no id/race_id; caller wires). */
+/**
+ * A runner row ready to insert into `runners` (no id/race_id; caller wires).
+ *
+ * PROGRAMME 0 added provider identity plus the three columns that already
+ * existed on the table but were never written (`trainer_id`, `jockey_id`,
+ * `age`).
+ *
+ * The legacy/unused columns (`trainer_name`, `jockey_name`, `finish_position`,
+ * `betfair_sp`, `official_sp`) are deliberately NOT written — they are
+ * preserved in the database exactly as they are, and populating them would
+ * create a second source of truth for data the active columns already hold.
+ * Settlement fields (`finish_pos`, `sp_decimal`, `bsp_decimal`) are owned by
+ * the results path and are untouched here.
+ */
 export interface RunnerUpsert {
   horse_name: string;
   trainer: string | null;
@@ -144,6 +280,14 @@ export interface RunnerUpsert {
   official_rating: number | null;
   weight_lbs: number | null;
   runner_status: string;
+  /** External Racing API horse id. */
+  provider_horse_id: string | null;
+  /** External Racing API trainer id (column already existed, unpopulated). */
+  trainer_id: string | null;
+  /** External Racing API jockey id (column already existed, unpopulated). */
+  jockey_id: string | null;
+  /** Runner age in years (column already existed, unpopulated). */
+  age: number | null;
 }
 
 /** The Betfair Exchange decimal price already bundled on a standard racecard. */
@@ -167,14 +311,44 @@ export function racecardToRaceUpsert(card: StandardRacecard): RaceUpsert | null 
   const resolved = resolveOffTime(card.off_dt, card.date, card.off_time);
   if (!resolved) return null;
 
+  const raceName =
+    (card.race_name ?? '(unknown race)').trim() || '(unknown race)';
+  const slug = raceSlug(resolved.offTimeIso, card.race_name);
+
   return {
+    // --- unchanged since before Programme 0 ---
     meeting_date: resolved.meetingDate,
     course,
     country: (card.region ?? 'GB').trim() || 'GB',
-    race_name: (card.race_name ?? '(unknown race)').trim() || '(unknown race)',
+    race_name: raceName,
     off_time: resolved.offTimeIso,
     handicap_flag: isHandicap(card.race_name, card.race_class),
     status: 'scheduled',
+
+    // --- Programme 0: provider identity ---
+    provider_race_id: trimmedOrNull(card.race_id),
+    provider_course_id: trimmedOrNull(card.course_id),
+
+    // --- Programme 0: route identity ---
+    course_key: courseKey(course) || null,
+    race_slug: slug === '' ? null : slug,
+
+    // --- Programme 0: card attributes previously discarded ---
+    race_type: trimmedOrNull(card.type),
+    distance_f: toNumberOrNull(card.distance_f),
+    // Only a genuine provider display string is stored. The numeric furlongs
+    // value is NOT reformatted into prose here — inventing display wording in
+    // ingestion is exactly the fabrication this pipeline forbids.
+    distance: trimmedOrNull(card.distance_round),
+    going: trimmedOrNull(card.going),
+    race_class: trimmedOrNull(card.race_class),
+    age_band: trimmedOrNull(card.age_band),
+    pattern: trimmedOrNull(card.pattern),
+    field_size: toNumberOrNull(card.field_size),
+    // Reached only for a NON-abandoned card (abandoned cards return null
+    // above), so this records the provider's explicit `false` and stays null
+    // when the card said nothing at all.
+    is_abandoned: typeof card.is_abandoned === 'boolean' ? card.is_abandoned : null,
   };
 }
 
@@ -185,6 +359,7 @@ export function racecardRunnerToUpsert(
   const horse = (runner.horse ?? '').trim();
   if (horse === '') return null;
   return {
+    // --- unchanged since before Programme 0 ---
     horse_name: horse,
     trainer: (runner.trainer ?? '').trim() || null,
     jockey: (runner.jockey ?? '').trim() || null,
@@ -193,6 +368,12 @@ export function racecardRunnerToUpsert(
     official_rating: toNumberOrNull(runner.ofr),
     weight_lbs: toNumberOrNull(runner.lbs),
     runner_status: 'declared',
+
+    // --- Programme 0: provider identity + three existing empty columns ---
+    provider_horse_id: trimmedOrNull(runner.horse_id),
+    trainer_id: trimmedOrNull(runner.trainer_id),
+    jockey_id: trimmedOrNull(runner.jockey_id),
+    age: toNumberOrNull(runner.age),
   };
 }
 
