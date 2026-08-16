@@ -50,6 +50,8 @@ import {
   runRacecardsDryRun,
   runnerFieldCoverage,
   summariseDestinationDates,
+  indexExistingRacesByProviderId,
+  type ExistingProviderRaceRow,
   type ExistingRaceRow,
   type ExistingRunnerRow,
   type RacecardsDryRunReadSeam,
@@ -268,9 +270,14 @@ interface FakeSeam extends RacecardsDryRunReadSeam {
 
 function fakeSeam(options: {
   dateCount?: number;
+  providerRaces?: ExistingProviderRaceRow[];
   races?: ExistingRaceRow[];
   runners?: ExistingRunnerRow[];
-  failOn?: 'countRacesForDate' | 'findRacesByOffTimes' | 'findRunnersForRaces';
+  failOn?:
+    | 'countRacesForDate'
+    | 'findRacesByProviderIds'
+    | 'findRacesByOffTimes'
+    | 'findRunnersForRaces';
 } = {}): FakeSeam {
   const calls: string[] = [];
   const maybeFail = (name: string) => {
@@ -282,6 +289,11 @@ function fakeSeam(options: {
       calls.push(`countRacesForDate(${date})`);
       maybeFail('countRacesForDate');
       return options.dateCount ?? 0;
+    },
+    async findRacesByProviderIds(providerRaceIds) {
+      calls.push(`findRacesByProviderIds(${providerRaceIds.length})`);
+      maybeFail('findRacesByProviderIds');
+      return options.providerRaces ?? [];
     },
     async findRacesByOffTimes(offTimes) {
       calls.push(`findRacesByOffTimes(${offTimes.length})`);
@@ -667,18 +679,23 @@ test('16. existing rows are counted correctly and never double-counted', async (
   assert.equal(report.runners_planned_insert, 0);
   assert.equal(report.duplicate_cards_in_provider_response, 0);
   assert.equal(report.runners_matched_within_provider_response, 0);
-  // Every mapped race and every mapped runner lands in exactly one bucket.
+  // Every mapped race and every mapped runner lands in exactly one bucket,
+  // including the ambiguous ones introduced with provider-id-first resolution.
+  assert.equal(report.races_provider_id_ambiguous, 0);
+  assert.equal(report.runners_on_ambiguous_races, 0);
   assert.equal(
     report.races_mapped,
     report.races_existing +
       report.races_planned_insert +
-      report.duplicate_cards_in_provider_response,
+      report.duplicate_cards_in_provider_response +
+      report.races_provider_id_ambiguous,
   );
   assert.equal(
     report.runners_mapped,
     report.runners_existing +
       report.runners_planned_insert +
-      report.runners_matched_within_provider_response,
+      report.runners_matched_within_provider_response +
+      report.runners_on_ambiguous_races,
   );
 });
 
@@ -798,6 +815,7 @@ test('21. the read seam declares no mutation method', () => {
   assert.deepEqual(methods.sort(), [
     'countRacesForDate',
     'findRacesByOffTimes',
+    'findRacesByProviderIds',
     'findRunnersForRaces',
   ]);
   for (const name of methods) {
@@ -816,6 +834,7 @@ test('21. the read seam declares no mutation method', () => {
   assert.deepEqual(seamKeys.sort(), [
     'countRacesForDate',
     'findRacesByOffTimes',
+    'findRacesByProviderIds',
     'findRunnersForRaces',
   ]);
 });
@@ -962,6 +981,7 @@ test('28. --json emits aggregates only, under a fixed key set', async () => {
     'races_existing',
     'races_mapped',
     'races_planned_insert',
+    'races_provider_id_ambiguous',
     'regions',
     'runner_field_coverage',
     'runner_records_on_mapped_races',
@@ -970,6 +990,7 @@ test('28. --json emits aggregates only, under a fixed key set', async () => {
     'runners_existing',
     'runners_mapped',
     'runners_matched_within_provider_response',
+    'runners_on_ambiguous_races',
     'runners_planned_insert',
     'runners_skipped_invalid',
     'schema_version',
@@ -1037,8 +1058,19 @@ test('29. existing Programme 0 tests and registrations remain intact', () => {
   assert.match(tests, /import '\.\/raceSync\.test';/);
   assert.match(tests, /import '\.\/racecardsDryRun\.test';/);
 
+  // The Programme 0 handoff contract was deliberately SUPERSEDED when
+  // resolution moved onto provider identity; its replacement must still be
+  // present, so the identity contract is never simply deleted.
   const p0 = readFileSync('scripts/canonicalRaceIdentity.test.ts', 'utf8');
-  assert.match(p0, /P0 KNOWN CONSTRAINT: identity is captured, not resolved \(handoff contract\)/);
+  assert.match(
+    p0,
+    /IDENTITY RESOLUTION: provider id first, course \+ off_time fallback \(handoff contract\)/,
+  );
+  assert.equal(
+    /P0 KNOWN CONSTRAINT: identity is captured, not resolved/.test(p0),
+    false,
+    'the superseded contract must not linger alongside its replacement',
+  );
 
   const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as {
     scripts: Record<string, string>;
@@ -1197,13 +1229,14 @@ test('33. M-1: the CLI never prints a raw message, object or stack, and still ex
   // PostgREST message cannot travel inside an Error to another caller.
   const seamBlock = cli.slice(cli.indexOf('supabaseRacecardsReadSeam'), cli.indexOf('const USAGE'));
   const throwSites = [...seamBlock.matchAll(/throw new Error\(`([^`]*)`\)/g)].map((m) => m[1]);
-  assert.equal(throwSites.length, 3, 'three wrapped read errors');
+  assert.equal(throwSites.length, 4, 'four wrapped read errors');
   for (const site of throwSites) {
     assert.match(site, /redactPreviewDetail\(/, `unredacted throw site: ${site}`);
     assert.doesNotMatch(site, /error\.message/);
   }
   // Each retains a distinguishable generic context.
   assert.ok(throwSites.some((s) => s.startsWith('races count failed')));
+  assert.ok(throwSites.some((s) => s.startsWith('races provider-id lookup failed')));
   assert.ok(throwSites.some((s) => s.startsWith('races lookup failed')));
   assert.ok(throwSites.some((s) => s.startsWith('runners lookup failed')));
 });
@@ -1316,9 +1349,14 @@ test('37. L-1: a duplicate card is not a second planned insert', async () => {
     raceMatchKey('Fixtureton', `${SELECTED_DATE}T13:05:00.000Z`),
   );
 
-  // No extra read and no write: one race lookup, no runner lookup (nothing stored).
+  // No extra read and no write: one provider lookup, one off-time lookup, no
+  // runner lookup (nothing stored). Provider identity is queried FIRST.
+  // Two DISTINCT provider ids are queried (the cards carry different ones), and
+  // one shared off-time instant. Neither is stored, so the second card falls
+  // through to the (course, off_time) fallback and is caught as a duplicate.
   assert.deepEqual(seam.calls, [
     `countRacesForDate(${SELECTED_DATE})`,
+    'findRacesByProviderIds(2)',
     'findRacesByOffTimes(1)',
   ]);
 
@@ -1347,7 +1385,8 @@ test('38. L-1: duplicate-card runners model production; within-card duplicates d
     report.runners_mapped,
     report.runners_planned_insert +
       report.runners_existing +
-      report.runners_matched_within_provider_response,
+      report.runners_matched_within_provider_response +
+      report.runners_on_ambiguous_races,
   );
 
   // Within ONE card, production reads the existing names BEFORE inserting, so
@@ -1399,4 +1438,152 @@ test('39. L-2: runner records on skipped cards stay out of the mapped denominato
   assert.match(out, /Invalid runners skipped on mapped races: 1/);
   assert.match(out, /PROGRAMME 0 RUNNER FIELD COVERAGE \(of 2 mapped runners\)/);
   assert.match(out, /PROGRAMME 0 RACE FIELD COVERAGE \(of 1 mapped races\)/);
+});
+
+/* ========================================================================== *
+ * 40-43. provider-id-first resolution parity with production
+ * ========================================================================== */
+
+test('40. the preview resolves by provider identity FIRST, ahead of the fallback', async () => {
+  // Staged so the two routes would give DIFFERENT answers: the provider id
+  // points at race-provider-1, while the (course, off_time) fallback would
+  // find race-fallback-x. Provider identity must win.
+  const { report, seam } = await preview([FULL_CARD], {
+    providerRaces: [{ id: 'race-provider-1', provider_race_id: 'rac_11110000' }],
+    races: [
+      { id: 'race-fallback-x', course: 'Fixtureton', off_time: `${SELECTED_DATE}T13:05:00+00:00` },
+    ],
+    runners: [{ race_id: 'race-provider-1', horse_name: 'Fixture Runner (GB)' }],
+    dateCount: 1,
+  });
+
+  assert.equal(report.races_existing, 1);
+  assert.equal(report.races_planned_insert, 0);
+  assert.equal(report.races_provider_id_ambiguous, 0);
+  // The decisive assertion: the runner cohort came from the PROVIDER-resolved
+  // race. Had the fallback won, race-provider-1's runners would be invisible.
+  assert.equal(report.runners_existing, 1, 'provider-resolved race supplied the runner index');
+  assert.equal(report.runners_planned_insert, 1, 'the bare runner is still new');
+
+  // Provider identity is queried BEFORE the off-time fallback.
+  const providerAt = seam.calls.findIndex((c) => c.startsWith('findRacesByProviderIds'));
+  const offTimeAt = seam.calls.findIndex((c) => c.startsWith('findRacesByOffTimes'));
+  assert.ok(providerAt >= 0 && offTimeAt > providerAt, 'provider lookup precedes the fallback');
+  assert.ok(seam.calls.includes('findRunnersForRaces(1)'));
+
+  // NOTE: the preview batches both lookups up front, so the off-time query is
+  // issued even when every race resolves by provider identity. That is a READ
+  // PATTERN difference from production's per-race lookup, not a resolution
+  // difference — the resolved id is the provider one either way.
+  assert.equal(indexExistingRacesByProviderId([]).size, 0);
+});
+
+test('41. a null provider id falls straight through to the historical fallback', async () => {
+  // SPARSE_CARD carries no race_id at all — exactly a historical-shaped card.
+  const { report, seam } = await preview([SPARSE_CARD], {
+    races: [{ id: 'race-historical-1', course: 'Sparseton', off_time: `${SELECTED_DATE}T15:00:00+00:00` }],
+    runners: [{ race_id: 'race-historical-1', horse_name: 'Bare Fixture Runner' }],
+    dateCount: 1,
+  });
+
+  assert.equal(report.races_existing, 1, 'the historical row still resolves');
+  assert.equal(report.races_planned_insert, 0);
+  assert.equal(report.runners_existing, 1);
+  // With no non-null provider id in the whole response, the provider lookup is
+  // never issued at all.
+  assert.ok(
+    !seam.calls.some((c) => c.startsWith('findRacesByProviderIds')),
+    'no provider lookup when nothing carries a provider id',
+  );
+  assert.deepEqual(seam.calls, [
+    `countRacesForDate(${SELECTED_DATE})`,
+    'findRacesByOffTimes(1)',
+    'findRunnersForRaces(1)',
+  ]);
+});
+
+test('42. duplicate stored provider ids FAIL CLOSED — never planned as an insert', async () => {
+  const { report } = await preview([FULL_CARD, SPARSE_CARD], {
+    providerRaces: [
+      { id: 'race-dup-a', provider_race_id: 'rac_11110000' },
+      { id: 'race-dup-b', provider_race_id: 'rac_11110000' },
+    ],
+    dateCount: 0,
+  });
+
+  assert.equal(report.races_provider_id_ambiguous, 1, 'the ambiguous card is counted');
+  assert.equal(report.races_planned_insert, 1, 'only SPARSE_CARD is planned; the ambiguous one is not');
+  assert.equal(report.races_existing, 0, 'an ambiguous race is NOT an existing match either');
+  assert.equal(report.duplicate_cards_in_provider_response, 0);
+
+  // Its runners are counted but never planned.
+  assert.equal(report.runners_on_ambiguous_races, 2, "FULL_CARD's two mappable runners");
+  assert.equal(report.runners_planned_insert, 1, 'only the sparse card contributes a plan');
+
+  // Both bucket invariants still balance, now including the ambiguous buckets.
+  assert.equal(
+    report.races_mapped,
+    report.races_existing +
+      report.races_planned_insert +
+      report.duplicate_cards_in_provider_response +
+      report.races_provider_id_ambiguous,
+  );
+  assert.equal(
+    report.runners_mapped,
+    report.runners_planned_insert +
+      report.runners_existing +
+      report.runners_matched_within_provider_response +
+      report.runners_on_ambiguous_races,
+  );
+
+  // The operator is warned, in aggregate terms, that a real run would refuse.
+  const warning = report.warnings.find((w) => /MORE THAN ONE stored race/.test(w));
+  assert.ok(warning, 'an ambiguity warning is required');
+  assert.match(warning, /FAILS CLOSED/);
+  assert.match(warning, /writes nothing at all/);
+  // No identifier leaks through it.
+  for (const id of ['rac_11110000', 'race-dup-a', 'race-dup-b', 'Fixtureton']) {
+    assert.ok(!warning.includes(id));
+  }
+
+  const out = renderRacecardsDryRunConsole(report).join('\n');
+  assert.match(out, /AMBIGUOUS provider id \(would refuse\) {2}: 1/);
+  assert.match(out, /On an ambiguous race \(not planned\) {4}: 2/);
+  assert.match(out, /PLANNED RACE ACTIONS \(provider_race_id first, then course \+ off_time\)/);
+  for (const id of ['rac_11110000', 'race-dup-a', 'Fixtureton']) {
+    assert.ok(!out.includes(id), `console output must not contain "${id}"`);
+  }
+});
+
+test('43. the provider lookup is SELECT-only and fails closed on a read error', async () => {
+  // A read failure carries its own stage and never degrades to "not found".
+  await assert.rejects(
+    runRacecardsDryRun('tomorrow', {
+      client: fakeClient({ standard: { racecards: [FULL_CARD] } }),
+      reads: fakeSeam({ failOn: 'findRacesByProviderIds' }),
+      tier: 'standard',
+      now: NOW,
+    }),
+    (err: unknown) => {
+      assert.ok(err instanceof RacecardsDryRunFailure);
+      assert.equal(err.stage, 'existing_race_provider_lookup');
+      assert.match(err.detail, /findRacesByProviderIds failed/);
+      return true;
+    },
+  );
+
+  // The live implementation is a select, and its driver message is redacted —
+  // the filter values ARE provider ids.
+  const cli = CLI();
+  const seamBlock = cli.slice(cli.indexOf('supabaseRacecardsReadSeam'), cli.indexOf('const USAGE'));
+  const providerBlock = seamBlock.slice(
+    seamBlock.indexOf('findRacesByProviderIds'),
+    seamBlock.indexOf('findRacesByOffTimes'),
+  );
+  assert.match(providerBlock, /\.select\('id, provider_race_id'\)/);
+  assert.match(providerBlock, /\.in\('provider_race_id', batch\)/);
+  assert.match(providerBlock, /redactPreviewDetail\(error\)/);
+  for (const forbidden of [/\.insert\s*\(/, /\.update\s*\(/, /\.upsert\s*\(/, /\.delete\s*\(/, /\.rpc\s*\(/]) {
+    assert.doesNotMatch(providerBlock, forbidden);
+  }
 });

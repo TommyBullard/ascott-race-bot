@@ -30,12 +30,15 @@
  * inserted by another process between this preview and any later authorised
  * commit, and the provider may reissue a card with corrected details.
  *
- * IDENTITY CAVEAT (inherited, not introduced). Race resolution still matches on
- * (course, off_time) and runner resolution on a normalised horse name, exactly
- * as `liveSync` does. `provider_race_id` is CAPTURED by Programme 0 but is read
- * by no lookup, so the same provider race arriving with a corrected off time
- * still counts as NEW here — because it would in fact insert a second row. This
- * preview reproduces current behaviour; it does not improve on it.
+ * IDENTITY MODEL (mirrors production exactly). Race resolution is
+ * PROVIDER-ID-FIRST: a non-null `provider_race_id` is looked up first, and
+ * exactly one match resolves the race without consulting the fallback. A null
+ * provider id, or zero matches, falls through to the raw (course, off_time)
+ * lookup that still resolves the historical rows. More than one provider-id
+ * match is AMBIGUOUS and is never planned as an insert — a real commit run
+ * fails closed on it. Runner resolution remains a normalised horse name, as in
+ * `liveSync`; provider_horse_id-first runner resolution is a separate decision
+ * and is deliberately NOT modelled here.
  *
  * OUTPUT IS IDENTIFIER-FREE. Every field of {@link RacecardsDryRunReport} is a
  * count, a fixed label, a day/date scope or warning prose built only from
@@ -64,7 +67,7 @@ import { resolveCronMeetingDate } from './cronDate';
 import { redactErrorDetail } from './nationwideWriteBoundaryAudit';
 
 /** Bumped only when the report shape changes in a way a consumer would notice. */
-export const RACECARDS_DRY_RUN_SCHEMA_VERSION = 2;
+export const RACECARDS_DRY_RUN_SCHEMA_VERSION = 3;
 
 /**
  * The region scope previewed. Mirrors `liveSync`'s `DEFAULT_REGIONS` (which is
@@ -151,6 +154,7 @@ export function redactPreviewDetail(error: unknown): string {
 export type PreviewFailureStage =
   | 'provider_racecards_fetch'
   | 'existing_race_date_count'
+  | 'existing_race_provider_lookup'
   | 'existing_race_lookup'
   | 'existing_runner_lookup'
   | 'unclassified';
@@ -158,6 +162,7 @@ export type PreviewFailureStage =
 const STAGE_LABELS: Record<PreviewFailureStage, string> = {
   provider_racecards_fetch: 'provider racecards fetch',
   existing_race_date_count: 'existing-race count for the selected date',
+  existing_race_provider_lookup: 'existing-race lookup by provider identity',
   existing_race_lookup: 'existing-race lookup',
   existing_runner_lookup: 'existing-runner lookup',
   unclassified: 'unclassified',
@@ -245,6 +250,12 @@ export interface ExistingRunnerRow {
   horse_name: string | null;
 }
 
+/** An existing `races` row keyed by provider identity. */
+export interface ExistingProviderRaceRow {
+  id: string;
+  provider_race_id: string | null;
+}
+
 /**
  * The database surface this preview is allowed to touch.
  *
@@ -258,6 +269,8 @@ export interface ExistingRunnerRow {
 export interface RacecardsDryRunReadSeam {
   /** `select count(*) from races where meeting_date = <date>`. */
   countRacesForDate(date: string): Promise<number>;
+  /** Races carrying any of these provider race ids — the FIRST resolution step. */
+  findRacesByProviderIds(providerRaceIds: readonly string[]): Promise<ExistingProviderRaceRow[]>;
   /** Races whose `off_time` matches any of these instants (course filtered in memory). */
   findRacesByOffTimes(offTimes: readonly string[]): Promise<ExistingRaceRow[]>;
   /** Runners belonging to the given race ids. */
@@ -369,6 +382,12 @@ export interface RacecardsDryRunReport {
    * means "already stored in the database".
    */
   duplicate_cards_in_provider_response: number;
+  /**
+   * Mapped cards whose `provider_race_id` matches MORE THAN ONE stored race.
+   * Canonical identity is undecidable, so these are never planned as inserts
+   * and never counted as existing — a real commit run fails closed on them.
+   */
+  races_provider_id_ambiguous: number;
 
   /** Provider + mapping counts for runners (review finding L-2). */
   runner_records_returned: number;
@@ -386,6 +405,8 @@ export interface RacecardsDryRunReport {
    * `runners_existing` for the same reason as the race-level counter.
    */
   runners_matched_within_provider_response: number;
+  /** Mapped runners on an ambiguous race: counted, but never planned. */
+  runners_on_ambiguous_races: number;
 
   race_field_coverage: RaceFieldCoverage;
   runner_field_coverage: RunnerFieldCoverage;
@@ -622,6 +643,25 @@ export function indexExistingRaces(rows: readonly ExistingRaceRow[]): Map<string
   return index;
 }
 
+/**
+ * Groups stored race ids by provider race id. A provider id mapping to more
+ * than one id is exactly the ambiguity production refuses — the duplicates are
+ * KEPT here rather than collapsed, so the count is visible.
+ */
+export function indexExistingRacesByProviderId(
+  rows: readonly ExistingProviderRaceRow[],
+): Map<string, string[]> {
+  const index = new Map<string, string[]>();
+  for (const row of rows) {
+    const providerId = row.provider_race_id;
+    if (typeof providerId !== 'string' || providerId === '') continue;
+    const ids = index.get(providerId);
+    if (ids) ids.push(String(row.id));
+    else index.set(providerId, [String(row.id)]);
+  }
+  return index;
+}
+
 /** Groups existing runners into a per-race set of normalised horse names. */
 export function indexExistingRunners(
   rows: readonly ExistingRunnerRow[],
@@ -692,7 +732,23 @@ export async function runRacecardsDryRun(
     deps.reads.countRacesForDate(selectedDate),
   );
 
-  // Existing-race lookup, reproducing (course + off_time) matching.
+  // Provider-identity lookup — the FIRST resolution step, mirroring production.
+  const providerIds = [
+    ...new Set(
+      pass.mapped
+        .map((m) => m.race.provider_race_id)
+        .filter((id): id is string => typeof id === 'string' && id !== ''),
+    ),
+  ];
+  const providerRows =
+    providerIds.length > 0
+      ? await atStage('existing_race_provider_lookup', () =>
+          deps.reads.findRacesByProviderIds(providerIds),
+        )
+      : [];
+  const providerIndex = indexExistingRacesByProviderId(providerRows);
+
+  // Existing-race lookup, reproducing the (course + off_time) FALLBACK.
   const offTimes = [...new Set(pass.mapped.map((m) => m.race.off_time))];
   const existingRaceRows =
     offTimes.length > 0
@@ -700,11 +756,25 @@ export async function runRacecardsDryRun(
       : [];
   const raceIndex = indexExistingRaces(existingRaceRows);
 
-  const matchedRaceIds = new Set<string>();
-  for (const entry of pass.mapped) {
+  /** Resolves one mapped race the way production does. Never throws. */
+  const resolveStoredId = (
+    entry: MappedCard,
+  ): { kind: 'ambiguous' } | { kind: 'resolved'; id: string } | { kind: 'absent' } => {
+    const providerId = entry.race.provider_race_id;
+    if (typeof providerId === 'string' && providerId !== '') {
+      const matches = providerIndex.get(providerId) ?? [];
+      if (matches.length > 1) return { kind: 'ambiguous' };
+      if (matches.length === 1) return { kind: 'resolved', id: matches[0] };
+    }
     const key = raceMatchKey(entry.race.course, entry.race.off_time);
     const id = key === null ? undefined : raceIndex.get(key);
-    if (id !== undefined) matchedRaceIds.add(id);
+    return id === undefined ? { kind: 'absent' } : { kind: 'resolved', id };
+  };
+
+  const matchedRaceIds = new Set<string>();
+  for (const entry of pass.mapped) {
+    const resolved = resolveStoredId(entry);
+    if (resolved.kind === 'resolved') matchedRaceIds.add(resolved.id);
   }
 
   // Existing-runner lookup, reproducing normalised-horse-name matching.
@@ -720,13 +790,21 @@ export async function runRacecardsDryRun(
   let racesPlannedInsert = 0;
   let racesExisting = 0;
   let duplicateCards = 0;
+  let racesAmbiguous = 0;
   let runnersPlannedInsert = 0;
   let runnersExisting = 0;
   let runnersMatchedInResponse = 0;
+  let runnersOnAmbiguousRaces = 0;
   const allRunners: RunnerUpsert[] = [];
 
   /** Resolution keys an earlier card in THIS response already planned as new. */
   const plannedNewKeys = new Set<string>();
+  /**
+   * Provider ids an earlier card already planned as new. Production would have
+   * INSERTED that row by now, so its provider-id lookup would resolve the
+   * later card — this models that without a second read.
+   */
+  const plannedNewProviderIds = new Set<string>();
   /**
    * Names this preview has already planned to insert, per resolution key —
    * i.e. rows a later duplicate card would find, because production would by
@@ -735,19 +813,42 @@ export async function runRacecardsDryRun(
   const previewAddedNames = new Map<string, Set<string>>();
 
   for (const entry of pass.mapped) {
+    const resolution = resolveStoredId(entry);
+
+    // AMBIGUOUS: more than one stored race carries this provider id. Production
+    // refuses outright, so nothing here may be planned — not an insert, not an
+    // existing match, and not a runner action. The runners are still counted so
+    // the mapped-runner denominator stays honest.
+    if (resolution.kind === 'ambiguous') {
+      racesAmbiguous += 1;
+      for (const runner of entry.runners) {
+        allRunners.push(runner);
+        runnersOnAmbiguousRaces += 1;
+      }
+      continue;
+    }
+
+    const providerId = entry.race.provider_race_id;
     const key = raceMatchKey(entry.race.course, entry.race.off_time);
-    const storedId = key === null ? undefined : raceIndex.get(key);
+    const storedId = resolution.kind === 'resolved' ? resolution.id : undefined;
+    const providerHandle = typeof providerId === 'string' && providerId !== '' ? `provider:${providerId}` : null;
 
     let stored: Set<string> | undefined;
     let added: Set<string>;
 
     if (storedId !== undefined) {
-      // Already in the database. A second card for the same stored race is also
-      // counted here, exactly as production would (both lookups find it).
+      // Already in the database, by provider identity or by the fallback. A
+      // second card resolving to the same stored race is counted here too,
+      // exactly as production would (both lookups find it).
       racesExisting += 1;
       stored = storedRunnerNames.get(storedId);
       added = previewAddedNames.get(storedId) ?? new Set<string>();
       previewAddedNames.set(storedId, added);
+    } else if (providerHandle !== null && plannedNewProviderIds.has(providerId as string)) {
+      // An earlier card in this response already planned this provider race.
+      duplicateCards += 1;
+      added = previewAddedNames.get(providerHandle) ?? new Set<string>();
+      previewAddedNames.set(providerHandle, added);
     } else if (key !== null && plannedNewKeys.has(key)) {
       duplicateCards += 1;
       added = previewAddedNames.get(key) ?? new Set<string>();
@@ -755,8 +856,12 @@ export async function runRacecardsDryRun(
     } else {
       racesPlannedInsert += 1;
       if (key !== null) plannedNewKeys.add(key);
+      if (providerHandle !== null) plannedNewProviderIds.add(providerId as string);
       added = new Set<string>();
+      // Registered under BOTH handles, pointing at the same set, so a later
+      // duplicate found by either route sees the same planned names.
       if (key !== null) previewAddedNames.set(key, added);
+      if (providerHandle !== null) previewAddedNames.set(providerHandle, added);
     }
 
     // Production reads the existing runner names ONCE, before inserting this
@@ -809,6 +914,7 @@ export async function runRacecardsDryRun(
     races_planned_insert: racesPlannedInsert,
     races_existing: racesExisting,
     duplicate_cards_in_provider_response: duplicateCards,
+    races_provider_id_ambiguous: racesAmbiguous,
 
     runner_records_returned: pass.runnerRecordsReturned,
     runner_records_on_mapped_races: pass.runnerRecordsOnMappedRaces,
@@ -819,6 +925,7 @@ export async function runRacecardsDryRun(
     runners_planned_insert: runnersPlannedInsert,
     runners_existing: runnersExisting,
     runners_matched_within_provider_response: runnersMatchedInResponse,
+    runners_on_ambiguous_races: runnersOnAmbiguousRaces,
 
     race_field_coverage: raceFieldCoverage(pass.mapped.map((m) => m.race)),
     runner_field_coverage: runnerFieldCoverage(allRunners),
@@ -893,6 +1000,16 @@ export function buildWarnings(report: RacecardsDryRunReport): string[] {
     warnings.push(
       `${report.races_existing} mapped race(s) already exist under (course + off_time) matching and ` +
         'would be reused unchanged — their Programme 0 columns would stay as they are.',
+    );
+  }
+
+  // --- ambiguous provider identity -------------------------------------------
+  if (report.races_provider_id_ambiguous > 0) {
+    warnings.push(
+      `${report.races_provider_id_ambiguous} mapped race(s) carry a provider race id that matches ` +
+        'MORE THAN ONE stored race. Canonical identity cannot be decided automatically, so they ' +
+        'are planned as neither an insert nor an existing match. A real commit run FAILS CLOSED ' +
+        'on this and writes nothing at all — investigate the duplicate stored rows first.',
     );
   }
 
@@ -994,16 +1111,18 @@ export function renderRacecardsDryRunConsole(report: RacecardsDryRunReport): str
   lines.push(`  Invalid runners skipped on mapped races: ${report.runners_skipped_invalid}`);
   lines.push('');
 
-  lines.push('PLANNED RACE ACTIONS (course + off_time matching)');
+  lines.push('PLANNED RACE ACTIONS (provider_race_id first, then course + off_time)');
   lines.push(`  Would appear NEW                      : ${report.races_planned_insert}`);
   lines.push(`  Already existing in the database      : ${report.races_existing}`);
   lines.push(`  Duplicate cards in this response      : ${report.duplicate_cards_in_provider_response}`);
+  lines.push(`  AMBIGUOUS provider id (would refuse)  : ${report.races_provider_id_ambiguous}`);
   lines.push('');
 
   lines.push('PLANNED RUNNER ACTIONS (normalised horse-name matching)');
   lines.push(`  Would appear NEW                      : ${report.runners_planned_insert}`);
   lines.push(`  Already existing in the database      : ${report.runners_existing}`);
   lines.push(`  Matched a row planned earlier here    : ${report.runners_matched_within_provider_response}`);
+  lines.push(`  On an ambiguous race (not planned)    : ${report.runners_on_ambiguous_races}`);
   lines.push('');
 
   lines.push(`PROGRAMME 0 RACE FIELD COVERAGE (of ${report.races_mapped} mapped races)`);

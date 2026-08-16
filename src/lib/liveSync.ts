@@ -47,6 +47,7 @@ import {
   racecardToRaceUpsert,
   resolveOffTime,
   resultRunnerToUpdate,
+  type RaceUpsert,
 } from './raceSync';
 
 /** UK + Irish region codes for The Racing API. */
@@ -69,6 +70,115 @@ async function findRaceId(course: string, offTimeIso: string): Promise<string | 
   const row = (data ?? [])[0] as { id: string } | undefined;
   return row ? String(row.id) : null;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Provider-id-first race resolution                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Thrown when a provider race id resolves to MORE THAN ONE stored race.
+ *
+ * The `races_provider_race_id_idx` index is partial and deliberately NON-unique
+ * — uniqueness is a claim about data the first enriched cohort (25 races) is
+ * far too small to justify asserting in the schema. So duplication is possible
+ * in principle, and when it happens canonical resolution is genuinely
+ * ambiguous: picking a row arbitrarily would attach a whole runner cohort to
+ * the wrong race. This fails closed instead, and asks for a human.
+ *
+ * The message deliberately carries NO provider id value.
+ */
+export class AmbiguousProviderRaceError extends Error {
+  constructor() {
+    super(
+      'races provider-id resolution is AMBIGUOUS: more than one stored race carries this ' +
+        'provider race id. Refusing to insert, update, or fall back to (course, off_time) — ' +
+        'canonical identity cannot be decided automatically and needs operator investigation.',
+    );
+    this.name = 'AmbiguousProviderRaceError';
+    Object.setPrototypeOf(this, AmbiguousProviderRaceError.prototype);
+  }
+}
+
+/**
+ * The two lookups race resolution needs, injected so the DECISION is unit
+ * testable with no database. The live implementations are wired below.
+ */
+export interface RaceResolutionLookups {
+  /** Every stored race id carrying this provider race id (capped at 2 by the caller). */
+  findIdsByProviderRaceId(providerRaceId: string): Promise<string[]>;
+  /** The pre-existing (course, off_time) lookup, semantics unchanged. */
+  findIdByCourseAndOffTime(course: string, offTimeIso: string): Promise<string | null>;
+}
+
+/** The minimal projection of a mapped race row resolution reads. */
+export type ResolvableRace = Pick<RaceUpsert, 'provider_race_id' | 'course' | 'off_time'>;
+
+/**
+ * Resolves a mapped racecard to an EXISTING race id, provider identity first.
+ *
+ *   1. a non-null `provider_race_id` is looked up first. Exactly one match
+ *      returns that row's internal uuid and the fallback is NOT consulted;
+ *      more than one match throws {@link AmbiguousProviderRaceError};
+ *   2. a null provider id, or zero provider-id matches, falls through to the
+ *      UNCHANGED raw (course, off_time) lookup — which is what still resolves
+ *      the 719 historical rows that predate capture;
+ *   3. null means neither found anything, and the caller inserts.
+ *
+ * RESOLUTION ONLY. This function reads; it never writes. In particular a
+ * historical row matched by the fallback keeps its null `provider_race_id`:
+ * stamping an external identity onto a row matched only by a collision-prone
+ * natural key would be a guess, and a wrong guess is unrecoverable. Backfill,
+ * if it ever happens, is a separate evidenced decision.
+ *
+ * Course-key resolution is deliberately NOT used here — that would be a second
+ * behavioural change in one tranche.
+ */
+export async function resolveExistingRaceId(
+  raceRow: ResolvableRace,
+  lookups: RaceResolutionLookups,
+): Promise<string | null> {
+  const providerRaceId = raceRow.provider_race_id;
+  // The mapper already maps blank provider strings to null; the empty check is
+  // defensive so a future mapper change cannot turn '' into a wildcard lookup.
+  if (typeof providerRaceId === 'string' && providerRaceId !== '') {
+    const ids = await lookups.findIdsByProviderRaceId(providerRaceId);
+    if (ids.length > 1) throw new AmbiguousProviderRaceError();
+    if (ids.length === 1) return ids[0];
+  }
+  return lookups.findIdByCourseAndOffTime(raceRow.course, raceRow.off_time);
+}
+
+/**
+ * Removes a provider id value from a driver error string.
+ *
+ * PostgREST can echo a filter value back in its message, and this is the one
+ * lookup whose filter value is an external identifier we have promised not to
+ * print. Plain string replacement, so no regex escaping is involved. Pure.
+ */
+export function scrubProviderId(message: string, providerRaceId: string): string {
+  if (providerRaceId === '') return message;
+  return message.split(providerRaceId).join('[provider-id]');
+}
+
+/** The live, Supabase-backed lookups. SELECT-only; neither method writes. */
+const supabaseRaceResolutionLookups: RaceResolutionLookups = {
+  async findIdsByProviderRaceId(providerRaceId: string): Promise<string[]> {
+    // limit(2) is enough to tell "none" from "exactly one" from "more than
+    // one", without fetching a whole duplicate set we would refuse anyway.
+    const { data, error } = await supabaseAdmin
+      .from('races')
+      .select('id')
+      .eq('provider_race_id', providerRaceId)
+      .limit(2);
+    if (error) {
+      throw new Error(
+        `races provider-id lookup failed: ${scrubProviderId(error.message, providerRaceId)}`,
+      );
+    }
+    return ((data ?? []) as { id: string }[]).map((r) => String(r.id));
+  },
+  findIdByCourseAndOffTime: (course, offTimeIso) => findRaceId(course, offTimeIso),
+};
 
 export interface RacecardsSyncSummary {
   cardsFetched: number;
@@ -168,7 +278,8 @@ export async function syncRacecards(
       continue;
     }
 
-    let raceId = await findRaceId(raceRow.course, raceRow.off_time);
+    // Provider identity first, (course, off_time) as the historical fallback.
+    let raceId = await resolveExistingRaceId(raceRow, supabaseRaceResolutionLookups);
     if (raceId) {
       summary.racesExisting++;
     } else {
