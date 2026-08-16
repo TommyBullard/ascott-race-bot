@@ -180,6 +180,91 @@ function functionBody(name: string): string {
   return PAGE_CODE.slice(start, end + 2);
 }
 
+/**
+ * The comment-stripped body of a module-level `const <name>: CSSProperties = {…}`
+ * in `page.tsx`, bounded to that declaration alone.
+ *
+ * Slice 3D C1 converted `liveBarStyle` from a function into a plain constant —
+ * its geometry no longer varies by branch, so a parameter would have been
+ * unused. `functionBody` can no longer reach it, and `styleBlock` only reads
+ * entries of the module-level `styles` object. This closes that gap for the
+ * three page-level style constants (`liveBarStyle`, `liveWarningStyle`,
+ * `safetyBannerStyle`), which all share the same declaration shape.
+ *
+ * Bounded by the first `\n};` after the opening brace — these declarations sit
+ * at column 0, so that terminator is their own.
+ */
+function constStyleBody(name: string): string {
+  const start = PAGE_CODE.indexOf(`const ${name}: CSSProperties = {`);
+  assert.notEqual(start, -1, `const ${name}: CSSProperties must exist in page.tsx`);
+  const end = PAGE_CODE.indexOf('\n};', start);
+  assert.ok(end > start, `const ${name} must be a bounded declaration`);
+  return PAGE_CODE.slice(start, end + 3);
+}
+
+/**
+ * THE NARROWED SUCCESSOR TO THE PAGE-WIDE TOKEN PROHIBITION.
+ *
+ * Until slice 3D C1, `page.tsx` was forbidden from naming ANY `--rb-text-*`,
+ * `--rb-status-*` or `--rb-accent-*` foreground, because every region on this
+ * page still sat on a hard-coded light surface and a dark-aware token would
+ * have landed light-on-light there. Test 7's own docblock required that
+ * assertion to be "narrowed to the regions still unmigrated, never simply
+ * deleted while legacy light surfaces remain" by the tranche that began
+ * migrating the page's OWN inline styles. C1 is that tranche.
+ *
+ * The narrowing is deliberately two-sided, and is STRICTLY STRONGER than the
+ * blanket ban it replaces:
+ *
+ *   1. an EXACT allowance — page.tsx may declare precisely the three token
+ *      foregrounds C1 introduced, all of which sit inside `rb-status-frame`,
+ *      which owns its own paired token surface; and
+ *   2. an ABSENCE contract on every region still standing on the containment
+ *      surface, so a token can never leak back onto legacy light.
+ *
+ * A blanket ban could only have been deleted here. This cannot: adding a
+ * fourth token foreground anywhere, or moving any of the three onto a legacy
+ * region, fails. When the frame flip lands, (1) grows and (2) empties.
+ */
+function assertPageTokenForegroundsStayOffLegacySurfaces(): void {
+  const declared = [
+    ...PAGE_CODE.matchAll(/color: 'var\((--rb-(?:text|status|accent)-[a-z-]+)\)'/g),
+  ].map((m) => m[1]);
+
+  assert.deepEqual(
+    declared,
+    ['--rb-text-muted', '--rb-text-muted', '--rb-status-warning'],
+    'page.tsx may declare exactly the three C1 status-frame foregrounds, in source order'
+  );
+
+  /*
+   * The regions still on `LEGACY_LIGHT_PAGE_SURFACE`. Each is bounded to
+   * itself, so a token entering ANY of them fails by name rather than being
+   * absorbed into a page-wide count.
+   */
+  const legacyRegions: Array<[string, string]> = [
+    ['styles.page', styleBlock('page')],
+    ['raceDaySecondaryLinkStyle', constStyleBody('raceDaySecondaryLinkStyle')],
+    ['RaceDayNav', functionBody('RaceDayNav')],
+  ];
+  for (const [name, body] of legacyRegions) {
+    for (const forbidden of ['var(--rb-text-', 'var(--rb-status-', 'var(--rb-accent-']) {
+      assert.equal(
+        body.includes(forbidden),
+        false,
+        `${name} still sits on the containment surface and must not declare ${forbidden}`
+      );
+    }
+  }
+
+  /* The intro paragraph is inline in the render, and is covered by the exact
+   * allowance above: it still declares the legacy literal, not a token. */
+  assert.ok(
+    PAGE_CODE.includes("color: '#57606a'"),
+    'the intro paragraph remains legacy until the frame flip'
+  );
+}
+
 /* ========================================================================== *
  * WCAG 2.1 contrast — same methodology as scripts/appShell.test.ts
  * ========================================================================== */
@@ -395,16 +480,29 @@ test('5b. the remaining explicit foregrounds reproduce the styles.page anchor', 
   assert.ok(page.includes(LEGACY_PRIMARY_FOREGROUND), 'the anchor must hold first');
 
   /*
-   * The set SHRINKS as regions migrate — that is the shape of the programme.
-   * `nextActionStyle` left in slice 3D phase 1; `accuracyBar` and `perfPanel`
-   * left in evidence-migration part 1; `styles.panel` (the tipster panels) left
-   * in the tipster tranche, which DELETED it rather than re-anchoring it.
-   * `liveBarStyle` is the only remaining holder of the anchor, and it is
-   * self-contained (it declares its own background), so it is safe where it is.
+   * THE SET IS NOW EMPTY — and that is the point of slice 3D C1.
+   *
+   * The set SHRANK as regions migrated: `nextActionStyle` left in slice 3D
+   * phase 1; `accuracyBar` and `perfPanel` left in evidence-migration part 1;
+   * `styles.panel` (the tipster panels) left in the tipster tranche, which
+   * DELETED it rather than re-anchoring it. `liveBarStyle` was the LAST holder
+   * of the anchor, and C1 migrated it to `rb-status-frame`.
+   *
+   * So the anchor relationship this test was built to police no longer has a
+   * second party. It is deliberately SUPERSEDED here rather than deleted: the
+   * assertion inverts into "no region reproduces the page foreground any more",
+   * which is strictly stronger than the equivalence it replaces. Test 25 owns
+   * the live bar's positive pairing contract.
    */
-  assert.ok(
-    functionBody('liveBarStyle').includes(LEGACY_PRIMARY_FOREGROUND),
-    'liveBarStyle must declare the same foreground as styles.page'
+  assert.equal(
+    functionBody('liveBarClass').includes(LEGACY_PRIMARY_FOREGROUND),
+    false,
+    'liveBarClass carries a class name, never a foreground'
+  );
+  assert.equal(
+    constStyleBody('liveBarStyle').includes(LEGACY_PRIMARY_FOREGROUND),
+    false,
+    'liveBarStyle must no longer reproduce the legacy page foreground'
   );
 
   // The migrated regions must NOT reacquire a legacy foreground.
@@ -469,14 +567,14 @@ test('7. no dark-aware token foreground exists anywhere in the homepage', () => 
    * foreground/surface migration of the page's OWN inline styles. At that point
    * it should be narrowed to the regions still unmigrated, never simply deleted
    * while legacy light surfaces remain.
+   *
+   * SUPERSEDED AS INSTRUCTED, BY SLICE 3D C1. C1 migrated the live-mode bar and
+   * the shared banner onto `rb-status-frame`, which owns a paired token surface,
+   * so those three foregrounds are now correct rather than forbidden. The
+   * narrowed successor keeps the ban in force on every region that is still
+   * standing on the containment surface, and pins the allowance exactly.
    */
-  for (const forbidden of ['var(--rb-text-', 'var(--rb-status-', 'var(--rb-accent-']) {
-    assert.equal(
-      PAGE_SRC.includes(forbidden),
-      false,
-      `${forbidden} must not appear while hard-coded light child surfaces remain`
-    );
-  }
+  assertPageTokenForegroundsStayOffLegacySurfaces();
 });
 
 /* ========================================================================== *
@@ -520,12 +618,18 @@ test('8. styles.muted is RETIRED, with no legacy replacement', () => {
 
   /*
    * `#656d76` itself is NOT globally removed, and must not be asserted away:
-   * `countdownStyle` and `liveBarStyle` still use it, both SELF-CONTAINED (each
-   * declares its own background), which is why they are safe and out of scope.
-   * Pinning the count stops a new unpaired consumer appearing unnoticed.
+   * `countdownStyle` still uses it inside a SELF-CONTAINED chip (it declares
+   * its own background), which is why it is safe and out of scope. Pinning the
+   * count stops a new unpaired consumer appearing unnoticed.
+   *
+   * SLICE 3D C1 lowered this from three to one. The two LiveModeBar supporting
+   * -text uses were BARE TEXT on the bar's own surface, so when that surface
+   * became a token frame they had to move with it; they now take
+   * `--rb-text-muted`. Test 25 owns their positive contract. The countdown
+   * chip is the only remaining consumer.
    */
   const remaining = [...PAGE_CODE.matchAll(/#656d76/g)];
-  assert.equal(remaining.length, 3, 'exactly the countdown neutral chip and LiveModeBar x2');
+  assert.equal(remaining.length, 1, 'exactly the countdown neutral chip');
 });
 
 test('9-11. the message states render via primitives, and pageMuted is gone (slice 3D.2)', () => {
@@ -865,35 +969,24 @@ test('16a. the remaining legacy summary/status surfaces are explicitly self-cont
   }
 
   /*
-   * The two function-generated surfaces, each bounded to its own body. Every
-   * branch and tone is pinned: a partial change that converted only one would
-   * still strand an inherited `#1f2328` on the others.
+   * THE FUNCTION-GENERATED LEGACY SURFACES ARE NOW GONE TOO.
+   *
+   * `nextActionStyle` left this set in slice 3D phase 1. `liveBarStyle` was
+   * the last one, and slice 3D C1 migrated it to `rb-status-frame` —
+   * `--positive` when scoped, bare when static — so there is no longer a
+   * function on this page that generates a fixed light surface at all.
+   *
+   * The branch pins that used to live here (`#eafff1`/`#f6f8fa` backgrounds,
+   * `#aceebb`/`#d0d7de` borders, the explicit `#1f2328`) are deliberately
+   * SUPERSEDED, not weakened: test 25 asserts the same two branches positively,
+   * by class, and additionally proves the geometry-only remainder. Asserting
+   * their absence here is what stops the tinted fill returning.
    */
-  const liveBar = functionBody('liveBarStyle');
-  assert.ok(
-    liveBar.includes("background: scoped ? '#eafff1' : '#f6f8fa'"),
-    'liveBarStyle must retain both legacy background branches'
-  );
-  assert.ok(
-    liveBar.includes("border: `1px solid ${scoped ? '#aceebb' : '#d0d7de'}`"),
-    'liveBarStyle must retain both legacy border branches'
-  );
-  assert.ok(
-    liveBar.includes(LEGACY_PRIMARY_FOREGROUND),
-    'liveBarStyle must declare the explicit legacy foreground'
-  );
-
-  /*
-   * `nextActionStyle` left this set in slice 3D phase 1 — its region migrated
-   * to the paired `rb-status-frame` classes, so it is no longer a legacy
-   * self-contained surface. Test 17 owns that migration; test 16a now covers
-   * FOUR legacy surfaces, not five.
-   */
-  for (const forbidden of ['var(--rb-text-', 'var(--rb-status-', 'var(--rb-accent-']) {
+  for (const gone of ['#eafff1', '#573a00']) {
     assert.equal(
-      liveBar.includes(forbidden),
+      PAGE_CODE.includes(gone),
       false,
-      `liveBarStyle must not use ${forbidden}`
+      `${gone} was a full-width tinted block surface and must not return`
     );
   }
 
@@ -904,7 +997,7 @@ test('16a. the remaining legacy summary/status surfaces are explicitly self-cont
    * no longer be what it claims to be.
    */
   assert.equal(
-    liveBar.includes('function liveDotStyle'),
+    constStyleBody('liveBarStyle').includes('function liveDotStyle'),
     false,
     'the liveBarStyle slice must not over-run into liveDotStyle'
   );
@@ -2168,13 +2261,7 @@ test('17b. the next-action command LABEL is paired on the frame surface', () => 
    * unaffected — restated here because that is precisely the boundary a
    * "just use the token" shortcut would have crossed.
    */
-  for (const forbidden of ['var(--rb-text-', 'var(--rb-status-', 'var(--rb-accent-']) {
-    assert.equal(
-      PAGE_SRC.includes(forbidden),
-      false,
-      `${forbidden} must still not appear in page.tsx`
-    );
-  }
+  assertPageTokenForegroundsStayOffLegacySurfaces();
   for (const cls of [
     'rb-evidence-panel',
     'rb-evidence-card',
@@ -2190,30 +2277,22 @@ test('17b. the next-action command LABEL is paired on the frame surface', () => 
   );
 });
 
-test('16c. the legacy primary foreground clears AA on every 3D.4a surface', () => {
-  /*
-   * SCOPE OF THIS ASSERTION. It calculates WCAG 2.1 contrast for the four
-   * distinct legacy surfaces the five migrated definitions use, and proves each
-   * foreground/background pairing clears the 4.5:1 normal-text threshold.
-   *
-   * It does NOT independently prove before/after computed-colour equality — it
-   * has no before/after comparison and inspects no browser-computed style.
-   * Source-level equality with `styles.page` is proven separately, by the
-   * bounded equivalence contract in test 5b.
-   */
-  for (const [background, what] of [
-    ['#eafff1', 'live mode (scoped) / next action positive'],
-    ['#fff8c5', 'next action warning'],
-    ['#f6f8fa', 'static view / accuracy bar / performance panel'],
-    ['#ffffff', 'tipster panels'],
-  ] as const) {
-    const ratio = contrast('#1f2328', background);
-    assert.ok(
-      ratio >= AA_NORMAL_TEXT,
-      `${what}: #1f2328 on ${background} is ${ratio.toFixed(2)}:1`
-    );
-  }
-});
+/*
+ * 16c. RETIRED BY SLICE 3D C1 — its premise is fully discharged.
+ *
+ * It calculated WCAG contrast for `#1f2328` on the four legacy surfaces that
+ * the FIVE 3D.4a definitions used (live-mode green, next-action yellow,
+ * static/summary grey, tipster white). All five have since migrated:
+ * `nextActionStyle` in phase 1, `accuracyBar`/`perfPanel` in part 1,
+ * `styles.panel` in the tipster tranche, and `liveBarStyle` here in C1.
+ *
+ * Not one of those four pairings now exists in production, so the test could
+ * only ever restate arithmetic about colours the page no longer declares —
+ * the definition of a contract that has stopped tracking its subject. Test 16a
+ * proves the surfaces are gone; tests 17, 18, 22 and 25 own the positive
+ * pairing of the regions that replaced them, each measured against the surface
+ * production actually uses. Coverage MOVED and strengthened; it did not lapse.
+ */
 
 test('22. the tipster panels are a paired token region (tipster tranche)', () => {
   /*
@@ -2501,10 +2580,8 @@ test('22. the tipster panels are a paired token region (tipster tranche)', () =>
     'no bespoke tipster class was invented'
   );
 
-  // The page-wide invariant: no dark-aware text/status/accent literal enters here.
-  for (const forbidden of ['var(--rb-text-', 'var(--rb-status-', 'var(--rb-accent-']) {
-    assert.equal(PAGE_SRC.includes(forbidden), false, `${forbidden} must not appear in page.tsx`);
-  }
+  // The invariant, narrowed by C1 to the regions still on the containment surface.
+  assertPageTokenForegroundsStayOffLegacySurfaces();
 
   /* --- F. behaviour freeze ------------------------------------------------ */
 
@@ -2866,13 +2943,8 @@ test('23. the two operational panels are a paired token region (top-level part 1
     styleBlock('page').includes('background: LEGACY_LIGHT_PAGE_SURFACE'),
     'and is still applied to the page wrapper'
   );
-  for (const forbidden of ['var(--rb-text-', 'var(--rb-status-', 'var(--rb-accent-']) {
-    assert.equal(
-      PAGE_SRC.includes(forbidden),
-      false,
-      `${forbidden} must still not appear in page.tsx — this tranche does not touch it`
-    );
-  }
+  /* Narrowed by C1: token foregrounds are allowed only on paired frames. */
+  assertPageTokenForegroundsStayOffLegacySurfaces();
   assert.match(
     functionBody('TipsterStatusPanel'),
     /<section className="rb-evidence-panel" style=\{styles\.tipsterPanel\}>/,
@@ -3482,13 +3554,8 @@ test('24. proof, timeline and place audit are a paired token region (top-level p
     styleBlock('page').includes('background: LEGACY_LIGHT_PAGE_SURFACE'),
     'and is still applied to the page wrapper'
   );
-  for (const forbidden of ['var(--rb-text-', 'var(--rb-status-', 'var(--rb-accent-']) {
-    assert.equal(
-      PAGE_SRC.includes(forbidden),
-      false,
-      `${forbidden} must still not appear in page.tsx — this tranche does not touch it`
-    );
-  }
+  /* Narrowed by C1: token foregrounds are allowed only on paired frames. */
+  assertPageTokenForegroundsStayOffLegacySurfaces();
   /* PR A (part 1) is undisturbed. */
   for (const name of PART1_PANELS) {
     assert.match(
@@ -3692,4 +3759,319 @@ test('24b. every part-2 panel foreground clears AA on the surface it now sits on
     strandedWell < 1.5,
     `a retained #f6f8fa well would have held dark-scheme primary text at ${strandedWell.toFixed(2)}:1`
   );
+});
+
+/* ========================================================================== *
+ * 25-25b. the final structural light blocks (SLICE 3D C1)
+ *
+ * The last three full-width tinted blocks on this page — the live-mode bar,
+ * its warning, and the shared safety / all-courses banner — were each a
+ * COMPLETE fixed pair (contrast-safe on their own fills) and yet each was a
+ * panel-sized light island that would read as a bright band once the shell
+ * goes dark. Contrast safety and dark-scheme visual consistency are different
+ * properties, and these three had the first without the second.
+ *
+ * All three now use `rb-status-frame`, the same paired mechanism
+ * `NextActionWidget` adopted in phase 1: a semantic LEFT BORDER on a neutral
+ * token surface instead of a tinted fill that has no token equivalent.
+ *
+ * C1 deliberately does NOT touch the containment. `LEGACY_LIGHT_PAGE_SURFACE`
+ * is still declared and still applied, and the page root, intro and
+ * RaceDayNav are untouched — those belong to the frame flip that follows.
+ * That ordering is the whole point: this tranche removes the last islands so
+ * the frame flip becomes a change of surface only.
+ * ========================================================================== */
+
+test('25. the final structural blocks are paired token regions (slice 3D C1)', () => {
+  /* --- A. the live bar takes the frame, and keeps its branch -------------- */
+
+  /*
+   * The two states are asserted POSITIVELY and separately. A single "contains
+   * rb-status-frame" check would pass even if both branches collapsed onto one
+   * tone, which would silently erase the live/static distinction.
+   */
+  const barClass = functionBody('liveBarClass');
+  assert.ok(
+    barClass.includes("scoped ? 'rb-status-frame rb-status-frame--positive' : 'rb-status-frame'"),
+    'the scoped branch is positive and the static branch is the bare frame'
+  );
+  assert.match(
+    PAGE_CODE,
+    /<div className=\{liveBarClass\(scoped\)\} style=\{liveBarStyle\}>/,
+    'the live bar root takes the class from the branch and the geometry inline'
+  );
+
+  /*
+   * THE BRANCH REMAINS TIED TO `scoped`. C1 changed how each state is painted,
+   * never which state is chosen, so the classification input must be the same
+   * boolean the component already received.
+   */
+  assert.match(
+    PAGE_CODE,
+    /function liveBarClass\(scoped: boolean\): string/,
+    'the branch is still driven by the existing scoped value'
+  );
+
+  /* --- B. liveBarStyle is geometry only ----------------------------------- */
+
+  const bar = constStyleBody('liveBarStyle');
+  for (const forbidden of ['background', 'border', 'color:']) {
+    assert.equal(
+      new RegExp(forbidden).test(bar),
+      false,
+      `liveBarStyle must take its ${forbidden} from the frame class`
+    );
+  }
+  for (const geometry of ["display: 'flex'", 'gap: 10', 'fontSize: 13', "padding: '8px 12px'", "margin: '12px 0'"]) {
+    assert.ok(bar.includes(geometry), `liveBarStyle must keep ${geometry}`);
+  }
+  /* No branch may survive inside the geometry: the tone lives in the class. */
+  assert.equal(/scoped/.test(bar), false, 'liveBarStyle must no longer branch on scoped');
+
+  /* --- C. the supporting text and the warning ----------------------------- */
+
+  /*
+   * Both supporting-text roles are BARE TEXT on the frame surface, so both had
+   * to move with it. Counted as well as matched: there are exactly two, and a
+   * count stops one of them being quietly dropped or duplicated.
+   */
+  const mutedUses = [...PAGE_CODE.matchAll(/color: 'var\(--rb-text-muted\)'/g)];
+  assert.equal(mutedUses.length, 2, 'exactly the two LiveModeBar supporting-text roles');
+  assert.ok(
+    PAGE_CODE.includes("<span style={{ color: 'var(--rb-text-muted)' }}>"),
+    'the cadence / static-view line takes the muted token'
+  );
+  assert.match(
+    PAGE_CODE,
+    /color: 'var\(--rb-text-muted\)',\s*marginLeft: 'auto',\s*fontVariantNumeric: 'tabular-nums',/,
+    'the refreshed-timestamp line takes the muted token and keeps its layout'
+  );
+
+  const warn = constStyleBody('liveWarningStyle');
+  assert.ok(
+    warn.includes("color: 'var(--rb-status-warning)'"),
+    'the warning foreground is the semantic warning token'
+  );
+  assert.ok(warn.includes("flexBasis: '100%'"), 'the warning still wraps to its own full line');
+  for (const gone of ['background', 'border', 'borderRadius']) {
+    assert.equal(
+      new RegExp(gone).test(warn),
+      false,
+      `liveWarningStyle must no longer own a ${gone}`
+    );
+  }
+  assert.match(
+    PAGE_CODE,
+    /<span className="rb-status-frame__detail" style=\{liveWarningStyle\}>/,
+    'the warning takes the frame detail typography'
+  );
+
+  /* The warning stays conditional on exactly the same derived value. */
+  assert.ok(
+    PAGE_CODE.includes('{scoped && view.warning && ('),
+    'the warning condition is unchanged'
+  );
+
+  /* --- D. the live dot is decorative and unchanged ------------------------ */
+
+  /*
+   * Deliberately NOT migrated and deliberately NOT given a contrast floor: it
+   * is `aria-hidden`, and the visible "Live mode" / "Static view" wording
+   * beside it carries the same meaning, so it is never the sole signal.
+   */
+  const dot = functionBody('liveDotStyle');
+  assert.ok(
+    dot.includes("background: scoped ? '#1a7f37' : '#afb8c1'"),
+    'liveDotStyle is unchanged'
+  );
+  assert.ok(PAGE_CODE.includes('<span style={liveDotStyle(scoped)} aria-hidden />'), 'and stays aria-hidden');
+  assert.ok(
+    PAGE_CODE.includes("{scoped ? 'Live mode' : 'Static view'}"),
+    'the dot is redundant to visible wording, which is unchanged'
+  );
+
+  /* --- E. both banners share ONE migrated treatment ----------------------- */
+
+  const bannerClass = 'className="rb-status-frame rb-status-frame--warning" style={safetyBannerStyle}';
+  assert.equal(
+    [...PAGE_CODE.matchAll(/className="rb-status-frame rb-status-frame--warning" style=\{safetyBannerStyle\}/g)].length,
+    2,
+    'exactly two consumers: SafetyBanner and AllCoursesBanner'
+  );
+  assert.ok(functionBody('SafetyBanner').includes(bannerClass), 'SafetyBanner takes the warning frame');
+  assert.ok(
+    functionBody('AllCoursesBanner').includes(bannerClass),
+    'AllCoursesBanner takes the same warning frame'
+  );
+
+  const banner = constStyleBody('safetyBannerStyle');
+  for (const forbidden of ['background', 'border', 'color:']) {
+    assert.equal(
+      new RegExp(forbidden).test(banner),
+      false,
+      `safetyBannerStyle must take its ${forbidden} from the frame class`
+    );
+  }
+  for (const kept of ['fontSize: 12.5', 'lineHeight: 1.5', "margin: '0 0 16px'"]) {
+    assert.ok(banner.includes(kept), `safetyBannerStyle must keep ${kept}`);
+  }
+
+  /* --- F. no structural light island remains ------------------------------ */
+
+  /*
+   * THE POINT OF THE WHOLE TRANCHE.
+   *
+   * `#eafff1` and `#573a00` were unique to the migrated blocks, so their
+   * absence is a complete proof for those two. The remaining near-white
+   * literals are all SMALL self-contained chips, so the guard that matters is
+   * structural: no page-level style CONSTANT — the shape a full-width block
+   * takes — may own a near-white fill. Chip palettes live in `styles` entries
+   * and function-local records and are untouched.
+   */
+  for (const gone of ['#eafff1', '#573a00']) {
+    assert.equal(PAGE_CODE.includes(gone), false, `${gone} must not return`);
+  }
+  for (const name of ['liveBarStyle', 'liveWarningStyle', 'safetyBannerStyle']) {
+    const body = constStyleBody(name);
+    assert.equal(
+      /(background|backgroundColor):\s*'#[0-9a-fA-F]{3,6}'/.test(body),
+      false,
+      `${name} must not own a fixed structural fill`
+    );
+  }
+  /* The broad inverse guard from test 16a, restated for the styles object. */
+  for (const { name, body } of pageStyleEntries()) {
+    for (const legacySurface of ["background: '#fff'", "background: '#ffffff'"]) {
+      assert.equal(body.includes(legacySurface), false, `styles.${name} owns no white surface`);
+    }
+  }
+
+  /* --- G. containment and the out-of-scope frame are untouched ------------ */
+
+  assert.match(
+    PAGE_CODE,
+    /const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';/,
+    'C1 does not remove the containment'
+  );
+  assert.ok(
+    styleBlock('page').includes('background: LEGACY_LIGHT_PAGE_SURFACE'),
+    'and it is still applied to the page wrapper'
+  );
+  assert.ok(styleBlock('page').includes(LEGACY_PRIMARY_FOREGROUND), 'the page frame is still legacy');
+  assert.match(
+    PAGE_CODE,
+    /const raceDaySecondaryLinkStyle: CSSProperties = \{[^}]*color: '#0550ae'/,
+    'the secondary links are untouched — they belong to the frame flip'
+  );
+  assert.ok(PAGE_CODE.includes("color: '#57606a'"), 'the intro paragraph is untouched');
+
+  /* --- H. behaviour freeze ------------------------------------------------ */
+
+  for (const unchanged of [
+    'const view = buildLiveStatusView({ statusUpdatedMs, cardsUpdatedMs, statusError });',
+    'const refreshedAge = formatRelativeAge(view.refreshedMs, nowMs);',
+    'const refreshSecs = Math.round(RACE_DAY_REFRESH_MS / 1000);',
+    '`Auto-refreshing read-only data every ${refreshSecs}s`',
+    "'Open a specific race day to see live, auto-refreshing data.'",
+    '`Status refreshed ${refreshedAge.text}`',
+    '{scoped && view.refreshedMs != null && (',
+  ]) {
+    assert.ok(PAGE_CODE.includes(unchanged), `LiveModeBar timing/wording unchanged: ${unchanged}`);
+  }
+  assert.ok(
+    functionBody('SafetyBanner').includes('Decision-support only — not betting advice.'),
+    'the safety wording is unchanged'
+  );
+  assert.ok(
+    functionBody('AllCoursesBanner').includes('{ALL_COURSES_BANNER_MESSAGE}'),
+    'the all-courses wording is unchanged'
+  );
+  assert.ok(
+    functionBody('AllCoursesBanner').includes('if (!isClient || !isAllCoursesMode(search)) return null;'),
+    'the all-courses conditional rendering is unchanged'
+  );
+  assert.ok(
+    functionBody('AllCoursesBanner').includes('style={raceDayPrimaryButtonStyle}'),
+    'the all-courses quick link is unchanged'
+  );
+});
+
+test('25b. every migrated C1 role clears AA on the status-frame surface', () => {
+  /*
+   * The surface is DERIVED from `.rb-status-frame` itself, the class all three
+   * blocks now carry, so a future change of that class's fill fails here
+   * rather than shipping.
+   */
+  const rule = cssRule('.rb-status-frame');
+  const bg = /background: var\((--rb-surface-[a-z-]+)\)/.exec(rule);
+  assert.ok(bg, '.rb-status-frame must declare a var(--rb-surface-*) background');
+  const fg = /color: var\((--rb-text-[a-z-]+)\)/.exec(rule);
+  assert.ok(fg, '.rb-status-frame must declare a paired token foreground');
+
+  const surface = { light: lightToken(bg[1]), dark: darkToken(bg[1]) };
+
+  /*
+   * Every role these blocks actually render, measured on the frame surface.
+   * `primary` arrives by inheritance from the class itself (the bold
+   * "Live mode" / "Static view" label and the banner prose); the other three
+   * are declared by the migrated styles.
+   */
+  const ROLES = [
+    ['--rb-text-primary', 16.9, 13.1, 'frame foreground: bar label and banner prose'],
+    ['--rb-text-secondary', 8.96, 8.24, 'rb-status-frame__detail default'],
+    ['--rb-text-muted', 5.8, 5.02, 'LiveModeBar cadence and refreshed timestamp'],
+    ['--rb-status-warning', 6.41, 6.59, 'LiveModeBar warning'],
+  ] as const;
+
+  for (const [token, expLight, expDark, what] of ROLES) {
+    const light = contrast(lightToken(token), surface.light);
+    const dark = contrast(darkToken(token), surface.dark);
+    assert.ok(light >= AA_NORMAL_TEXT, `${what}: ${token} light is ${light.toFixed(2)}:1`);
+    assert.ok(dark >= AA_NORMAL_TEXT, `${what}: ${token} dark is ${dark.toFixed(2)}:1`);
+    assert.ok(
+      Math.abs(light - expLight) < 0.05 && Math.abs(dark - expDark) < 0.05,
+      `${what}: expected ~${expLight}/${expDark}, measured ${light.toFixed(2)}/${dark.toFixed(2)}`
+    );
+  }
+
+  /*
+   * The frame's own foreground token must be the one the roles were measured
+   * against inheriting — proving the class is a complete pair, not a surface
+   * with an assumed foreground.
+   */
+  assert.equal(fg[1], '--rb-text-primary', 'the frame pairs its surface with the primary tier');
+
+  /* --- why the migration was necessary ----------------------------------- */
+
+  /*
+   * The blocks were never a CONTRAST defect — each fixed pair cleared AA on
+   * its own fill, and that is exactly why a contrast-only audit would have
+   * passed them. They were a VISUAL-CONSISTENCY defect: full-width fills far
+   * brighter than the dark shell around them. Recording both halves stops the
+   * migration being mistaken for a contrast fix.
+   */
+  for (const [fgHex, bgHex, what] of [
+    ['#1f2328', '#eafff1', 'live bar (scoped)'],
+    ['#1f2328', '#f6f8fa', 'live bar (static)'],
+    ['#9a6700', '#fff8c5', 'live warning'],
+    ['#573a00', '#fff8c5', 'safety / all-courses banner'],
+  ] as const) {
+    assert.ok(
+      contrast(fgHex, bgHex) >= AA_NORMAL_TEXT,
+      `${what} was contrast-safe before migration (${contrast(fgHex, bgHex).toFixed(2)}:1)`
+    );
+  }
+
+  /*
+   * And the visual half: each retired fill sat far above the dark application
+   * background it would have been stranded on. `--rb-bg-app` is the shell
+   * surface these blocks render over once the frame flip lands.
+   */
+  const darkApp = darkToken('--rb-bg-app');
+  for (const retired of ['#eafff1', '#f6f8fa', '#fff8c5']) {
+    assert.ok(
+      contrast(retired, darkApp) > 10,
+      `${retired} would have been a bright island on ${darkApp} (${contrast(retired, darkApp).toFixed(2)}:1)`
+    );
+  }
 });
