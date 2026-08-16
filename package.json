@@ -23,6 +23,7 @@
     "security:secrets-check": "tsx scripts/securitySecretsCheck.ts",
     "schema:launch-check": "tsx scripts/schemaLaunchCheck.ts",
     "local:racecards": "node scripts/printLocalCurlCommands.js",
+    "racecards:dry-run": "tsx scripts/racecardsDryRun.ts",
     "inspect:model-observability": "tsx scripts/inspectModelRunObservability.ts",
     "run:model": "tsx scripts/runModel.ts",
     "model:day": "tsx scripts/runModelsForRaceDay.ts",
