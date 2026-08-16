@@ -17,7 +17,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 
 import {
   courseKey,
@@ -27,6 +27,13 @@ import {
   racecardToRaceUpsert,
   trimmedOrNull,
 } from '../src/lib/raceSync';
+import {
+  AmbiguousProviderRaceError,
+  resolveExistingRaceId,
+  scrubProviderId,
+  type RaceResolutionLookups,
+  type ResolvableRace,
+} from '../src/lib/liveSync';
 import { REQUIRED_TABLES } from '../src/lib/dbHealthSpec';
 
 const MIGRATION = 'supabase/migrations/20260816000000_canonical_race_identity.sql';
@@ -236,7 +243,7 @@ test('P0 raceSlug: per-row slug immutability comes from the write path', () => {
   );
   assert.match(
     live,
-    /let raceId = await findRaceId\(raceRow\.course, raceRow\.off_time\);/,
+    /let raceId = await resolveExistingRaceId\(raceRow, supabaseRaceResolutionLookups\);/,
     'races are still looked up before being written'
   );
   assert.match(
@@ -271,56 +278,89 @@ test('P0 raceSlug: per-row slug immutability comes from the write path', () => {
   }
 });
 
-test('P0 KNOWN CONSTRAINT: identity is captured, not resolved (handoff contract)', () => {
+test('IDENTITY RESOLUTION: provider id first, course + off_time fallback (handoff contract)', () => {
   /*
-   * A HANDOFF CONTRACT, NOT A PERMANENT RULE.
+   * SUPERSEDES the Programme 0 handoff contract, deliberately and with review.
    *
-   * Programme 0 stores `provider_race_id` but no lookup reads it: races are
-   * still resolved by the RAW course string plus off_time. So a corrected off
-   * time or course label misses the existing row and inserts a second row with
-   * a second uuid and a second slug, and the deliberately non-unique partial
-   * index does not prevent it. That duplication PREDATES Programme 0 and is
-   * unchanged by it.
+   * That earlier test asserted the CAPTURE/RESOLVE SPLIT: `provider_race_id`
+   * was stored but read by no lookup, so a corrected off time or course label
+   * inserted a second row with a second uuid and a second slug. It existed so
+   * that limitation stayed visible, and it said in terms that it expected to be
+   * replaced by the programme that moved resolution onto provider identity.
+   * This is that replacement — the split is closed, so asserting it would now
+   * assert something false.
    *
-   * This test exists so the limitation is visible rather than assumed away. It
-   * is EXPECTED to be superseded by the programme that migrates resolution to
-   * provider_race_id-first — deliberately, with review, not by accident. It
-   * does not assert that duplication must remain, only that it is the current
-   * behaviour and that nothing here has quietly claimed otherwise.
+   * WHAT THIS ASSERTS INSTEAD. Resolution is provider-id-FIRST with the raw
+   * (course, off_time) lookup retained as the fallback that still resolves the
+   * 719 historical rows; a historical match is returned as-is and never
+   * enriched, stamped or rewritten; and resolution remains resolution — it
+   * reads, and introduces no update path.
+   *
+   * WHAT IS STILL DEFERRED, and must stay visible: runner resolution is still
+   * a normalised horse name (provider_horse_id-first is a separate evidenced
+   * decision), the partial provider index is still NON-unique, and no backfill
+   * attaches provider identity to a historical row.
    */
   const live = readFileSync('src/lib/liveSync.ts', 'utf8');
+
+  // 1. Provider identity is resolved FIRST, and it is a real filtered lookup.
+  const resolver = live.slice(
+    live.indexOf('export async function resolveExistingRaceId'),
+    live.indexOf('export function scrubProviderId')
+  );
+  assert.ok(resolver.length > 0, 'the resolution function must exist');
+  assert.match(resolver, /findIdsByProviderRaceId\(providerRaceId\)/);
+  assert.match(live, /\.eq\('provider_race_id', providerRaceId\)/,
+    'provider identity must be an actual filtered query');
+  // The provider branch precedes the fallback inside the resolver.
+  assert.ok(
+    resolver.indexOf('findIdsByProviderRaceId') <
+      resolver.indexOf('findIdByCourseAndOffTime'),
+    'provider identity must be consulted before the fallback'
+  );
+
+  // 2. The (course, off_time) fallback is UNCHANGED and still present.
   const findRaceId = live.slice(
     live.indexOf('async function findRaceId'),
-    live.indexOf('export interface RacecardsSyncSummary')
+    live.indexOf('/* ---')
   );
-  assert.ok(findRaceId.length > 0, 'findRaceId must still exist to be described');
-
-  // 1. Resolution keys are still the raw course string and the off time.
+  assert.ok(findRaceId.length > 0, 'the fallback lookup must still exist');
   assert.match(findRaceId, /\.eq\('course', course\)/);
   assert.match(findRaceId, /\.eq\('off_time', offTimeIso\)/);
-
-  // 2. provider_race_id takes no part in resolution — anywhere in liveSync.
   assert.equal(
     findRaceId.includes('provider_race_id'),
     false,
-    'findRaceId must not silently start resolving on provider identity'
-  );
-  assert.equal(
-    /\.eq\('provider_race_id'/.test(live),
-    false,
-    'no lookup filters on provider_race_id yet'
+    'the fallback must stay a pure (course, off_time) lookup'
   );
 
-  // 3. Yet capture DOES happen — which is exactly the capture/resolve split.
+  // 3. Ambiguity fails closed — never an arbitrary pick, never a fallback.
+  assert.match(resolver, /if \(ids\.length > 1\) throw new AmbiguousProviderRaceError\(\);/);
+  assert.match(live, /export class AmbiguousProviderRaceError/);
+
+  // 4. Resolution never writes: no update/upsert/insert inside the resolver.
+  for (const forbidden of [/\.update\(/, /\.upsert\(/, /\.insert\(/]) {
+    assert.doesNotMatch(resolver, forbidden, 'resolution must not write');
+  }
+  // ...and no code path stamps provider identity onto an existing row.
+  assert.equal(
+    /\.update\(\{[^}]*provider_race_id/.test(live),
+    false,
+    'a historical row must never be back-stamped with provider identity'
+  );
+
+  // 5. Capture still happens — resolution did not replace it.
   const sync = readFileSync('src/lib/raceSync.ts', 'utf8');
   assert.match(sync, /provider_race_id: trimmedOrNull\(card\.race_id\)/);
 
-  // 4. And the limitation is stated where the next programme will look.
-  assert.match(
-    sync,
-    /provider_race_id-first|resolution to provider_race_id/i,
-    'the raceSlug docblock must name the deferred resolution change'
+  // 6. The remaining deferrals stay named where the next programme will look.
+  assert.equal(
+    /provider_horse_id.{0,80}(first|resolution)/is.test(live) ||
+      /provider_horse_id-first/i.test(readFileSync('src/lib/racecardsDryRun.ts', 'utf8')),
+    true,
+    'runner-side provider resolution must remain explicitly deferred'
   );
+  const migration = readFileSync(MIGRATION, 'utf8');
+  assert.match(migration, /non-unique/i, 'the provider index must still be non-unique');
 });
 
 /* ========================================================================== *
@@ -581,4 +621,243 @@ test('P0 scope: no model, recommendation, lock, evaluation or quote change', () 
   }
   // runner_quotes is untouched by this programme.
   assert.equal(SQL.includes('runner_quotes'), false);
+});
+
+/* ========================================================================== *
+ * 6. provider-id-first race resolution (behaviour, over injected lookups)
+ * ========================================================================== */
+
+/** A recording pair of lookups. No database, no provider, no I/O. */
+function lookups(options: {
+  providerIds?: string[];
+  fallbackId?: string | null;
+  providerThrows?: boolean;
+  fallbackThrows?: boolean;
+} = {}) {
+  const calls: string[] = [];
+  const seam: RaceResolutionLookups = {
+    async findIdsByProviderRaceId(providerRaceId) {
+      calls.push(`byProviderId(${providerRaceId})`);
+      if (options.providerThrows) {
+        throw new Error('races provider-id lookup failed: 42501 permission denied');
+      }
+      return options.providerIds ?? [];
+    },
+    async findIdByCourseAndOffTime(course, offTimeIso) {
+      calls.push(`byCourseOffTime(${course},${offTimeIso})`);
+      if (options.fallbackThrows) throw new Error('races lookup failed: fixture');
+      return options.fallbackId ?? null;
+    },
+  };
+  return { seam, calls };
+}
+
+const STORED_UUID = '11111111-2222-3333-4444-555555555555';
+const HISTORICAL_UUID = '99999999-8888-7777-6666-555555555555';
+
+/** The mapped row a corrected card produces: same provider id, changed details. */
+function mappedRace(overrides: Partial<ResolvableRace> = {}): ResolvableRace {
+  return {
+    provider_race_id: 'rac_abc123',
+    course: 'Lingfield (AW)',
+    off_time: '2026-06-12T14:30:00.000Z',
+    ...overrides,
+  };
+}
+
+test('RESOLUTION: a non-null provider id is queried FIRST and one match wins', async () => {
+  const { seam, calls } = lookups({ providerIds: [STORED_UUID] });
+  const id = await resolveExistingRaceId(mappedRace(), seam);
+
+  assert.equal(id, STORED_UUID, 'the existing internal uuid is returned');
+  // The provider lookup ran first, and the fallback was NOT consulted at all.
+  assert.deepEqual(calls, ['byProviderId(rac_abc123)']);
+});
+
+test('RESOLUTION: a corrected off time or course still resolves to the same race', async () => {
+  // This is the whole point of the tranche: neither correction may create a
+  // second uuid, a second slug or a second runner cohort.
+  for (const corrected of [
+    mappedRace({ off_time: '2026-06-12T14:35:00.000Z' }), // off time corrected
+    mappedRace({ course: 'Lingfield' }), // raw course label corrected
+    mappedRace({ course: 'Lingfield', off_time: '2026-06-12T15:00:00.000Z' }), // both
+  ]) {
+    const { seam, calls } = lookups({ providerIds: [STORED_UUID], fallbackId: null });
+    const id = await resolveExistingRaceId(corrected, seam);
+    assert.equal(id, STORED_UUID, 'the corrected card resolves to the EXISTING race');
+    assert.deepEqual(calls, ['byProviderId(rac_abc123)'], 'no fallback, so no second insert');
+  }
+});
+
+test('RESOLUTION: zero provider matches falls through to the unchanged fallback', async () => {
+  const { seam, calls } = lookups({ providerIds: [], fallbackId: HISTORICAL_UUID });
+  const id = await resolveExistingRaceId(mappedRace(), seam);
+
+  assert.equal(id, HISTORICAL_UUID);
+  assert.deepEqual(calls, [
+    'byProviderId(rac_abc123)',
+    'byCourseOffTime(Lingfield (AW),2026-06-12T14:30:00.000Z)',
+  ]);
+});
+
+test('RESOLUTION: a null provider id goes straight to the fallback', async () => {
+  const { seam, calls } = lookups({ fallbackId: HISTORICAL_UUID });
+  const id = await resolveExistingRaceId(mappedRace({ provider_race_id: null }), seam);
+
+  assert.equal(id, HISTORICAL_UUID, 'historical rows still resolve');
+  assert.deepEqual(calls, ['byCourseOffTime(Lingfield (AW),2026-06-12T14:30:00.000Z)']);
+
+  // A blank provider id is defensively treated as absent, never as a wildcard.
+  const blank = lookups({ fallbackId: HISTORICAL_UUID });
+  await resolveExistingRaceId(mappedRace({ provider_race_id: '' }), blank.seam);
+  assert.deepEqual(blank.calls, ['byCourseOffTime(Lingfield (AW),2026-06-12T14:30:00.000Z)']);
+});
+
+test('RESOLUTION: neither lookup matching returns null so the caller inserts once', async () => {
+  const { seam, calls } = lookups({ providerIds: [], fallbackId: null });
+  const id = await resolveExistingRaceId(mappedRace(), seam);
+
+  assert.equal(id, null, 'null is the signal to insert');
+  assert.equal(calls.length, 2, 'exactly one provider lookup and one fallback lookup');
+
+  // The insert path itself is unchanged: still one insert of the mapped row.
+  const live = readFileSync('src/lib/liveSync.ts', 'utf8');
+  assert.match(live, /raceId = randomUUID\(\);/);
+  assert.match(live, /from\('races'\)\.insert\(\{ id: raceId, \.\.\.raceRow \}\)/);
+  const inserts = [...live.matchAll(/from\('races'\)\.insert\(/g)];
+  assert.equal(inserts.length, 1, 'exactly one races insert site');
+});
+
+test('RESOLUTION: duplicate provider rows FAIL CLOSED — no pick, no fallback, no insert', async () => {
+  const { seam, calls } = lookups({
+    providerIds: [STORED_UUID, HISTORICAL_UUID],
+    fallbackId: HISTORICAL_UUID,
+  });
+
+  await assert.rejects(
+    resolveExistingRaceId(mappedRace(), seam),
+    (err: unknown) => {
+      assert.ok(err instanceof AmbiguousProviderRaceError);
+      // The provider id value is never exposed in the safe error.
+      assert.ok(!err.message.includes('rac_abc123'));
+      assert.doesNotMatch(err.message, /\b(rac|crs|hrs|trn|jck)_/);
+      assert.match(err.message, /AMBIGUOUS/);
+      assert.match(err.message, /operator investigation/);
+      return true;
+    },
+  );
+
+  // It did not arbitrarily pick a row, and it did not consult the fallback.
+  assert.deepEqual(calls, ['byProviderId(rac_abc123)'], 'no fallback after ambiguity');
+});
+
+test('RESOLUTION: a provider-lookup read failure fails closed, never as "not found"', async () => {
+  const { seam, calls } = lookups({ providerThrows: true, fallbackId: HISTORICAL_UUID });
+
+  await assert.rejects(resolveExistingRaceId(mappedRace(), seam), /provider-id lookup failed/);
+  // Crucially: the fallback did NOT run, so a read failure can never be
+  // mistaken for "no such race" and turned into an insert.
+  assert.deepEqual(calls, ['byProviderId(rac_abc123)']);
+});
+
+test('RESOLUTION: the driver message is scrubbed of the provider id value', () => {
+  const leaked = 'invalid input for eq: provider_race_id=rac_abc123 near "rac_abc123"';
+  const safe = scrubProviderId(leaked, 'rac_abc123');
+  assert.ok(!safe.includes('rac_abc123'));
+  assert.equal(safe.split('[provider-id]').length - 1, 2, 'every occurrence is replaced');
+  assert.match(safe, /invalid input for eq/, 'the diagnostic shape survives');
+  // A blank id is a no-op rather than a global replacement.
+  assert.equal(scrubProviderId('untouched', ''), 'untouched');
+
+  // The live lookup routes its driver message through the scrubber.
+  const live = readFileSync('src/lib/liveSync.ts', 'utf8');
+  assert.match(live, /scrubProviderId\(error\.message, providerRaceId\)/);
+});
+
+test('RESOLUTION: no existing race row is updated, enriched or re-slugged', () => {
+  const live = readFileSync('src/lib/liveSync.ts', 'utf8');
+
+  // The ONLY races update remains settlement, with its frozen payload.
+  const raceUpdates = [...live.matchAll(/\.update\(\{([^}]*)\}\)/g)].map((m) => m[1]);
+  const settlementPatch = raceUpdates.find((p) => p.includes("status: 'result'"));
+  assert.ok(settlementPatch, 'the settlement update must still exist');
+  for (const frozen of [
+    'race_slug',
+    'off_time',
+    'course',
+    'race_name',
+    'course_key',
+    'provider_race_id',
+    'provider_course_id',
+    'race_type',
+    'going',
+    'distance_f',
+    'race_class',
+    'age_band',
+    'pattern',
+    'field_size',
+  ]) {
+    assert.equal(
+      settlementPatch!.includes(frozen),
+      false,
+      `no write path may rewrite ${frozen}`
+    );
+  }
+
+  // Runner matching is untouched: still normalised horse name, insert-only.
+  assert.match(live, /\.select\('id, horse_name'\)\s*\n\s*\.eq\('race_id', raceId\)/);
+  assert.match(live, /!present\.has\(normalizeHorseName\(r\.horse_name\)\)/);
+  assert.equal(
+    /provider_horse_id/.test(live),
+    false,
+    'provider_horse_id-first runner resolution is NOT part of this tranche'
+  );
+
+  // The settlement path still resolves on (course, off_time) — deliberately
+  // frozen: changing it would be a second behavioural change.
+  assert.match(live, /const raceId = await findRaceId\(course, resolved\.offTimeIso\);/);
+});
+
+test('RESOLUTION: no schema change accompanies this tranche', () => {
+  // The provider index stays partial and NON-unique; nothing here promotes it.
+  const migration = readFileSync(MIGRATION, 'utf8');
+  assert.match(migration, /create index if not exists\s+races_provider_race_id_idx/);
+  assert.equal(
+    /create unique index[\s\S]*provider_race_id/i.test(migration),
+    false,
+    'the partial index must not become unique on this evidence'
+  );
+  const files = readdirSync('supabase/migrations').filter((f) => f.endsWith('.sql'));
+  assert.equal(
+    files.filter((f) => /provider.?id.?resolution|resolution/i.test(f)).length,
+    0,
+    'this tranche adds no migration'
+  );
+});
+
+/*
+ * POST-RELEASE VERIFICATION ANCHORS — documentation, never production logic.
+ *
+ * These are the recorded fingerprints of the first controlled capture
+ * (2026-08-17). They exist so a reviewer can find the exact values to re-check
+ * AFTER release; nothing in the runtime reads them, and no test asserts them
+ * against a database. Recording them as a constant here would risk them being
+ * mistaken for a runtime expectation, so they live in prose:
+ *
+ *   races        : 25          fingerprint 039bbcf9a246ebe65211714f72b734ed
+ *   runners      : 217         fingerprint 7450ac0c3935b1bd4ae1112e952e9675
+ *
+ * The post-release check is that BOTH remain unchanged after this tranche
+ * ships, because resolution-only changes must not rewrite a single stored row.
+ */
+test('RESOLUTION: identity fingerprints are documentation, not runtime logic', () => {
+  const live = readFileSync('src/lib/liveSync.ts', 'utf8');
+  const dryRun = readFileSync('src/lib/racecardsDryRun.ts', 'utf8');
+  for (const fingerprint of [
+    '039bbcf9a246ebe65211714f72b734ed',
+    '7450ac0c3935b1bd4ae1112e952e9675',
+  ]) {
+    assert.equal(live.includes(fingerprint), false, 'no runtime file may embed a fingerprint');
+    assert.equal(dryRun.includes(fingerprint), false, 'no runtime file may embed a fingerprint');
+  }
 });

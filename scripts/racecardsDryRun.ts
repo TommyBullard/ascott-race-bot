@@ -50,6 +50,7 @@ import {
   renderPreviewFailure,
   renderRacecardsDryRunConsole,
   runRacecardsDryRun,
+  type ExistingProviderRaceRow,
   type ExistingRaceRow,
   type ExistingRunnerRow,
   type PreviewDay,
@@ -137,6 +138,28 @@ export const supabaseRacecardsReadSeam: RacecardsDryRunReadSeam = {
     if (error) throw new Error(`races count failed: ${redactPreviewDetail(error)}`);
     if (typeof count !== 'number') throw new Error('races count returned no value');
     return count;
+  },
+
+  async findRacesByProviderIds(
+    providerRaceIds: readonly string[],
+  ): Promise<ExistingProviderRaceRow[]> {
+    const rows: ExistingProviderRaceRow[] = [];
+    for (const batch of chunk(providerRaceIds, READ_CHUNK)) {
+      const { data, error } = await supabaseAdmin
+        .from('races')
+        .select('id, provider_race_id')
+        .in('provider_race_id', batch);
+      // The filter values ARE provider ids, so the driver message is redacted
+      // before it can carry one into an Error.
+      if (error) throw new Error(`races provider-id lookup failed: ${redactPreviewDetail(error)}`);
+      for (const row of (data ?? []) as {
+        id: string | number;
+        provider_race_id: string | null;
+      }[]) {
+        rows.push({ id: String(row.id), provider_race_id: row.provider_race_id ?? null });
+      }
+    }
+    return rows;
   },
 
   async findRacesByOffTimes(offTimes: readonly string[]): Promise<ExistingRaceRow[]> {
