@@ -59,8 +59,11 @@ import { parseRacecardsDryRunArgs } from './racecardsDryRun';
 
 const LIB_PATH = 'src/lib/racecardsDryRun.ts';
 const CLI_PATH = 'scripts/racecardsDryRun.ts';
-const LIB = () => readFileSync(LIB_PATH, 'utf8');
-const CLI = () => readFileSync(CLI_PATH, 'utf8');
+// Line endings are normalised to \n: this repository is checked out with
+// core.autocrlf=true, so a committed file arrives as CRLF and a structural
+// assertion looking for a literal '\n}\n' would silently parse nothing.
+const LIB = () => readFileSync(LIB_PATH, 'utf8').replace(/\r\n/g, '\n');
+const CLI = () => readFileSync(CLI_PATH, 'utf8').replace(/\r\n/g, '\n');
 
 /**
  * Source with comments removed.
