@@ -705,8 +705,22 @@ test('29. the homepage renders through the shell and owns no main of its own', (
   // Still no direct stylesheet import: tokens arrive via the shell, not the page.
   assert.equal(/from '@\/styles\/tokens\.css'/.test(HOMEPAGE_SRC), false);
 
-  // The 3D.1 compatibility surface is untouched by this tranche.
-  assert.match(HOMEPAGE_SRC, /const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';/);
+  /*
+   * SUPERSEDED BY SLICE 3D C2 — INVERTED, NOT DROPPED.
+   *
+   * This asserted that the 3D.1 compatibility surface was untouched by the
+   * shell-adoption tranche. C2 is the tranche that REMOVED it: the page frame
+   * now declares neither a background nor a foreground and inherits both,
+   * together, from `.rb-app`. Asserting its absence here keeps this file's
+   * stake in the page frame rather than silently dropping the contract.
+   *
+   * `homepageContrast` test 26 owns the positive inheritance contract.
+   */
+  assert.equal(
+    /const LEGACY_LIGHT_PAGE_SURFACE/.test(HOMEPAGE_SRC),
+    false,
+    'the 3D.1 containment surface stays removed'
+  );
 });
 
 test('29a. the homepage loading state renders the shared skeleton (slice 3D.2)', () => {

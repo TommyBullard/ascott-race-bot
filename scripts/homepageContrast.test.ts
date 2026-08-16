@@ -231,38 +231,81 @@ function assertPageTokenForegroundsStayOffLegacySurfaces(): void {
     ...PAGE_CODE.matchAll(/color: 'var\((--rb-(?:text|status|accent)-[a-z-]+)\)'/g),
   ].map((m) => m[1]);
 
+  /*
+   * SUPERSEDED BY SLICE 3D C2 — THE SECOND AND FINAL WIDENING.
+   *
+   * C1 allowed exactly three token foregrounds, all inside `rb-status-frame`,
+   * and forbade them everywhere still standing on the containment surface. C2
+   * removed that surface, so the three regions this list used to protect —
+   * `styles.page`, the intro and the nav — have themselves migrated, and the
+   * allowance grows to six while the prohibition side empties, exactly as the
+   * C1 rationale predicted it would.
+   *
+   * It is still an EQUALITY, not a floor: a seventh token foreground fails
+   * here, and so does any change to which roles are used or the order they
+   * appear in. That is what keeps this stronger than the blanket ban it
+   * replaced two tranches ago.
+   */
   assert.deepEqual(
     declared,
-    ['--rb-text-muted', '--rb-text-muted', '--rb-status-warning'],
-    'page.tsx may declare exactly the three C1 status-frame foregrounds, in source order'
+    [
+      '--rb-text-muted', // LiveModeBar cadence / static-view line (C1)
+      '--rb-text-muted', // LiveModeBar refreshed timestamp (C1)
+      '--rb-status-warning', // LiveModeBar warning (C1)
+      '--rb-text-secondary', // RaceDayNav empty message (C2)
+      '--rb-accent-analytical', // raceDaySecondaryLinkStyle (C2)
+      '--rb-text-secondary', // intro paragraph (C2)
+    ],
+    'page.tsx declares exactly the C1 + C2 token foregrounds, in source order'
   );
 
   /*
-   * The regions still on `LEGACY_LIGHT_PAGE_SURFACE`. Each is bounded to
-   * itself, so a token entering ANY of them fails by name rather than being
-   * absorbed into a page-wide count.
+   * THE PROHIBITION SIDE IS NOW EMPTY, AND THAT IS THE CONTRACT.
+   *
+   * No region of this page stands on a fixed light surface any more, so there
+   * is no region a token foreground could be unsafe in. The invariant that
+   * replaces it is the inverse: no page-level style may reintroduce a fixed
+   * surface or a fixed foreground under those tokens. Test 26 owns the
+   * positive inheritance contract; this is the guard that keeps the page frame
+   * from quietly reacquiring either half of a legacy pair.
    */
-  const legacyRegions: Array<[string, string]> = [
-    ['styles.page', styleBlock('page')],
-    ['raceDaySecondaryLinkStyle', constStyleBody('raceDaySecondaryLinkStyle')],
-    ['RaceDayNav', functionBody('RaceDayNav')],
-  ];
-  for (const [name, body] of legacyRegions) {
-    for (const forbidden of ['var(--rb-text-', 'var(--rb-status-', 'var(--rb-accent-']) {
-      assert.equal(
-        body.includes(forbidden),
-        false,
-        `${name} still sits on the containment surface and must not declare ${forbidden}`
-      );
-    }
-  }
-
-  /* The intro paragraph is inline in the render, and is covered by the exact
-   * allowance above: it still declares the legacy literal, not a token. */
-  assert.ok(
-    PAGE_CODE.includes("color: '#57606a'"),
-    'the intro paragraph remains legacy until the frame flip'
+  const page = styleBlock('page');
+  assert.equal(/background/.test(page), false, 'styles.page must not reacquire a surface');
+  assert.equal(/\bcolor:/.test(page), false, 'styles.page must not reacquire a foreground');
+  assert.equal(
+    /LEGACY_LIGHT_PAGE_SURFACE/.test(PAGE_CODE),
+    false,
+    'the containment constant must not return'
   );
+}
+
+/**
+ * THE C2 SUCCESSOR TO "the containment remains active".
+ *
+ * Every tranche from part 1 onward ended by re-asserting that it had NOT
+ * touched the page frame — the constant still declared, still applied. C2 is
+ * the tranche that removes it, so each of those guards is superseded by this
+ * one, which asserts the same boundary from the other side: the frame is now
+ * token-paired and neither half of a legacy pair may return.
+ *
+ * Kept as a shared helper for the same reason the C1 one was: five call sites
+ * asserting the page frame independently is how they drift apart.
+ */
+function assertPageFrameIsTokenPaired(): void {
+  assert.equal(
+    /LEGACY_LIGHT_PAGE_SURFACE/.test(PAGE_CODE),
+    false,
+    'the containment constant must stay removed'
+  );
+  const page = styleBlock('page');
+  assert.equal(/background/.test(page), false, 'styles.page owns no surface');
+  assert.equal(/color:/.test(page), false, 'styles.page owns no foreground');
+  assert.ok(page.includes('maxWidth: 820'), 'and keeps its geometry');
+
+  /* The pair it inherits instead, read from the shell rule that supplies it. */
+  const app = cssRule('.rb-app');
+  assert.match(app, /background: var\(--rb-bg-app\)/, '.rb-app supplies the surface');
+  assert.match(app, /color: var\(--rb-text-primary\)/, 'and the paired foreground');
 }
 
 /* ========================================================================== *
@@ -378,7 +421,7 @@ function cssRule(selector: string): string {
 }
 
 /** The containment surface, as the page actually declares it. */
-const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';
+const LEGACY_CONTAINMENT_SURFACE = '#e7ebf1';
 
 /**
  * The legacy primary foreground. `styles.page` is the ORIGINAL anchor: every
@@ -391,30 +434,54 @@ const LEGACY_PRIMARY_FOREGROUND = "color: '#1f2328'";
  * 1-3. the containment surface and its relationship to the token
  * ========================================================================== */
 
-test('1. LEGACY_LIGHT_PAGE_SURFACE exists and is the expected fixed literal', () => {
-  assert.match(
-    PAGE_CODE,
-    /const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';/,
-    'the containment surface must be a named module-level constant'
+test('1. LEGACY_LIGHT_PAGE_SURFACE is GONE (slice 3D C2 inverts the containment contract)', () => {
+  /*
+   * INVERTED, NOT DELETED.
+   *
+   * This test required the containment constant to exist for the whole of
+   * slice 3D. Its own removal condition — every homepage region completing a
+   * PAIRED foreground/surface migration — was met by C1, so C2 deleted it and
+   * this becomes the absence contract that stops it returning.
+   *
+   * The constant is checked in COMMENT-STRIPPED source: page.tsx legitimately
+   * still names it in the docblock that records why it existed, and prose must
+   * not satisfy a removal assertion.
+   */
+  assert.equal(
+    /LEGACY_LIGHT_PAGE_SURFACE/.test(PAGE_CODE),
+    false,
+    'the containment constant must not be declared or referenced in code'
+  );
+  assert.equal(
+    /#e7ebf1/.test(PAGE_CODE),
+    false,
+    'nor may its literal be reintroduced under another name'
   );
 });
 
 test('2. the LIGHT --rb-bg-app token is #e7ebf1', () => {
-  assert.equal(lightToken('--rb-bg-app'), LEGACY_LIGHT_PAGE_SURFACE);
+  assert.equal(lightToken('--rb-bg-app'), LEGACY_CONTAINMENT_SURFACE);
 });
 
-test('3. the constant matches the light --rb-bg-app value (drift detector)', () => {
+test('3. the page now INHERITS the light surface it used to pin (drift detector)', () => {
   /*
-   * The constant is deliberately a FIXED literal and does not track the token
-   * at runtime — it has to stay light when the token goes dark. This assertion
-   * exists so the two cannot silently diverge: if the design system ever
-   * restyles its light application background, this fails and the containment
-   * surface is re-decided deliberately rather than drifting out of alignment.
+   * SUPERSEDED BY C2, AND THIS IS WHY THE FLIP WAS SAFE.
+   *
+   * The drift detector used to prove a fixed constant still equalled the light
+   * token. With the constant gone the same fact does different work: because
+   * `--rb-bg-app` IS `#e7ebf1` in the light scheme, deleting the containment
+   * changed NOTHING in light mode. The historical value is retained here as
+   * the evidence for that claim, not as a live production reference.
    */
   assert.equal(
-    LEGACY_LIGHT_PAGE_SURFACE,
     lightToken('--rb-bg-app'),
-    'containment surface has drifted from the light --rb-bg-app value'
+    LEGACY_CONTAINMENT_SURFACE,
+    'light --rb-bg-app must still equal the surface the containment used to pin'
+  );
+  assert.notEqual(
+    lightToken('--rb-bg-app'),
+    darkToken('--rb-bg-app'),
+    'and the dark scheme must genuinely differ, or the flip would be a no-op'
   );
 });
 
@@ -422,15 +489,17 @@ test('3. the constant matches the light --rb-bg-app value (drift detector)', () 
  * 4-6. styles.page keeps its existing geometry and gains only a background
  * ========================================================================== */
 
-test('4. styles.page uses the named containment surface as its background', () => {
-  assert.match(
-    PAGE_CODE,
-    /background: LEGACY_LIGHT_PAGE_SURFACE,/,
-    'the wrapper must be opaque, via the named constant rather than a literal'
-  );
+test('4. styles.page declares NO background (slice 3D C2)', () => {
+  /*
+   * INVERTED. The wrapper was opaque so that legacy foregrounds stayed on the
+   * light background they were measured against. It is now transparent to
+   * `.rb-app`, which paints `--rb-bg-app` and is the nearest painted ancestor.
+   */
+  const page = styleBlock('page');
+  assert.equal(/background/.test(page), false, 'the wrapper must inherit its surface');
 });
 
-test('5. the styles.page block itself still declares the legacy dark foreground', () => {
+test('5. the styles.page block declares NO foreground and keeps its geometry (C2)', () => {
   /*
    * BOUNDED ON PURPOSE. This assertion used to match `color: '#1f2328'` across
    * the whole page source. That was unambiguous while the literal appeared
@@ -447,88 +516,65 @@ test('5. the styles.page block itself still declares the legacy dark foreground'
    * surfaces is precisely the unsafe half-migration the containment prevents.
    */
   const page = styleBlock('page');
-  assert.ok(
+  assert.equal(
     page.includes(LEGACY_PRIMARY_FOREGROUND),
-    'styles.page keeps its legacy foreground'
+    false,
+    'styles.page must no longer declare the legacy foreground'
   );
-  assert.ok(
-    page.includes('background: LEGACY_LIGHT_PAGE_SURFACE'),
-    'styles.page keeps the named containment surface'
-  );
-  assert.ok(page.includes('maxWidth: 820'), 'styles.page keeps its container width');
+  assert.equal(/color:/.test(page), false, 'nor any other inline foreground');
+  assert.equal(/background/.test(page), false, 'nor a surface');
+
+  /* The geometry it DOES own is unchanged — this was never a layout change. */
+  for (const geometry of [
+    'maxWidth: 820',
+    "margin: '2rem auto'",
+    "padding: '0 1rem'",
+    'paddingBottom:',
+    "fontFamily: 'system-ui",
+  ]) {
+    assert.ok(page.includes(geometry), `styles.page keeps ${geometry}`);
+  }
 });
 
-test('5b. the remaining explicit foregrounds reproduce the styles.page anchor', () => {
+test('5b. no region reproduces a legacy page foreground (slice 3D C2)', () => {
   /*
-   * SOURCE-LEVEL EQUIVALENCE, NOT A COMPUTED-STYLE COMPARISON.
+   * THE ANCHOR IS GONE, SO THIS BECOMES A PURE ABSENCE CONTRACT.
    *
-   * Before slice 3D.4a these five surfaces declared no `color` and inherited
-   * their primary foreground from `styles.page`. 3D.4a makes that inheritance
-   * explicit. Asserting each bounded block against the SAME constant that
-   * `styles.page` uses is what proves the explicit declarations reproduce the
-   * previously inherited value rather than merely happening to look similar —
-   * repeating the literal independently in six places would prove nothing.
+   * 3D.4a made five surfaces declare the `styles.page` foreground explicitly so
+   * each could later migrate without stranding an inherited colour. Every one
+   * has since migrated — the last, `liveBarStyle`, in C1 — and C2 removed the
+   * anchor itself. The equivalence this test policed therefore has neither
+   * side left, and it inverts: `#1f2328` must appear nowhere in this page.
    *
-   * A later paired visual migration must update each region deliberately. It
-   * must not change this shared legacy anchor as a side effect: doing so would
-   * silently desynchronise the five regions from the frame they were derived
-   * from, and this test is what makes that fail.
-   *
-   * This is a source contract. It does not compare browser-computed styles.
-   */
-  const page = styleBlock('page');
-  assert.ok(page.includes(LEGACY_PRIMARY_FOREGROUND), 'the anchor must hold first');
-
-  /*
-   * THE SET IS NOW EMPTY — and that is the point of slice 3D C1.
-   *
-   * The set SHRANK as regions migrated: `nextActionStyle` left in slice 3D
-   * phase 1; `accuracyBar` and `perfPanel` left in evidence-migration part 1;
-   * `styles.panel` (the tipster panels) left in the tipster tranche, which
-   * DELETED it rather than re-anchoring it. `liveBarStyle` was the LAST holder
-   * of the anchor, and C1 migrated it to `rb-status-frame`.
-   *
-   * So the anchor relationship this test was built to police no longer has a
-   * second party. It is deliberately SUPERSEDED here rather than deleted: the
-   * assertion inverts into "no region reproduces the page foreground any more",
-   * which is strictly stronger than the equivalence it replaces. Test 25 owns
-   * the live bar's positive pairing contract.
+   * That is strictly stronger than the equivalence it replaces, and it is what
+   * stops the legacy frame returning under any name.
    */
   assert.equal(
-    functionBody('liveBarClass').includes(LEGACY_PRIMARY_FOREGROUND),
+    PAGE_CODE.includes(LEGACY_PRIMARY_FOREGROUND),
     false,
-    'liveBarClass carries a class name, never a foreground'
+    'the legacy primary foreground must not appear anywhere in page.tsx'
   );
   assert.equal(
-    constStyleBody('liveBarStyle').includes(LEGACY_PRIMARY_FOREGROUND),
+    /#1f2328/.test(PAGE_CODE),
     false,
-    'liveBarStyle must no longer reproduce the legacy page foreground'
+    'nor the bare literal, under any property'
   );
 
-  // The migrated regions must NOT reacquire a legacy foreground.
-  for (const key of ['accuracyBar', 'perfPanel', 'tipsterPanel'] as const) {
-    assert.equal(
-      styleBlock(key).includes(LEGACY_PRIMARY_FOREGROUND),
-      false,
-      `styles.${key} is paired via rb-evidence-panel and must not re-declare the legacy colour`
-    );
-  }
-
-  /*
-   * `styles.panel` is gone, not merely unanchored. Test 22 owns the tipster
-   * panels' positive pairing; asserting the key's absence here is what stops
-   * the legacy surface returning under its old name.
-   */
+  /* The keys that were deleted rather than re-anchored must stay deleted. */
   assert.equal(
     /(^|\s)panel: \{/.test(PAGE_CODE),
     false,
     'the legacy tipster panel surface must not return'
   );
-
   assert.equal(
     /function nextActionStyle\(/.test(PAGE_CODE),
     false,
     'nextActionStyle was superseded by the rb-status-frame classes'
+  );
+  assert.equal(
+    /function liveBarStyle\(/.test(PAGE_CODE),
+    false,
+    'liveBarStyle was superseded by liveBarClass + geometry (C1)'
   );
 });
 
@@ -699,132 +745,111 @@ test('12. RETIRED — the styles.muted count contract reached zero', () => {
  * 13. the removal condition is recorded
  * ========================================================================== */
 
-test('13. the temporary removal condition is documented at the constant', () => {
-  const at = PAGE_SRC.indexOf('const LEGACY_LIGHT_PAGE_SURFACE');
-  assert.notEqual(at, -1, 'the constant must exist');
-  // The doc block sits immediately above the declaration.
-  const docBlock = PAGE_SRC.slice(Math.max(0, at - 2600), at);
-  assert.match(docBlock, /REMOVAL CONDITION/, 'a removal condition must be stated');
-  assert.match(docBlock, /TEMPORARY|TRANSITIONAL/, 'the measure must be marked temporary');
-  assert.match(
-    docBlock,
-    /paired|PAIRED/,
-    'the removal condition must name paired foreground/surface migration'
-  );
-});
+/*
+ * 13. RETIRED BY SLICE 3D C2 — the removal condition it policed was met.
+ *
+ * It required the containment constant to carry a docblock naming a REMOVAL
+ * CONDITION, marking itself TEMPORARY, and describing paired migration. That
+ * condition — every homepage region completing a paired foreground/surface
+ * migration — was satisfied by C1, and C2 acted on it. There is no constant
+ * left to document, so the test has no subject. Test 1 now asserts its
+ * absence and test 26 owns the inheritance that replaced it.
+ */
 
 /* ========================================================================== *
  * 14-15. measured contrast
  * ========================================================================== */
 
-test('14. the migrated page-surface foregrounds clear 4.5:1 on the containment surface', () => {
+test('14. the page-frame foregrounds clear AA on the surface they now inherit', () => {
   /*
-   * `#59626f` was dropped from this table by slice 3D.2: `styles.pageMuted` no
-   * longer exists, because the two states that used it now render via
-   * primitives that own their surface as well as their foreground.
+   * SUPERSEDED BY C2. This measured the legacy foregrounds against the fixed
+   * containment surface. Those foregrounds are gone; what replaces them is
+   * measured against `--rb-bg-app`, the surface `.rb-app` actually paints and
+   * `styles.page` now inherits. Both schemes, derived from the token rules.
    */
-  const pairs: [string, string][] = [
-    ['#1f2328', 'inherited page text (h1, nav prompt)'],
-    ['#57606a', 'intro paragraph'],
-  ];
-  for (const [fg, what] of pairs) {
-    const ratio = contrast(fg, LEGACY_LIGHT_PAGE_SURFACE);
-    assert.ok(
-      ratio >= AA_NORMAL_TEXT,
-      `${what}: ${fg} on ${LEGACY_LIGHT_PAGE_SURFACE} is ${ratio.toFixed(2)}:1`
-    );
+  const app = cssRule('.rb-app');
+  const surfaceTok = /background: var\((--rb-bg-app)\)/.exec(app);
+  assert.ok(surfaceTok, '.rb-app must declare the application background token');
+
+  for (const [token, what] of [
+    ['--rb-text-primary', 'inherited page text (h1, nav root)'],
+    ['--rb-text-secondary', 'intro paragraph and nav empty message'],
+    ['--rb-accent-analytical', 'race-day nav secondary links'],
+  ] as const) {
+    for (const scheme of ['light', 'dark'] as const) {
+      const fg = scheme === 'light' ? lightToken(token) : darkToken(token);
+      const bg = scheme === 'light' ? lightToken(surfaceTok[1]) : darkToken(surfaceTok[1]);
+      const ratio = contrast(fg, bg);
+      assert.ok(
+        ratio >= AA_NORMAL_TEXT,
+        `${what}: ${token} on ${surfaceTok[1]} (${scheme}) is ${ratio.toFixed(2)}:1`
+      );
+    }
   }
 });
 
-test('14c. the race-day nav secondary links clear AA on the containment surface', () => {
+test('14c. the race-day nav secondary links are token-paired and clear AA (C2)', () => {
   /*
-   * SUPERSEDES THE KNOWN-SHORTFALL EXEMPTION.
+   * SUPERSEDED TWICE, DELIBERATELY, AND THIS IS THE END STATE.
    *
-   * This test used to record `#0969da` at ~4.34:1 on the containment surface as
-   * a bounded, deliberately-unfixed shortfall, with an upper bound that would
-   * fail the moment the navigation tranche corrected it. That has now happened:
-   * the links are `#0550ae`, which reaches ~6.35:1 on the same surface. The
-   * exemption — the ~4.3 floor, the `< 4.5` bound and the "known shortfall"
-   * framing — is DELETED rather than retained, and what replaces it is a
-   * permanent passing contract.
+   * v1 recorded `#0969da` at ~4.34:1 as a bounded known shortfall. PR #15
+   * replaced that with a passing contract at `#0550ae` (~6.35:1) and pinned a
+   * further clause: `rb-inline-link` must remain UNUSABLE here, because its
+   * `--rb-accent-analytical` flips light in the dark scheme and the surface
+   * beneath was fixed light.
    *
-   * `#cf222e` was removed from the old list earlier and is not reinstated here:
-   * slice 3D.2 replaced the inline error paragraph with `ErrorState`, so the
-   * failing TEXT pair no longer exists. No known-shortfall entry remains, which
-   * is why this test no longer maintains a list at all.
-   *
-   * A LEGACY DARKENING, NOT `rb-inline-link`. Asserted below, because the token
-   * class would be actively wrong here while the containment stands.
+   * C2 removed that surface, so the clause is not merely obsolete — it is now
+   * FALSE, and keeping it would forbid the correct treatment. It is replaced
+   * by its inverse: the token is measured on the surface the links actually
+   * sit on, and must clear AA in BOTH schemes.
    */
+  const navLink = constStyleBody('raceDaySecondaryLinkStyle');
 
-  /* --- the foreground, parsed from the production style ------------------- */
-
-  const navAt = PAGE_CODE.indexOf('const raceDaySecondaryLinkStyle');
-  assert.notEqual(navAt, -1, 'raceDaySecondaryLinkStyle must exist');
-  const navLink = PAGE_CODE.slice(navAt, PAGE_CODE.indexOf('};', navAt));
-
-  const navFg = /color: '(#[0-9a-fA-F]{6})'/.exec(navLink);
-  assert.ok(navFg, 'the link style must declare a foreground');
-  assert.equal(navFg[1], '#0550ae', 'the corrected legacy darkening');
-  assert.equal(
-    navLink.includes('#0969da'),
-    false,
-    'the superseded value must not remain in this style'
-  );
+  const tokenFg = /color: 'var\((--rb-[a-z-]+)\)'/.exec(navLink);
+  assert.ok(tokenFg, 'the link style must declare a token foreground');
+  assert.equal(tokenFg[1], '--rb-accent-analytical', 'the analytical accent');
+  for (const gone of ['#0550ae', '#0969da']) {
+    assert.equal(navLink.includes(gone), false, `${gone} must not remain in this style`);
+  }
 
   /*
-   * The OTHER `#0969da` on the page belongs to `countdownStyle`, which is
-   * self-contained (`#ddf4ff` fill) and is not this link. Pinning it here stops
-   * an unrelated occurrence either satisfying or defeating this contract.
+   * The OTHER legacy blues on the page belong to self-contained chips — the
+   * countdown pill (`#0969da` on `#ddf4ff`) and the Beta badge (`#0550ae` on
+   * `#ddf4ff`). Pinning them here stops an unrelated occurrence either
+   * satisfying or defeating this contract.
    */
   assert.ok(
     functionBody('countdownStyle').includes("color: '#0969da'"),
     'the countdown chip keeps its own separate legacy colour'
   );
 
-  /* --- the surface, parsed from the ACTIVE containment application -------- */
+  /* --- measured on the surface the links now inherit ---------------------- */
+
+  const surfaceTok = /background: var\((--rb-bg-app)\)/.exec(cssRule('.rb-app'));
+  assert.ok(surfaceTok, '.rb-app must supply the page surface');
+
+  const light = contrast(lightToken(tokenFg[1]), lightToken(surfaceTok[1]));
+  const dark = contrast(darkToken(tokenFg[1]), darkToken(surfaceTok[1]));
+  for (const [scheme, ratio] of [['light', light], ['dark', dark]] as const) {
+    assert.ok(ratio >= AA_NORMAL_TEXT, `nav links (${scheme}) are ${ratio.toFixed(2)}:1`);
+  }
+  assert.ok(Math.abs(light - 6.82) < 0.05, `expected ~6.82:1 light, got ${light.toFixed(2)}`);
+  assert.ok(Math.abs(dark - 7.56) < 0.05, `expected ~7.56:1 dark, got ${dark.toFixed(2)}`);
 
   /*
-   * Read from `styles.page` rather than restated: the links inherit whatever
-   * that wrapper actually paints, so if the containment were removed or
-   * repointed this measurement would follow it instead of silently passing
-   * against a stale literal.
+   * `rb-inline-link` is now COMPATIBLE but deliberately NOT adopted: it would
+   * also change font-size, weight, white-space and add an underline. Nothing
+   * in C2 requires that, so the links keep their own style and the underline
+   * stays a separate affordance decision. Pinned so adopting it is a choice,
+   * never a drive-by.
    */
-  const page = styleBlock('page');
-  assert.ok(
-    page.includes('background: LEGACY_LIGHT_PAGE_SURFACE'),
-    'the containment must still be applied to the page wrapper'
-  );
-  const surfaceLiteral = /const LEGACY_LIGHT_PAGE_SURFACE = '(#[0-9a-fA-F]{6})';/.exec(PAGE_CODE);
-  assert.ok(surfaceLiteral, 'the containment constant must still be declared');
-  assert.equal(surfaceLiteral[1], LEGACY_LIGHT_PAGE_SURFACE, 'and unchanged by this tranche');
-
-  /* --- the measurement ---------------------------------------------------- */
-
-  const ratio = contrast(navFg[1], surfaceLiteral[1]);
-  assert.ok(
-    ratio >= AA_NORMAL_TEXT,
-    `race-day nav secondary links: ${navFg[1]} on ${surfaceLiteral[1]} is ${ratio.toFixed(2)}:1`
-  );
-  assert.ok(
-    Math.abs(ratio - 6.35) < 0.05,
-    `expected ~6.35:1, measured ${ratio.toFixed(2)}:1`
-  );
-
-  /* --- the token class stays out until the containment goes --------------- */
-
-  const inlineLink = /color: var\((--rb-[a-z-]+)\)/.exec(cssRule('.rb-inline-link'));
-  assert.ok(inlineLink, '.rb-inline-link must declare a token foreground');
-  const wouldBe = contrast(darkToken(inlineLink[1]), surfaceLiteral[1]);
-  assert.ok(
-    wouldBe < AA_NORMAL_TEXT,
-    `rb-inline-link must remain unusable here: its dark value is ${wouldBe.toFixed(2)}:1 on the fixed light surface`
-  );
   assert.equal(
     /rb-inline-link/.test(functionBody('RaceDayNav')),
     false,
-    'so neither call site may adopt it while the containment stands'
+    'neither call site adopts the class in this tranche'
   );
+  assert.ok(navLink.includes('fontSize: 13'), 'the link keeps its own size');
+  assert.ok(navLink.includes("textDecoration: 'none'"), 'and its undecorated treatment');
 });
 
 test('14d. the corrected nav links keep their structure, wording and destinations', () => {
@@ -887,30 +912,67 @@ test('14d. the corrected nav links keep their structure, wording and destination
     'no new class was added for this correction'
   );
 
-  /* --- the regions this tranche deliberately did NOT touch ---------------- */
+  /* --- the regions PR #15 deferred, now migrated by C2 -------------------- */
 
-  assert.ok(
+  /*
+   * These two assertions used to pin the deferred regions as STILL LEGACY,
+   * recording the boundary of the navigation-contrast tranche. C2 is the
+   * tranche that migrated them, so they invert: the nav empty message and the
+   * intro both take the secondary tier, and neither legacy literal survives.
+   * Test 26 owns their positive contract; asserting the absence here keeps
+   * PR #15's own boundary honest rather than silently dropping it.
+   */
+  assert.equal(
     nav.includes("color: '#1f2328'"),
-    'the RaceDayNav root keeps its legacy foreground — out of scope'
+    false,
+    'the RaceDayNav empty message no longer holds the legacy foreground'
   );
   assert.ok(
+    nav.includes("color: 'var(--rb-text-secondary)'"),
+    'it takes the secondary tier instead'
+  );
+  assert.equal(
     PAGE_CODE.includes("color: '#57606a'"),
-    'the intro paragraph keeps its legacy foreground — out of scope'
+    false,
+    'the intro paragraph no longer holds its legacy foreground'
   );
 });
 
-test('15. the containment is demonstrably necessary (pre-fix failure)', () => {
+test('15. HISTORICAL: why the frame flip had to be atomic (slice 3D C2)', () => {
   /*
-   * Evidence of the defect being contained, NOT an accepted post-fix pair.
-   * Without the opaque surface the wrapper is transparent over `.rb-app`, whose
-   * dark background puts the inherited page foreground far below the floor.
+   * EXPLANATORY EVIDENCE, NOT A LIVE PRODUCTION CONTRACT.
+   *
+   * This recorded that the containment was necessary. C2 removed it, so what
+   * the test now preserves is WHY every foreground had to migrate in the same
+   * change as the surface: each legacy value fails badly on the dark
+   * application background the page frame now reaches. Had the frame flipped
+   * while any of them stayed, that is the ratio the reader would have got.
+   *
+   * The surface is derived from the token, so this stays honest if the dark
+   * background is ever retuned; the foregrounds are historical literals and
+   * are deliberately hard-coded — they no longer exist in production to parse.
    */
-  const ratio = contrast('#1f2328', darkToken('--rb-bg-app'));
-  assert.ok(
-    ratio < AA_NORMAL_TEXT,
-    `expected the uncontained pair to fail, but it was ${ratio.toFixed(2)}:1`
-  );
-  assert.ok(ratio < 2, `the uncontained pair should be severe; got ${ratio.toFixed(2)}:1`);
+  const darkApp = darkToken('--rb-bg-app');
+  for (const [legacy, expected, what] of [
+    ['#1f2328', 1.15, 'page frame + nav empty message'],
+    ['#57606a', 2.84, 'intro paragraph'],
+    ['#0550ae', 2.39, 'nav secondary links'],
+  ] as const) {
+    const ratio = contrast(legacy, darkApp);
+    assert.ok(
+      ratio < AA_NORMAL_TEXT,
+      `${what}: expected ${legacy} to fail on ${darkApp}, got ${ratio.toFixed(2)}:1`
+    );
+    assert.ok(
+      Math.abs(ratio - expected) < 0.05,
+      `${what}: expected ~${expected}:1, measured ${ratio.toFixed(2)}:1`
+    );
+  }
+
+  /* And none of the three survives in production. */
+  for (const legacy of ['#1f2328', '#57606a']) {
+    assert.equal(PAGE_CODE.includes(legacy), false, `${legacy} must be gone`);
+  }
 });
 
 /* ========================================================================== *
@@ -1440,7 +1502,7 @@ test('20. the race-card core is a paired token region (evidence migration part 2
     assert.match(PAGE_CODE, new RegExp(`function ${kept}\\(`), `${kept} intact`);
   }
   assert.match(PAGE_CODE, /position: 'sticky' as const/, 'the part 2a sticky contract is intact');
-  assert.match(PAGE_CODE, /const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';/, 'containment retained');
+  assertPageFrameIsTokenPaired(); /* superseded by C2 */
 });
 
 test('20b. the official locked decision has structural primacy over the live diagnostic', () => {
@@ -2212,15 +2274,8 @@ test('17b. the next-action command LABEL is paired on the frame surface', () => 
 
   /* --- 12. the containment surface remains active ------------------------- */
 
-  assert.match(
-    PAGE_CODE,
-    /const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';/,
-    'the containment constant remains'
-  );
-  assert.ok(
-    styleBlock('page').includes('background: LEGACY_LIGHT_PAGE_SURFACE'),
-    'and is still applied to the page wrapper'
-  );
+  /* Superseded by C2: the page frame is token-paired, not contained. */
+  assertPageFrameIsTokenPaired();
 
   /* --- 13. the navigation links are not this widget's business ------------ */
 
@@ -2239,15 +2294,19 @@ test('17b. the next-action command LABEL is paired on the frame surface', () => 
    * or influence the nav link, and the link must be readable. Test 14c owns the
    * exact value and the measured ratio.
    */
-  const navLinkAt = PAGE_CODE.indexOf('const raceDaySecondaryLinkStyle');
-  assert.notEqual(navLinkAt, -1, 'raceDaySecondaryLinkStyle must exist');
-  const navLink = PAGE_CODE.slice(navLinkAt, PAGE_CODE.indexOf('};', navLinkAt));
-  const navFg = /color: '(#[0-9a-fA-F]{6})'/.exec(navLink);
-  assert.ok(navFg, 'the nav link must declare a foreground');
-  assert.ok(
-    contrast(navFg[1], LEGACY_LIGHT_PAGE_SURFACE) >= AA_NORMAL_TEXT,
-    `the nav link must be readable on the containment surface; got ${contrast(navFg[1], LEGACY_LIGHT_PAGE_SURFACE).toFixed(2)}:1`
-  );
+  const navLink = constStyleBody('raceDaySecondaryLinkStyle');
+  const navFg = /color: 'var\((--rb-[a-z-]+)\)'/.exec(navLink);
+  assert.ok(navFg, 'the nav link must declare a token foreground (C2)');
+  const navSurface = /background: var\((--rb-bg-app)\)/.exec(cssRule('.rb-app'));
+  assert.ok(navSurface, '.rb-app must supply the page surface');
+  for (const scheme of ['light', 'dark'] as const) {
+    const fg = scheme === 'light' ? lightToken(navFg[1]) : darkToken(navFg[1]);
+    const bg = scheme === 'light' ? lightToken(navSurface[1]) : darkToken(navSurface[1]);
+    assert.ok(
+      contrast(fg, bg) >= AA_NORMAL_TEXT,
+      `the nav link must be readable on the inherited surface (${scheme}); got ${contrast(fg, bg).toFixed(2)}:1`
+    );
+  }
   assert.equal(
     widget.includes('raceDaySecondaryLinkStyle'),
     false,
@@ -2605,15 +2664,8 @@ test('22. the tipster panels are a paired token region (tipster tranche)', () =>
 
   /* --- G. the prior tranches are undisturbed ------------------------------ */
 
-  assert.match(
-    PAGE_CODE,
-    /const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';/,
-    'the containment surface remains active — the page frame is still legacy'
-  );
-  assert.ok(
-    styleBlock('page').includes('background: LEGACY_LIGHT_PAGE_SURFACE'),
-    'and is still applied to the page wrapper'
-  );
+  /* Superseded by C2: the page frame is token-paired, not contained. */
+  assertPageFrameIsTokenPaired();
   for (const cls of [
     'rb-evidence-card',
     'rb-status-frame--official',
@@ -2934,15 +2986,8 @@ test('23. the two operational panels are a paired token region (top-level part 1
 
   /* --- J. the prior tranches are undisturbed ------------------------------ */
 
-  assert.match(
-    PAGE_CODE,
-    /const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';/,
-    'the containment surface remains active — the page frame is still legacy'
-  );
-  assert.ok(
-    styleBlock('page').includes('background: LEGACY_LIGHT_PAGE_SURFACE'),
-    'and is still applied to the page wrapper'
-  );
+  /* Superseded by C2: the page frame is token-paired, not contained. */
+  assertPageFrameIsTokenPaired();
   /* Narrowed by C1: token foregrounds are allowed only on paired frames. */
   assertPageTokenForegroundsStayOffLegacySurfaces();
   assert.match(
@@ -2954,10 +2999,15 @@ test('23. the two operational panels are a paired token region (top-level part 1
     functionBody('RaceDayNav').includes('raceDaySecondaryLinkStyle'),
     'the PR #15 nav links still take their corrected style'
   );
+  /*
+   * PR #15's correction is SUPERSEDED by C2, not lost: the literal it
+   * introduced was a stand-in for the token it could not safely use while
+   * the containment stood. Test 14c owns the token and its measured ratios.
+   */
   assert.match(
     PAGE_CODE,
-    /const raceDaySecondaryLinkStyle: CSSProperties = \{[^}]*color: '#0550ae'/,
-    'and the PR #15 contrast correction itself is undisturbed'
+    /const raceDaySecondaryLinkStyle: CSSProperties = \{[^}]*color: 'var\(--rb-accent-analytical\)'/,
+    'the nav links now carry the analytical token'
   );
 });
 
@@ -3545,15 +3595,8 @@ test('24. proof, timeline and place audit are a paired token region (top-level p
     assert.ok(PAGE_CODE.includes(wiring), `page.tsx must still render ${wiring}`);
   }
 
-  assert.match(
-    PAGE_CODE,
-    /const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';/,
-    'the containment surface remains active — the page frame is still legacy'
-  );
-  assert.ok(
-    styleBlock('page').includes('background: LEGACY_LIGHT_PAGE_SURFACE'),
-    'and is still applied to the page wrapper'
-  );
+  /* Superseded by C2: the page frame is token-paired, not contained. */
+  assertPageFrameIsTokenPaired();
   /* Narrowed by C1: token foregrounds are allowed only on paired frames. */
   assertPageTokenForegroundsStayOffLegacySurfaces();
   /* PR A (part 1) is undisturbed. */
@@ -3569,10 +3612,15 @@ test('24. proof, timeline and place audit are a paired token region (top-level p
     /<section className="rb-evidence-panel" style=\{styles\.tipsterPanel\}>/,
     'the PR #14 tipster migration is undisturbed'
   );
+  /*
+   * PR #15's correction is SUPERSEDED by C2, not lost: the literal it
+   * introduced was a stand-in for the token it could not safely use while
+   * the containment stood. Test 14c owns the token and its measured ratios.
+   */
   assert.match(
     PAGE_CODE,
-    /const raceDaySecondaryLinkStyle: CSSProperties = \{[^}]*color: '#0550ae'/,
-    'and the PR #15 contrast correction is undisturbed'
+    /const raceDaySecondaryLinkStyle: CSSProperties = \{[^}]*color: 'var\(--rb-accent-analytical\)'/,
+    'the nav links now carry the analytical token'
   );
 });
 
@@ -3775,7 +3823,7 @@ test('24b. every part-2 panel foreground clears AA on the surface it now sits on
  * `NextActionWidget` adopted in phase 1: a semantic LEFT BORDER on a neutral
  * token surface instead of a tinted fill that has no token equivalent.
  *
- * C1 deliberately does NOT touch the containment. `LEGACY_LIGHT_PAGE_SURFACE`
+ * C1 deliberately does NOT touch the containment. `LEGACY_CONTAINMENT_SURFACE`
  * is still declared and still applied, and the page root, intro and
  * RaceDayNav are untouched — those belong to the frame flip that follows.
  * That ordering is the whole point: this tranche removes the last islands so
@@ -3948,22 +3996,23 @@ test('25. the final structural blocks are paired token regions (slice 3D C1)', (
 
   /* --- G. containment and the out-of-scope frame are untouched ------------ */
 
+  /* Superseded by C2: the page frame is token-paired, not contained. */
+  assertPageFrameIsTokenPaired();
+  /*
+   * C1 pinned these two as UNTOUCHED because they belonged to the frame flip.
+   * C2 is that flip, so both invert — the links take the analytical token and
+   * the intro takes the secondary tier. Test 26 owns their positive contract.
+   */
   assert.match(
     PAGE_CODE,
-    /const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';/,
-    'C1 does not remove the containment'
+    /const raceDaySecondaryLinkStyle: CSSProperties = \{[^}]*color: 'var\(--rb-accent-analytical\)'/,
+    'the secondary links completed the frame flip'
   );
-  assert.ok(
-    styleBlock('page').includes('background: LEGACY_LIGHT_PAGE_SURFACE'),
-    'and it is still applied to the page wrapper'
+  assert.equal(
+    PAGE_CODE.includes("color: '#57606a'"),
+    false,
+    'and the intro paragraph did too'
   );
-  assert.ok(styleBlock('page').includes(LEGACY_PRIMARY_FOREGROUND), 'the page frame is still legacy');
-  assert.match(
-    PAGE_CODE,
-    /const raceDaySecondaryLinkStyle: CSSProperties = \{[^}]*color: '#0550ae'/,
-    'the secondary links are untouched — they belong to the frame flip'
-  );
-  assert.ok(PAGE_CODE.includes("color: '#57606a'"), 'the intro paragraph is untouched');
 
   /* --- H. behaviour freeze ------------------------------------------------ */
 
@@ -4074,4 +4123,345 @@ test('25b. every migrated C1 role clears AA on the status-frame surface', () => 
       `${retired} would have been a bright island on ${darkApp} (${contrast(retired, darkApp).toFixed(2)}:1)`
     );
   }
+});
+
+/* ========================================================================== *
+ * 26-26b. the page frame itself (SLICE 3D C2 — CONTAINMENT REMOVED)
+ *
+ * The last tranche. `LEGACY_LIGHT_PAGE_SURFACE` was a fixed `#e7ebf1` wrapper
+ * that held every legacy foreground on the light background it was measured
+ * against while the regions beneath it migrated one at a time. Its removal
+ * condition was every homepage region completing a PAIRED foreground/surface
+ * migration; C1 met it, and C2 acted on it.
+ *
+ * The frame now declares NEITHER half and inherits BOTH from `.rb-app`. Light
+ * rendering is unchanged to the byte — `--rb-bg-app` IS `#e7ebf1` in the light
+ * scheme — and dark mode reaches the page frame for the first time.
+ * ========================================================================== */
+
+test('26. the page frame is token-paired and the containment is gone (slice 3D C2)', () => {
+  /* --- A. the containment is absent, in code not prose -------------------- */
+
+  assert.equal(
+    /LEGACY_LIGHT_PAGE_SURFACE/.test(PAGE_CODE),
+    false,
+    'the containment constant must be absent from comment-stripped source'
+  );
+  assert.equal(/#e7ebf1/.test(PAGE_CODE), false, 'and its literal must not reappear');
+
+  /*
+   * page.tsx legitimately NAMES the constant in the docblock recording why it
+   * existed. Asserting on comment-stripped source is what stops that history
+   * satisfying — or breaking — the removal contract.
+   */
+  assert.ok(
+    PAGE_SRC.includes('LEGACY_LIGHT_PAGE_SURFACE'),
+    'the history is deliberately retained in prose'
+  );
+
+  /* --- B. styles.page owns geometry and nothing else ---------------------- */
+
+  const page = styleBlock('page');
+  assert.equal(/background/.test(page), false, 'styles.page declares no background');
+  assert.equal(/\bcolor:/.test(page), false, 'styles.page declares no foreground');
+  for (const geometry of [
+    'maxWidth: 820',
+    "margin: '2rem auto'",
+    "padding: '0 1rem'",
+    'paddingBottom:',
+    'env(safe-area-inset-bottom, 0px)',
+    "fontFamily: 'system-ui",
+  ]) {
+    assert.ok(page.includes(geometry), `styles.page keeps ${geometry}`);
+  }
+
+  /* --- C. the inherited pair is complete and unambiguous ------------------ */
+
+  /*
+   * THE WHOLE SAFETY ARGUMENT OF THIS TRANCHE.
+   *
+   * A foreground inherited from an ancestor is only safe if that ancestor also
+   * paints the surface it is read against. `.rb-app` declares BOTH on the same
+   * element, so the effective surface behind `styles.page` cannot be ambiguous:
+   * the wrapper paints nothing, and the nearest painted ancestor supplies both
+   * halves together. Parsed from the rule rather than assumed.
+   */
+  const app = cssRule('.rb-app');
+  const surface = /background: var\((--rb-bg-app)\)/.exec(app);
+  const foreground = /color: var\((--rb-text-primary)\)/.exec(app);
+  assert.ok(surface, '.rb-app must declare the application background token');
+  assert.ok(foreground, '.rb-app must declare the paired primary foreground');
+
+  /* And the page must actually render inside it, or the inheritance is theory. */
+  assert.match(PAGE_CODE, /<AppShell>/, 'the page renders inside the shell');
+  assert.match(
+    PAGE_CODE,
+    /<div style=\{styles\.page\}>/,
+    'and the frame is the shell child that inherits the pair'
+  );
+  assert.equal(
+    /<main[\s>]/.test(PAGE_CODE),
+    false,
+    'the shell owns the only main landmark'
+  );
+
+  /*
+   * No replacement wrapper class was invented. The pair arrives from the shell
+   * the page already rendered inside — adding a bespoke page class would be a
+   * second mechanism for the same job.
+   */
+  assert.equal(
+    /\.rb-[a-z_-]*(page-frame|page-surface|dashboard)/.test(TOKENS_CSS),
+    false,
+    'no bespoke page-frame class was invented'
+  );
+
+  /* --- D. the three migrated foregrounds ---------------------------------- */
+
+  const nav = functionBody('RaceDayNav');
+  assert.ok(
+    nav.includes("color: 'var(--rb-text-secondary)'"),
+    'the RaceDayNav empty message takes the secondary tier'
+  );
+  assert.equal(nav.includes("color: '#1f2328'"), false, 'and drops its legacy literal');
+
+  /*
+   * The nav ROOT declares no foreground at all — it inherits primary from the
+   * frame. Pinned as an absence so a future edit cannot quietly give it one.
+   */
+  assert.match(
+    nav,
+    /<div style=\{\{ margin: '12px 0 4px' \}\}>/,
+    'the RaceDayNav root stays geometry-only and inherits primary'
+  );
+
+  const intro = /<p\s+style=\{\{\s*margin: '4px 0 0',\s*fontSize: 14,\s*color: 'var\(--rb-text-secondary\)',/;
+  assert.match(PAGE_CODE, intro, 'the intro paragraph takes the secondary tier');
+  assert.equal(PAGE_CODE.includes("color: '#57606a'"), false, 'and drops its legacy literal');
+
+  const link = constStyleBody('raceDaySecondaryLinkStyle');
+  assert.ok(
+    link.includes("color: 'var(--rb-accent-analytical)'"),
+    'the secondary links take the analytical accent'
+  );
+  assert.equal(link.includes('#0550ae'), false, 'and drop the legacy darkening');
+
+  /* --- E. the links are otherwise byte-identical -------------------------- */
+
+  assert.ok(link.includes('fontSize: 13'), 'the links keep their size');
+  assert.ok(link.includes("textDecoration: 'none'"), 'and their undecorated treatment');
+  assert.equal(
+    [...PAGE_CODE.matchAll(/style=\{raceDaySecondaryLinkStyle\}/g)].length,
+    2,
+    'exactly two consumers, as before'
+  );
+  assert.match(
+    nav,
+    /<a href=\{nav\.previousDay\.href\} style=\{raceDaySecondaryLinkStyle\}>/,
+    'the previous-day anchor is unchanged'
+  );
+  assert.match(
+    nav,
+    /<Link href=\{nav\.audit\.href\} prefetch=\{false\} style=\{raceDaySecondaryLinkStyle\}>/,
+    'and the audit Link keeps its prefetch behaviour'
+  );
+  assert.ok(nav.includes('buildRaceDayNavView(search)'), 'view-builder delegation is unchanged');
+  assert.ok(nav.includes('{nav.previousDay.label}'), 'wording still comes from the view');
+  assert.ok(nav.includes('{nav.audit.label}'), 'for both destinations');
+
+  /* --- F. no structural light island remains ------------------------------ */
+
+  /*
+   * The frame was the LAST one. Every page-level style constant and every
+   * `styles` entry is checked for a fixed near-white fill; small self-contained
+   * chips keep theirs and are not structural.
+   */
+  for (const name of ['liveBarStyle', 'liveWarningStyle', 'safetyBannerStyle', 'raceDaySecondaryLinkStyle']) {
+    const body = constStyleBody(name);
+    assert.equal(
+      /(background|backgroundColor):\s*'#[0-9a-fA-F]{3,6}'/.test(body),
+      false,
+      `${name} must own no fixed structural fill`
+    );
+  }
+  for (const { name, body } of pageStyleEntries()) {
+    for (const legacySurface of ["background: '#fff'", "background: '#ffffff'", "background: '#f6f8fa'"]) {
+      assert.equal(
+        body.includes(legacySurface),
+        false,
+        `styles.${name} must not own a structural light surface`
+      );
+    }
+  }
+
+  /* Imported homepage components own no structural white either. */
+  for (const name of [...NESTED_PANELS, ...PART1_PANELS, ...PART2_PANELS]) {
+    const src = codeOf(readFileSync(`src/components/${name}.tsx`, 'utf8'));
+    assert.equal(
+      /background: '#(fff|ffffff)'/.test(src),
+      false,
+      `${name} must own no structural white surface`
+    );
+  }
+
+  /* --- G. every retained fixed palette is still self-contained ------------ */
+
+  for (const { name, body } of pageStyleEntries()) {
+    const fg = /color: '(#[0-9a-fA-F]{6})'/.exec(body);
+    if (fg) {
+      assert.ok(
+        /(background|bg): '#[0-9a-fA-F]{6}'/.test(body),
+        `styles.${name} keeps ${fg[1]} without a surface of its own`
+      );
+    }
+  }
+
+  /* --- H. the prior tranches are intact ----------------------------------- */
+
+  /* C1's status frames. */
+  assert.ok(
+    functionBody('liveBarClass').includes(
+      "scoped ? 'rb-status-frame rb-status-frame--positive' : 'rb-status-frame'"
+    ),
+    'the C1 live-bar branch is intact'
+  );
+  assert.equal(
+    [...PAGE_CODE.matchAll(/className="rb-status-frame rb-status-frame--warning" style=\{safetyBannerStyle\}/g)].length,
+    2,
+    'and both C1 banners still share the warning frame'
+  );
+
+  /* The panel tranches — each read from the source map that owns it. */
+  for (const name of PART1_PANELS) {
+    assert.match(
+      PART1_SRC[name],
+      /<section className="rb-evidence-panel" style=\{styles\.panel\}/,
+      `${name} remains token-paired (PR #16)`
+    );
+  }
+  for (const name of PART2_PANELS) {
+    assert.match(
+      PART2_SRC[name],
+      /<section\s+className="rb-evidence-panel"/,
+      `${name} remains token-paired (PR #17)`
+    );
+  }
+  assert.match(
+    functionBody('TipsterStatusPanel'),
+    /<section className="rb-evidence-panel" style=\{styles\.tipsterPanel\}>/,
+    'the PR #14 tipster migration is undisturbed'
+  );
+  assert.match(
+    PAGE_CODE,
+    /function nextActionFrameClass\(/,
+    'the phase-1 next-action frame mapping is undisturbed'
+  );
+
+  /* --- I. behaviour freeze ------------------------------------------------ */
+
+  for (const unchanged of [
+    'Math.round(RACE_DAY_REFRESH_MS / 1000)',
+    'buildRaceDayNavView',
+    'buildLiveStatusView',
+    'formatRelativeAge',
+    'prefetch={false}',
+  ]) {
+    assert.ok(PAGE_CODE.includes(unchanged), `${unchanged} must be unchanged`);
+  }
+  assert.equal(/rb-inline-link/.test(functionBody('RaceDayNav')), false, 'no affordance redesign');
+});
+
+test('26b. every page-frame role clears AA on the surface it now inherits', () => {
+  /*
+   * The surface is DERIVED from `.rb-app`, the rule that actually supplies it,
+   * so a future change to the shell background fails here rather than shipping.
+   */
+  const app = cssRule('.rb-app');
+  const bg = /background: var\((--rb-bg-app)\)/.exec(app);
+  assert.ok(bg, '.rb-app must declare a var(--rb-bg-app) background');
+
+  const surface = { light: lightToken(bg[1]), dark: darkToken(bg[1]) };
+
+  /* --- A. the page-frame roles, pinned ------------------------------------ */
+
+  const near = (actual: number, expected: number, what: string) =>
+    assert.ok(
+      Math.abs(actual - expected) < 0.05,
+      `${what} expected ~${expected}:1, measured ${actual.toFixed(2)}:1`
+    );
+
+  const ROLES = [
+    ['--rb-text-primary', 15.03, 16.03, 'page frame (h1, nav root, body)'],
+    ['--rb-text-secondary', 7.97, 10.08, 'intro paragraph and nav empty message'],
+    ['--rb-text-muted', 5.16, 6.14, 'muted text on the page surface'],
+    ['--rb-accent-analytical', 6.82, 7.56, 'race-day nav secondary links'],
+    ['--rb-status-positive', 5.65, 7.9, 'positive evidence on the page surface'],
+    ['--rb-status-warning', 5.7, 8.07, 'warning evidence on the page surface'],
+    ['--rb-status-failure', 6.1, 6.38, 'failure evidence on the page surface'],
+  ] as const;
+
+  for (const [token, expLight, expDark, what] of ROLES) {
+    const light = contrast(lightToken(token), surface.light);
+    const dark = contrast(darkToken(token), surface.dark);
+    assert.ok(light >= AA_NORMAL_TEXT, `${what}: ${token} light is ${light.toFixed(2)}:1`);
+    assert.ok(dark >= AA_NORMAL_TEXT, `${what}: ${token} dark is ${dark.toFixed(2)}:1`);
+    near(light, expLight, `${what} (light)`);
+    near(dark, expDark, `${what} (dark)`);
+  }
+
+  /* --- B. each region is still measured against ITS OWN surface ----------- */
+
+  /*
+   * C2 changes the PAGE surface only. The nested regimes must keep being
+   * measured against the surfaces they actually own, or this test would
+   * quietly re-home every role onto the page background.
+   */
+  const frame = /background: var\((--rb-surface-[a-z-]+)\)/.exec(cssRule('.rb-status-frame'));
+  const panel = /background: var\((--rb-surface-[a-z-]+)\)/.exec(cssRule('.rb-evidence-panel'));
+  assert.ok(frame && panel, 'the frame and panel rules must declare their own surfaces');
+  assert.equal(frame[1], '--rb-surface-elevated', 'status frames stay elevated');
+  assert.equal(panel[1], '--rb-surface-raised', 'evidence panels stay raised');
+  assert.notEqual(frame[1], bg[1], 'and neither is the page surface');
+  assert.notEqual(panel[1], bg[1], 'so their roles are not re-homed by this tranche');
+
+  for (const [rule, token, what] of [
+    [frame[1], '--rb-text-muted', 'C1 live-bar supporting text on the frame'],
+    [frame[1], '--rb-status-warning', 'C1 live warning on the frame'],
+    [panel[1], '--rb-text-muted', 'panel muted text on the raised surface'],
+    ['--rb-surface-inset', '--rb-text-muted', 'inset labels on the recessed surface'],
+  ] as const) {
+    for (const scheme of ['light', 'dark'] as const) {
+      const fg = scheme === 'light' ? lightToken(token) : darkToken(token);
+      const s = scheme === 'light' ? lightToken(rule) : darkToken(rule);
+      assert.ok(
+        contrast(fg, s) >= AA_NORMAL_TEXT,
+        `${what} (${scheme}) is ${contrast(fg, s).toFixed(2)}:1 on ${rule}`
+      );
+    }
+  }
+
+  /* --- C. self-contained palettes still measured on their own fills ------- */
+
+  let chips = 0;
+  for (const { name, body } of pageStyleEntries()) {
+    const fg = /color: '(#[0-9a-fA-F]{6})'/.exec(body);
+    const fill = /(?:background|bg): '(#[0-9a-fA-F]{6})'/.exec(body);
+    if (!fg || !fill) continue;
+    chips += 1;
+    assert.ok(
+      contrast(fg[1], fill[1]) >= AA_NORMAL_TEXT,
+      `styles.${name} chip is ${contrast(fg[1], fill[1]).toFixed(2)}:1`
+    );
+  }
+  assert.ok(chips >= 2, `expected the retained page chips to be measured, found ${chips}`);
+
+  /* --- D. decorative tokens get no false floor ---------------------------- */
+
+  /*
+   * `--rb-border` is a hairline for dividers and panel edges. It is measured
+   * here only to RECORD that it sits far below 3:1 and is deliberately not
+   * held to it — the same treatment every tranche has given it.
+   */
+  const border = contrast(lightToken('--rb-border'), surface.light);
+  assert.ok(border < 3, `the decorative hairline is ${border.toFixed(2)}:1 and claims no floor`);
 });

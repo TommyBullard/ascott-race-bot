@@ -284,48 +284,24 @@ interface InFormTipster {
 type LoadStatus = 'loading' | 'ready' | 'error';
 type ConfidenceLabel = 'High' | 'Medium' | 'Low';
 
-/**
- * TEMPORARY legacy-light compatibility surface for the page wrapper.
+/*
+ * SLICE 3D C2: THE PAGE FRAME IS NOW TOKEN-PAIRED.
  *
- * The value matches the current LIGHT value of `--rb-bg-app` in
- * `src/styles/tokens.css`. It is deliberately a fixed literal and does NOT
- * automatically track that token — the contrast test detects drift between the
- * two, but nothing here follows the token at runtime. That is the point: the
- * whole purpose of this constant is to stay light when the token goes dark.
+ * `LEGACY_LIGHT_PAGE_SURFACE` lived here. It was a fixed `#e7ebf1` wrapper that
+ * held every legacy foreground on the light background it was measured against
+ * while the regions beneath it migrated one tranche at a time. Its own removal
+ * condition — every homepage region completing a PAIRED foreground/surface
+ * migration — is now met: the summary surfaces, the next-race panel, the race
+ * cards and their nested panels, the tipster panels, the five top-level panels
+ * and, in C1, the last full-width status blocks.
  *
- * WHY THIS EXISTS. This page began as a legacy light-only design: it rendered
- * hard-coded light surfaces (the race cards, the tipster panels and the
- * next-race panel at `#fff`; the accuracy bar and performance panel at
- * `#f6f8fa`; plus tinted banners) with hard-coded dark foregrounds. Every one
- * of those has since completed a paired migration — the tipster panels were the
- * last — but the page frame itself, the race-day navigation and the intro
- * paragraph still declare legacy foregrounds, so the containment stands. Two
- * facts follow:
- *
- *   - Leaving this wrapper TRANSPARENT lets it sit on the shell's `.rb-app`
- *     background, which is `#12161c` under `prefers-color-scheme: dark`.
- *     Text inheriting `styles.page`'s `#1f2328` then renders at ~1.15:1 —
- *     effectively invisible.
- *   - Replacing that foreground with dark-aware `--rb-text-*` tokens is NOT a
- *     safe fix on its own. Those tokens become light in the dark scheme, and
- *     the child surfaces above are still hard-coded light, so the text would
- *     land light-on-light (~1.13:1 on `#fff`). A foreground may only migrate
- *     together with its own containing surface.
- *
- * Pinning an opaque light surface here keeps every existing foreground on the
- * light background it was designed and measured against, in BOTH schemes.
- *
- * THIS IS TRANSITIONAL, NOT DARK-MODE SUPPORT. It is contrast containment, not
- * a native dark homepage, not a completed token migration, and not a new
- * permanent design token.
- *
- * REMOVAL CONDITION. Delete this constant and the `background` on
- * `styles.page` once every homepage region — the cards, the panels, the tinted
- * banners and the imported panel components — has completed PAIRED
- * foreground/surface migration onto `--rb-*` tokens. Until then, removing it
- * reintroduces the ~1.15:1 failure.
+ * So the wrapper declares NO background and NO foreground. It inherits both,
+ * together, from `.rb-app` (`--rb-bg-app` + `--rb-text-primary`), which is the
+ * nearest painted ancestor and declares them as a pair. Light rendering is
+ * unchanged to the byte: `--rb-bg-app` IS `#e7ebf1` in the light scheme, which
+ * is exactly what the constant pinned. Dark mode now reaches the page frame for
+ * the first time, at `#12161c`.
  */
-const LEGACY_LIGHT_PAGE_SURFACE = '#e7ebf1';
 
 /*
  * `EV_POSITIVE_COLOR` / `EV_NEGATIVE_COLOR` are DELETED here by the tipster
@@ -740,15 +716,22 @@ function deriveWhyTags(pick: RaceCardPick): WhyTag[] {
 }
 
 const styles = {
+  /*
+   * GEOMETRY ONLY — the frame inherits its paired surface and foreground.
+   *
+   * `.rb-app` (the shell root this page renders inside) declares
+   * `background: var(--rb-bg-app)` AND `color: var(--rb-text-primary)` on the
+   * same element, so the inherited pair is complete and its effective surface
+   * is unambiguous. Declaring either half here would strand the other: a fixed
+   * background under token text, or token text over the shell's dark surface —
+   * the two failure modes this programme spent every tranche avoiding.
+   */
   page: {
     maxWidth: 820,
     margin: '2rem auto',
     padding: '0 1rem',
     paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 32px)',
     fontFamily: 'system-ui, -apple-system, sans-serif',
-    color: '#1f2328',
-    // Temporary contrast containment — see LEGACY_LIGHT_PAGE_SURFACE.
-    background: LEGACY_LIGHT_PAGE_SURFACE,
   } as CSSProperties,
   cardList: {
     display: 'flex',
@@ -2359,7 +2342,8 @@ function RaceDayNav({ scoped, search }: { scoped: boolean; search: string }) {
   return (
     <div style={{ margin: '12px 0 4px' }}>
       {!scoped && (
-        <p style={{ margin: '0 0 8px', fontSize: 14, color: '#1f2328' }}>
+        // SLICE 3D C2: supporting copy, not body text — secondary tier, 7.97:1 / 10.08:1.
+        <p style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--rb-text-secondary)' }}>
           {RACE_DAY_NAV_EMPTY_MESSAGE}
         </p>
       )}
@@ -2395,28 +2379,29 @@ const raceDayPrimaryButtonStyle: CSSProperties = {
 };
 
 /*
- * SLICE 3D: the race-day nav secondary links, darkened to clear AA.
+ * SLICE 3D C2: the race-day nav secondary links, now token-paired.
  *
- * `#0969da` measured 4.34:1 on `LEGACY_LIGHT_PAGE_SURFACE` (`#e7ebf1`) — short
- * of the 4.5:1 normal-text floor, and recorded as a bounded known shortfall by
- * contrast test 14c until this tranche. `#0550ae` is the same hue darkened and
- * reaches 6.35:1 on that surface.
+ * HISTORY. `#0969da` measured 4.34:1 on the old fixed containment surface —
+ * short of the 4.5:1 floor. PR #15 darkened it to `#0550ae` (6.35:1 there) as a
+ * LEGACY darkening rather than a token, because `--rb-accent-analytical` flips
+ * to `#74aaf0` in the dark scheme and would have landed at 2.01:1 on a surface
+ * that stayed fixed light. That reasoning ended with the containment: the page
+ * frame is now `--rb-bg-app`, so the token is correct in BOTH schemes —
+ * 6.82:1 light and 7.56:1 dark.
  *
- * A LEGACY DARKENING, DELIBERATELY, NOT `rb-inline-link`. That class resolves
- * `--rb-accent-analytical`, which flips to `#74aaf0` in the dark scheme and
- * would land at 2.01:1 on this FIXED light containment surface — light on
- * light. The token class only becomes correct once the containment is removed,
- * which needs the page frame, this nav's root, the intro paragraph and the five
- * top-level white panels to migrate first. Until then the safe fix is the
- * literal.
+ * STILL NOT `rb-inline-link`, deliberately. That class is now compatible, but
+ * adopting it would also change font-size (13 -> 12), font-weight (-> 600),
+ * white-space (-> nowrap) and text-decoration (none -> underline). Nothing in
+ * this tranche requires any of those: a token colour alone makes the links
+ * safe. The underline is a persistent-affordance decision worth taking on its
+ * own merits, not smuggled in as a side effect of a surface migration.
  *
- * `textDecoration: 'none'` is carried over UNCHANGED — these links have never
- * been underlined, and adding one would be a visual change beyond this
- * foreground-only correction.
+ * `textDecoration: 'none'` and `fontSize: 13` are therefore carried over
+ * UNCHANGED, exactly as they were before this tranche.
  */
 const raceDaySecondaryLinkStyle: CSSProperties = {
   fontSize: 13,
-  color: '#0550ae',
+  color: 'var(--rb-accent-analytical)',
   textDecoration: 'none',
 };
 
@@ -3003,7 +2988,8 @@ export default function RecommendationsPage() {
         style={{
           margin: '4px 0 0',
           fontSize: 14,
-          color: '#57606a',
+          /* SLICE 3D C2: descriptive subtitle on the token page surface — 7.97:1 light / 10.08:1 dark. */
+          color: 'var(--rb-text-secondary)',
           overflowWrap: 'anywhere',
         }}
       >
