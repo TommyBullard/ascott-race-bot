@@ -2179,12 +2179,12 @@ function LiveModeBar({
   const refreshedAge = formatRelativeAge(view.refreshedMs, nowMs);
   const refreshSecs = Math.round(RACE_DAY_REFRESH_MS / 1000);
   return (
-    <div style={liveBarStyle(scoped)}>
+    <div className={liveBarClass(scoped)} style={liveBarStyle}>
       <span style={liveDotStyle(scoped)} aria-hidden />
       <strong style={{ letterSpacing: 0.3 }}>
         {scoped ? 'Live mode' : 'Static view'}
       </strong>
-      <span style={{ color: '#656d76' }}>
+      <span style={{ color: 'var(--rb-text-muted)' }}>
         {scoped
           ? `Auto-refreshing read-only data every ${refreshSecs}s`
           : 'Open a specific race day to see live, auto-refreshing data.'}
@@ -2192,7 +2192,7 @@ function LiveModeBar({
       {scoped && view.refreshedMs != null && (
         <span
           style={{
-            color: '#656d76',
+            color: 'var(--rb-text-muted)',
             marginLeft: 'auto',
             fontVariantNumeric: 'tabular-nums',
           }}
@@ -2201,39 +2201,69 @@ function LiveModeBar({
         </span>
       )}
       {scoped && view.warning && (
-        <span style={liveWarningStyle}>{view.warning}</span>
+        <span className="rb-status-frame__detail" style={liveWarningStyle}>
+          {view.warning}
+        </span>
       )}
     </div>
   );
 }
 
+/*
+ * SLICE 3D C1: the warning is TEXT on the frame, no longer a tinted block.
+ *
+ * It used to be a full-width `#fff8c5` bar with its own border and radius —
+ * contrast-safe, but a bright island once the shell goes dark. It now takes
+ * `rb-status-frame__detail` for its typography and the semantic warning token
+ * for its foreground (6.41:1 light / 6.59:1 dark on the frame's elevated
+ * surface). `flexBasis` stays: it is what makes the warning wrap onto its own
+ * full-width line inside the bar's flex row, and that layout is unchanged.
+ *
+ * The inline colour deliberately overrides the class's secondary foreground —
+ * a warning must read as a warning, and inline beats class.
+ */
 const liveWarningStyle: CSSProperties = {
   flexBasis: '100%',
-  color: '#9a6700',
-  background: '#fff8c5',
-  border: '1px solid #eac54f',
-  borderRadius: 6,
-  padding: '4px 8px',
-  fontSize: 12,
+  color: 'var(--rb-status-warning)',
 };
 
-function liveBarStyle(scoped: boolean): CSSProperties {
-  return {
-    display: 'flex',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 10,
-    fontSize: 13,
-    padding: '8px 12px',
-    borderRadius: 8,
-    margin: '12px 0',
-    background: scoped ? '#eafff1' : '#f6f8fa',
-    border: `1px solid ${scoped ? '#aceebb' : '#d0d7de'}`,
-    // SLICE 3D.4a: the legacy foreground this surface already inherited, now
-    // declared explicitly. Same computed colour — see LEGACY_LIGHT_PAGE_SURFACE.
-    color: '#1f2328',
-  };
+/*
+ * SLICE 3D C1: the live bar's TONE, carried by the status-frame system.
+ *
+ * The scoped branch is semantically POSITIVE (live, auto-refreshing) and the
+ * unscoped branch is semantically NEUTRAL (a static view) — exactly the two
+ * states `rb-status-frame` already models, and the same transformation
+ * `nextActionFrameClass` applied in phase 1: a semantic LEFT BORDER on a
+ * neutral token surface, instead of a tinted fill that has no token
+ * equivalent. `neutral` deliberately adds no modifier, so the static view
+ * reads as the quieter of the two.
+ *
+ * The branch remains tied to the SAME `scoped` value as before — only how
+ * each state is painted has changed, never which state is chosen.
+ */
+function liveBarClass(scoped: boolean): string {
+  return scoped ? 'rb-status-frame rb-status-frame--positive' : 'rb-status-frame';
 }
+
+/*
+ * GEOMETRY ONLY.
+ *
+ * Surface, border, left rule, radius and foreground now arrive TOGETHER from
+ * `rb-status-frame`. This is no longer a function of `scoped`: the layout was
+ * always identical across both branches, and only the (now class-owned)
+ * colours differed. `borderRadius` is dropped rather than kept because the
+ * class supplies `--rb-radius-card`; padding and margin are retained so the
+ * bar keeps the exact spacing it has today.
+ */
+const liveBarStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  flexWrap: 'wrap',
+  gap: 10,
+  fontSize: 13,
+  padding: '8px 12px',
+  margin: '12px 0',
+};
 
 function liveDotStyle(scoped: boolean): CSSProperties {
   return {
@@ -2253,7 +2283,7 @@ function liveDotStyle(scoped: boolean): CSSProperties {
  */
 function SafetyBanner() {
   return (
-    <div style={safetyBannerStyle}>
+    <div className="rb-status-frame rb-status-frame--warning" style={safetyBannerStyle}>
       <strong>Decision-support only — not betting advice.</strong> No
       auto-betting and no bet placement, and this page is read-only.
       Recommendations are model outputs, not guarantees. During beta, results may
@@ -2282,7 +2312,7 @@ const ACTIVE_COURSE_QUICK_LINK = {
 function AllCoursesBanner({ search, isClient }: { search: string; isClient: boolean }) {
   if (!isClient || !isAllCoursesMode(search)) return null;
   return (
-    <div style={safetyBannerStyle}>
+    <div className="rb-status-frame rb-status-frame--warning" style={safetyBannerStyle}>
       <strong>{ALL_COURSES_BANNER_MESSAGE}</strong>
       <div style={{ marginTop: 8 }}>
         {/*
@@ -2390,14 +2420,28 @@ const raceDaySecondaryLinkStyle: CSSProperties = {
   textDecoration: 'none',
 };
 
+/*
+ * SLICE 3D C1: TYPOGRAPHY AND SPACING ONLY.
+ *
+ * Shared by BOTH `SafetyBanner` and `AllCoursesBanner`, and migrated once for
+ * both — they are one treatment, not two. Surface, border, left rule, radius,
+ * padding and foreground now arrive together from
+ * `rb-status-frame rb-status-frame--warning`, which is the same paired
+ * mechanism `NextActionWidget` already uses for its warning tone.
+ *
+ * `#fff8c5` was contrast-safe (9.69:1 with `#573a00`) but it was a FULL-WIDTH
+ * tinted block: on a dark shell it reads as a bright band across the page,
+ * which is a visual-consistency defect rather than a contrast one. The frame
+ * keeps the warning meaning in a semantic left rule on a neutral token
+ * surface, so nothing here depends on the page frame behind it.
+ *
+ * `margin` is retained because the class's `12px 0` is not this banner's
+ * spacing; `fontSize`/`lineHeight` are retained because the frame sets
+ * neither. Every word of both banners is unchanged.
+ */
 const safetyBannerStyle: CSSProperties = {
   fontSize: 12.5,
   lineHeight: 1.5,
-  color: '#573a00',
-  background: '#fff8c5',
-  border: '1px solid #eac54f',
-  borderRadius: 8,
-  padding: '8px 12px',
   margin: '0 0 16px',
 };
 
