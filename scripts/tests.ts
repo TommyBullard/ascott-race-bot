@@ -149,3 +149,4 @@ import './tipsterPublicConsensus.test';
 import './appShell.test';
 import './appShellAdoption.test';
 import './homepageContrast.test';
+import './racingNavigation.test';

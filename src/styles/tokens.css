@@ -1391,3 +1391,122 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+/* ========================================================================== *
+ * 12. Canonical racing navigation (/date, /meeting, /race)
+ *
+ * Additive and scoped to new `rb-` classes only, so no existing page changes.
+ * Every value comes from a token already defined above — no new custom
+ * property, no new colour, no focus-outline suppression, and mobile-first sizing with
+ * the wide runner table opting into `.rb-scroll-x` rather than the page.
+ * ========================================================================== */
+
+/* Breadcrumbs ------------------------------------------------------------- */
+
+.rb-crumbs {
+  margin-bottom: var(--rb-space-3);
+}
+
+.rb-crumbs__list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--rb-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--rb-text-label);
+  color: var(--rb-text-muted);
+}
+
+.rb-crumbs__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rb-space-1);
+}
+
+.rb-crumbs__sep {
+  color: var(--rb-text-muted);
+}
+
+/* Previous/next navigation (days and races) ------------------------------- */
+
+.rb-daynav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--rb-space-2);
+  margin-bottom: var(--rb-space-4);
+  font-size: var(--rb-text-label);
+}
+
+/* Meetings on a date page -------------------------------------------------- */
+
+/*
+ * Mobile-first: one column by default, and `auto-fit` only widens it once the
+ * viewport can hold a 260px track. No fixed width, so nothing forces the page
+ * to scroll sideways on a narrow screen.
+ */
+.rb-meeting-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--rb-space-3);
+}
+
+@media (min-width: 40rem) {
+  .rb-meeting-grid {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+}
+
+.rb-meeting-card__facts,
+.rb-race-row__facts,
+.rb-race-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--rb-space-2);
+  margin: var(--rb-space-2) 0 0;
+}
+
+.rb-meeting-card__fact dt,
+.rb-race-row__fact dt,
+.rb-race-facts__item dt {
+  margin: 0;
+  font-size: var(--rb-text-meta);
+  letter-spacing: var(--rb-tracking-label);
+  text-transform: uppercase;
+  color: var(--rb-text-muted);
+}
+
+.rb-meeting-card__fact dd,
+.rb-race-row__fact dd,
+.rb-race-facts__item dd {
+  margin: 0;
+  font-size: var(--rb-text-body);
+  color: var(--rb-text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* One race on a meeting page ---------------------------------------------- */
+
+/*
+ * The head wraps rather than truncating: on a narrow viewport the time, name
+ * and status stack instead of overflowing.
+ */
+.rb-race-row__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--rb-space-2);
+}
+
+.rb-race-row__time {
+  font-size: var(--rb-text-section);
+  color: var(--rb-text-primary);
+}
+
+.rb-race-row__name {
+  margin: 0;
+  flex: 1 1 12rem;
+  overflow-wrap: anywhere;
+}
