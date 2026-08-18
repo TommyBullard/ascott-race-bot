@@ -378,7 +378,10 @@ test('47-56. all behavioural + deployment files are byte-identical to HEAD', () 
     'src/lib/directModelClaimCheck.ts',
     'src/lib/raceDayPipelineRunner.ts',
     'src/lib/auth.ts',
-    'src/app/api/cron/racecards/route.ts',
+    // 'src/app/api/cron/racecards/route.ts' and 'scripts/lockTMinus.ts' left this
+    // list in the Off-Time Integrity programme; both keep TARGETED assertions of
+    // the ownership guarantee instead of byte identity (see the tests above and
+    // ownershipPropagation.test.ts 55-59a).
     'src/app/api/cron/odds/route.ts',
     'src/app/api/cron/model/route.ts',
     'src/app/api/cron/results/route.ts',
@@ -392,7 +395,6 @@ test('47-56. all behavioural + deployment files are byte-identical to HEAD', () 
     'scripts/runModelsForRaceDay.ts',
     'src/lib/producerClaim.ts',
     'src/lib/producerOwnership.ts',
-    'scripts/lockTMinus.ts',
     'scripts/autoResults.ts',
     'supabase/migrations/20260711000000_producer_run_claims.sql',
     'vercel.json',

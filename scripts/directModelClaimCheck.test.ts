@@ -397,9 +397,36 @@ test('46-47. no provider call and no child process introduced in changed files',
   }
 });
 
-test('48-49. shared runModelForRace and model-day core are byte-identical to HEAD', () => {
+/**
+ * `runModelForRace.ts` left the byte-identity list when the Off-Time Integrity
+ * programme made the pre-off guard evaluate the EFFECTIVE off (the stored off,
+ * tightened only ever EARLIER by corroborated evidence) and recorded that value
+ * on the run.
+ *
+ * What this test file actually protects is that the shared model core stays
+ * CLAIM-FREE — ownership is enforced by the CLIs and the routes, never here.
+ * That guarantee is asserted directly below, which is stricter than byte
+ * identity for this purpose: it would catch claim machinery being added even in
+ * a change that byte-identity had been updated to allow.
+ */
+test('48-49a. the shared model core stays claim-free and ownership-free', () => {
+  const core = src('src/lib/runModelForRace.ts');
+  assert.doesNotMatch(core, /tryAcquireProducerClaim|heartbeatProducerClaim|releaseProducerClaim/);
+  assert.doesNotMatch(core, /producerOwnership|ownershipContext|ownershipPropagation|x-producer-ownership/);
+  assert.doesNotMatch(core, /checkForeignProducerClaim|directModelClaimCheck/);
+  // The pre-off guard is still evaluated BEFORE any model write, and still
+  // delegates to the single shared guard rather than re-implementing it.
+  const guardAt = core.indexOf('evaluateModelRunGuard(');
+  const insertAt = core.indexOf('.from(MODEL_RUNS_TABLE)');
+  assert.ok(guardAt > 0 && insertAt > guardAt, 'the guard must precede the model-run insert');
+  // The off it judges against can only ever be the strictest known one.
+  assert.match(core, /fetchEffectiveOffTime\(raceId, storedOffTime\)/);
+  assert.match(core, /off_time: effectiveOff\.effectiveOffTime/);
+});
+
+test('48-49. the model-day core is byte-identical to HEAD', () => {
   const normalize = (s: string): string => s.replace(/\r\n/g, '\n');
-  for (const f of ['src/lib/runModelForRace.ts', 'src/lib/modelDayRun.ts']) {
+  for (const f of ['src/lib/modelDayRun.ts']) {
     const committed = execFileSync('git', ['show', `HEAD:${f}`], { encoding: 'utf8' });
     assert.equal(normalize(src(f)), normalize(committed), `${f} changed`);
   }
@@ -413,7 +440,10 @@ test('50-57. Slices 1-3, protected routes, pipeline, nationwide, auth, migration
     'src/lib/ownershipPropagation.ts',
     'src/lib/raceDayPipelineRunner.ts',
     'src/lib/auth.ts',
-    'src/app/api/cron/racecards/route.ts',
+    // 'src/app/api/cron/racecards/route.ts' and 'scripts/lockTMinus.ts' left this
+    // list in the Off-Time Integrity programme; both keep TARGETED assertions of
+    // the ownership guarantee instead of byte identity (see the tests above and
+    // ownershipPropagation.test.ts 55-59a).
     'src/app/api/cron/odds/route.ts',
     'src/app/api/run-model/route.ts',
     'scripts/runRaceDayPipeline.ts',
@@ -421,7 +451,6 @@ test('50-57. Slices 1-3, protected routes, pipeline, nationwide, auth, migration
     'scripts/nationwideDryRun.ts',
     'src/lib/producerClaim.ts',
     'src/lib/producerOwnership.ts',
-    'scripts/lockTMinus.ts',
     'scripts/autoResults.ts',
     'supabase/migrations/20260711000000_producer_run_claims.sql',
     'vercel.json',

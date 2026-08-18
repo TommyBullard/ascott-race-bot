@@ -75,6 +75,7 @@ import {
   tipsterQualityWeight,
 } from './tipsterConsensusEngine';
 import { withModelRunLock } from './modelRunLock';
+import { fetchEffectiveOffTime, isMissingColumnError } from './offTimeObservation';
 import {
   buildSupersedePatch,
   currentMarker,
@@ -311,9 +312,19 @@ async function runModelForRaceUnlocked(
       `Failed to fetch race ${raceId} for run guard: ${raceGuardError.message}`,
     );
   }
+  // OFF-TIME INTEGRITY: the guard is evaluated against the EFFECTIVE off — the
+  // strictest known instant, which is the stored off tightened by corroborated
+  // evidence that the race actually goes off EARLIER. It can never be later
+  // than the stored value, so this can only ever make the guard skip MORE. A
+  // missing observations table or any read error degrades to the stored off,
+  // i.e. exactly today's behaviour. `status` is untouched, so the RESULTED-wins
+  // precedence inside the guard is preserved.
+  const storedOffTime =
+    (raceGuardRow as { off_time?: string | null } | null)?.off_time ?? null;
+  const effectiveOff = await fetchEffectiveOffTime(raceId, storedOffTime);
   const guard = evaluateModelRunGuard(
     {
-      off_time: (raceGuardRow as { off_time?: string | null } | null)?.off_time ?? null,
+      off_time: effectiveOff.effectiveOffTime,
       status: (raceGuardRow as { status?: string | null } | null)?.status ?? null,
     },
     new Date(),
@@ -560,25 +571,47 @@ async function runModelForRaceUnlocked(
   });
 
   // 3a. Insert the new model run as the CURRENT run. Capture its generated id.
-  const { data: runData, error: runError } = await supabaseAdmin
+  const modelRunBase = {
+    race_id: raceId,
+    run_time: new Date().toISOString(),
+    market_snapshot_id: inputs.snapshot_id,
+    model_version: metadata.model_version,
+    probability_engine_version: metadata.probability_engine_version,
+    staking_engine_version: metadata.staking_engine_version,
+    input_mode: metadata.input_mode,
+    config_json: metadata.config_json,
+    data_quality_flags: metadata.data_quality_flags,
+    bet_mode: betMode,
+    base_kelly_fraction: baseKellyFraction,
+    signal_kappa: signalKappa,
+  };
+
+  // OFF-TIME INTEGRITY: `off_time_at_run` records the off this run was actually
+  // JUDGED against, so as-of reconstruction never has to assume it.
+  //
+  // It is attached OPTIMISTICALLY and dropped on a column-missing error. The
+  // column only exists once 20260818000000 is applied, and a hard failure here
+  // would take down every model run — no runs, no recommendations, no locks —
+  // if the code reached production first. One bounded retry, never a loop, so
+  // deploy order genuinely does not matter and the fail-open promise this
+  // programme makes elsewhere is true of ALL THREE of its new dependencies.
+  let { data: runData, error: runError } = await supabaseAdmin
     .from(MODEL_RUNS_TABLE)
-    .insert({
-      race_id: raceId,
-      run_time: new Date().toISOString(),
-      market_snapshot_id: inputs.snapshot_id,
-      model_version: metadata.model_version,
-      probability_engine_version: metadata.probability_engine_version,
-      staking_engine_version: metadata.staking_engine_version,
-      input_mode: metadata.input_mode,
-      config_json: metadata.config_json,
-      data_quality_flags: metadata.data_quality_flags,
-      bet_mode: betMode,
-      base_kelly_fraction: baseKellyFraction,
-      signal_kappa: signalKappa,
-      ...writeMarker,
-    })
+    .insert({ ...modelRunBase, ...writeMarker, off_time_at_run: effectiveOff.effectiveOffTime })
     .select('id')
     .single();
+
+  if (runError && isMissingColumnError(runError)) {
+    console.warn(
+      '[off-time] model_runs.off_time_at_run is absent (migration 20260818000000 not applied); ' +
+        'inserting the run without it. The pre-off guard is unaffected.',
+    );
+    ({ data: runData, error: runError } = await supabaseAdmin
+      .from(MODEL_RUNS_TABLE)
+      .insert({ ...modelRunBase, ...writeMarker })
+      .select('id')
+      .single());
+  }
 
   if (runError) {
     throw new Error(

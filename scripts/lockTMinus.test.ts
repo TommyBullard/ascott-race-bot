@@ -285,16 +285,20 @@ test('summarizeLockOutcomes: every kind counted; races_considered is the total',
     outcome('no_run_available'),
     outcome('too_early_not_locked'), outcome('too_early_not_locked'), outcome('too_early_not_locked'),
     outcome('skipped_post_off'),
+    // Off-Time Integrity: corroborated evidence says the effective off has
+    // passed even though the stored off has not. Refuses a lock; never creates.
+    outcome('skipped_off_time_contested'),
     outcome('already_locked'),
     outcome('error'),
   ]);
   assert.deepEqual(s, {
-    races_considered: 10,
+    races_considered: 11,
     locked_pick: 2,
     locked_no_bet: 1,
     no_run_available: 1,
     too_early_not_locked: 3,
     skipped_post_off: 1,
+    skipped_off_time_contested: 1,
     already_locked: 1,
     errors: 1,
   });

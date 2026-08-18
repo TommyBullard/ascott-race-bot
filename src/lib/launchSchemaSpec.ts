@@ -95,6 +95,7 @@ export const RLS_REQUIRED_TABLES = [
   'ml_training_examples',
   'model_run_locks',
   'locked_race_decisions',
+  'race_off_time_observations',
 ] as const;
 
 /**
@@ -103,6 +104,7 @@ export const RLS_REQUIRED_TABLES = [
  */
 export const RLS_MIGRATION_BY_TABLE: Readonly<Record<string, string>> = {
   locked_race_decisions: '20260708000000_locked_race_decisions.sql',
+  race_off_time_observations: '20260818000000_race_off_time_observations.sql',
 };
 
 /**
@@ -123,6 +125,7 @@ export const MIGRATION_BY_TABLE: Readonly<Record<string, string>> = {
   ml_training_examples: '20260618040000_ml_training_examples.sql',
   model_run_locks: '20260618050000_model_run_locks.sql',
   locked_race_decisions: '20260708000000_locked_race_decisions.sql',
+  race_off_time_observations: '20260818000000_race_off_time_observations.sql',
 };
 
 /**
@@ -137,6 +140,23 @@ export const LOCKED_DECISIONS_GUARD = {
   table: 'locked_race_decisions',
   migration: '20260708000000_locked_race_decisions.sql',
 } as const;
+
+/**
+ * The append-only guard on `race_off_time_observations` (Off-Time Integrity).
+ * Same reasoning as {@link LOCKED_DECISIONS_GUARD}: a trigger function is not
+ * RPC-probeable, so it is verified manually through the printed SQL. For an
+ * immutable audit table the trigger and the RLS posture are the two properties
+ * that matter most, so neither may be left outside the launch check.
+ */
+export const OFF_TIME_OBSERVATIONS_GUARD = {
+  functionName: 'race_off_time_observations_guard',
+  triggerName: 'race_off_time_observations_no_mutate',
+  table: 'race_off_time_observations',
+  migration: '20260818000000_race_off_time_observations.sql',
+} as const;
+
+/** Every append-only guard the launch check must verify. */
+export const APPEND_ONLY_GUARDS = [LOCKED_DECISIONS_GUARD, OFF_TIME_OBSERVATIONS_GUARD] as const;
 
 /** An object named for launch that the repo neither migrates nor references. */
 export interface UnresolvedObject {
@@ -355,13 +375,16 @@ export function buildLaunchVerificationSql(): string[] {
     "  has_function_privilege('service_role', 'public.try_acquire_model_lock(uuid, text, integer)', 'EXECUTE') as service_role,",
     "  has_function_privilege('anon', 'public.try_acquire_model_lock(uuid, text, integer)', 'EXECUTE') as anon;",
     '',
-    '-- 6. Append-only guard on locked_race_decisions (trigger functions are not',
-    '--    RPC-probeable, so this is the only way to verify them). Expect one row each:',
-    'select t.tgname, c.relname as table',
-    'from pg_trigger t join pg_class c on c.oid = t.tgrelid',
-    `where t.tgname = '${LOCKED_DECISIONS_GUARD.triggerName}' and c.relname = '${LOCKED_DECISIONS_GUARD.table}';`,
-    'select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace',
-    `where n.nspname = 'public' and p.proname = '${LOCKED_DECISIONS_GUARD.functionName}';`,
+    '-- 6. Append-only guards (trigger functions are not RPC-probeable, so this',
+    '--    is the only way to verify them). Expect one row from each query:',
+    ...APPEND_ONLY_GUARDS.flatMap((guard) => [
+      `-- ${guard.table} (${guard.migration})`,
+      'select t.tgname, c.relname as table',
+      'from pg_trigger t join pg_class c on c.oid = t.tgrelid',
+      `where t.tgname = '${guard.triggerName}' and c.relname = '${guard.table}';`,
+      'select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace',
+      `where n.nspname = 'public' and p.proname = '${guard.functionName}';`,
+    ]),
   ];
 }
 

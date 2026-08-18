@@ -46,8 +46,10 @@ import {
   renderLockOutcomeLine,
   renderLockRunSummary,
   isUniqueViolation,
+  shouldRefuseContestedLock,
   type LockRaceOutcome,
 } from '../src/lib/lockTMinus';
+import { fetchEffectiveOffTime } from '../src/lib/offTimeObservation';
 
 async function main(): Promise<void> {
   loadEnv();
@@ -138,7 +140,27 @@ async function main(): Promise<void> {
         continue;
       }
 
-      // 4. In-window: build the immutable decision row.
+      // 3b. OFF-TIME INTEGRITY — the LAST read before the write. The stored
+      //     off says we are in-window, but corroborated evidence may say the
+      //     race has already run. Re-classify against the EFFECTIVE off, which
+      //     can only ever be EARLIER, so this check can only REFUSE a lock and
+      //     never create one. A missing observations table fails open to the
+      //     stored off, i.e. exactly today's behaviour.
+      const effective = await fetchEffectiveOffTime(String(race.id), capture.off_time);
+      if (shouldRefuseContestedLock(effective, capture, race.status, scriptNowIso)) {
+        outcomes.push({
+          ...base,
+          kind: 'skipped_off_time_contested',
+          detail:
+            `effective off ${effective.effectiveOffTime} has passed ` +
+            `(corroborated by ${effective.corroboratingCount} observations); ` +
+            'refusing an immutable lock against a contested off',
+        });
+        continue;
+      }
+
+      // 4. In-window: build the immutable decision row. `off_time_at_lock`
+      //    remains the STORED off, so both DB CHECKs are untouched.
       const row = buildLockedDecisionRow(capture, minutesBefore, scriptNowIso);
       if (row === null) {
         // Defensive: classifyLockWindow already required both timestamps.
