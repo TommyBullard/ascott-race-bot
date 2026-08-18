@@ -150,3 +150,4 @@ import './appShell.test';
 import './appShellAdoption.test';
 import './homepageContrast.test';
 import './racingNavigation.test';
+import './racingNavExposure.test';

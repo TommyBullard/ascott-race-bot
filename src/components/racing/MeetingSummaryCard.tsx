@@ -59,10 +59,15 @@ export function MeetingSummaryCard({ meeting, date }: MeetingSummaryCardProps) {
         )}
       </dl>
 
+      {/*
+        The date page shows meeting CARDS, not the races inside them, so this
+        note must not claim the races are "listed here" — they are not on this
+        page at all. It states what is true: the card is unlinked, and why.
+      */}
       {href === null && (
         <p className="rb-note">
           This meeting was stored before canonical race identity was captured, so it has no
-          permanent page. Its races are listed here and are not linked.
+          permanent meeting page or race links.
         </p>
       )}
     </article>
