@@ -6,21 +6,29 @@
  *
  *   - table existence + exact row count:  select('*', { head: true, count: 'exact' })
  *   - column existence:                   select('<col>', { head: true })  per column
- *   - RPC function presence:              rpc('<fn>', {})  with EMPTY args
+ *   - RPC function presence:              NOT probed. No RPC is ever called;
+ *                                        proven only by the printed pg_proc SQL.
  *
- * `head: true` returns NO rows and writes nothing. The function probe uses EMPTY
- * args, which can never satisfy the lock functions' required parameters, so it is
- * side-effect-free (no lock is ever acquired). Index existence, RLS status, and
- * grants are NOT exposed by the data API, so the script PRINTS read-only SQL for
- * you to run in the Supabase SQL editor (it never executes it) and never claims a
- * verdict it cannot read.
+ * `head: true` returns NO rows and writes nothing. There is NO function probe at
+ * all: the data API can only "discover" a function by CALLING it, and both lock
+ * functions are write-capable, so this check refuses to. Function existence, index
+ * existence, RLS status and grants are therefore not exposed to it, so the script
+ * PRINTS read-only SQL for you to run in the Supabase SQL editor (it never executes
+ * it) and never claims a verdict it cannot read.
  *
  * It uses ONLY the SERVICE-ROLE key (src/lib/supabaseAdmin.ts) — never the anon /
  * publishable key — and prints NO secrets. It does not call the Racing API or
  * Betfair, runs no migration, and never executes `supabase db push`.
  *
  * Usage:   npm run schema:launch-check
- * Exit:    0 when PASS (all required tables/columns/functions present); 1 on FAIL.
+ * Exit:    0 PASS   — everything verifiable is verified, functions AUTHORITATIVELY
+ *                     present. Nothing outstanding.
+ *          3 REVIEW — nothing broken, nothing proven absent, but a required
+ *                     function is not verifiable through the data API. This is the
+ *                     NORMAL result. It is NOT launch approval: the printed SQL
+ *                     must be run before go-live.
+ *          1 FAIL   — a required object is proven missing, a required function is
+ *                     not executable by this role, or detection itself failed.
  * Requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in `.env.local` (or `.env`).
  */
 
@@ -30,8 +38,10 @@ import {
   REQUIRED_TABLES,
   EXPECTED_FUNCTIONS,
   UNRESOLVED_OBJECTS,
-  classifyFunctionProbe,
+  classifyFunctionEvidence,
+  renderFunctionStatus,
   summarizeLaunchCheck,
+  launchExitCode,
   buildLaunchVerificationSql,
   renderLaunchReport,
   type FunctionHealth,
@@ -63,20 +73,6 @@ async function probeTable(table: string): Promise<{ status: ProbeOutcome; rowCou
 async function probeColumn(table: string, column: string): Promise<ProbeOutcome> {
   const { error } = await supabaseAdmin.from(table).select(column, { head: true }).limit(1);
   return classifyColumnProbe(error);
-}
-
-/**
- * Probes an RPC function's presence with EMPTY args. The lock functions require
- * arguments, so an empty call matches no overload and is never executed — this is
- * a read-only existence probe, not an invocation.
- */
-async function probeFunction(name: string): Promise<ProbeOutcome> {
-  const rpc = supabaseAdmin.rpc as unknown as (
-    fn: string,
-    args?: Record<string, unknown>,
-  ) => PromiseLike<{ error: FunctionProbeError | null }>;
-  const { error } = await rpc(name, {});
-  return classifyFunctionProbe(error, name);
 }
 
 async function main(): Promise<void> {
@@ -117,13 +113,26 @@ async function main(): Promise<void> {
 
   // --- RPC functions ------------------------------------------------------
   console.log('\nRPC functions:');
-  const functionHealth: FunctionHealth[] = [];
-  for (const fn of EXPECTED_FUNCTIONS) {
-    const status = await probeFunction(fn.name);
-    functionHealth.push({ name: fn.name, status });
-    const mark = status === 'present' ? 'OK  ' : status === 'missing' ? 'MISS' : '????';
-    console.log(`  [${mark}] ${fn.name}${fn.signature}`);
+  // NO RPC IS CALLED HERE. PostgREST exposes function INVOCATION, not catalog
+  // inspection, so the only way to "discover" a function through the data API is
+  // to call it — and both of these are WRITE-CAPABLE lock functions. The previous
+  // empty-args probe was side-effect-free only by the accident that both take
+  // required arguments; one added DEFAULT would have made this "read-only" check
+  // acquire a real model lock. It also read the zero-argument PGRST202 ("without
+  // parameters ... in the schema cache") as proof of ABSENCE, which is how two
+  // live, verified functions came to be reported MISSING. Status is therefore
+  // NOT-API-VERIFIABLE by construction; the authoritative catalog SQL printed
+  // below is the only thing that can prove existence either way.
+  const functionHealth: FunctionHealth[] = EXPECTED_FUNCTIONS.map((fn) => ({
+    name: fn.name,
+    status: classifyFunctionEvidence({ kind: 'no_evidence' }),
+  }));
+  for (const health of functionHealth) {
+    const spec = EXPECTED_FUNCTIONS.find((fn) => fn.name === health.name);
+    console.log(`  [${renderFunctionStatus(health.status)}] ${health.name}${spec ? spec.signature : ''}`);
   }
+  console.log('         MANUAL: existence is proven only by verification SQL section 2 (pg_proc);');
+  console.log('         EXECUTE grants by section 5. Never invoked here, so never reported missing.');
 
   // --- Summary (RLS left MANUAL — not readable via the data API) -----------
   const summary = summarizeLaunchCheck({ tableHealth, functionHealth });
@@ -135,19 +144,30 @@ async function main(): Promise<void> {
   for (const line of buildLaunchVerificationSql()) console.log(`  ${line}`);
 
   console.log('\nSafe next action:');
-  if (summary.pass) {
+  if (summary.status === 'PASS') {
     console.log('  Schema looks launch-ready for the parts the data API can read. Confirm indexes /');
     console.log('  RLS / grants with the SQL above before go-live. No migration is required.');
+  } else if (summary.status === 'REVIEW') {
+    // REVIEW is NOT a migration situation: nothing was proven missing. Telling the
+    // operator to "apply the migrations" here is exactly the dangerous advice this
+    // whole fix exists to remove.
+    console.log('  Run verification SQL section 2 (and 2b if needed) to PROVE the RPC functions');
+    console.log('  exist with the expected signature, return type, SECURITY DEFINER and pinned');
+    console.log('  search_path, then section 5 for the EXECUTE grants. NO migration is indicated:');
+    console.log('  nothing was proven absent. Do NOT reapply a migration to change this state.');
+    console.log('  Record that SQL output as the manual evidence for launch approval.');
   } else {
-    console.log('  Apply the migrations listed under "Migrations likely needed" IN ORDER, in a');
+    console.log('  Apply the migrations listed under \'Migrations likely needed\' IN ORDER, in a');
     console.log('  maintenance window, per docs/LAUNCH_SCHEMA_SYNC_RUNBOOK.md (backup first; verify');
     console.log('  after each batch). This tool applies nothing.');
+    console.log('  If a function is DENY (present, not executable) or ???? (detection failed), no');
+    console.log('  migration applies: fix the GRANT or the connection instead.');
   }
   if (UNRESOLVED_OBJECTS.length > 0) {
     console.log('  Note the unresolved object(s) above — they have no migration in this repo.');
   }
 
-  process.exitCode = summary.pass ? 0 : 1;
+  process.exitCode = launchExitCode(summary.status);
 }
 
 main().catch((err) => {

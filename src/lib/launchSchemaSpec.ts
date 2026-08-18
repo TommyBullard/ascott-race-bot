@@ -48,12 +48,34 @@ export {
 /** A SECURITY DEFINER RPC the app relies on, plus the migration that creates it. */
 export interface FunctionSpec {
   name: string;
-  /** The argument signature, e.g. `(uuid, text, integer)`. */
+  /**
+   * The IDENTITY argument signature, e.g. `(uuid, text, integer)` — types only,
+   * matching `pg_get_function_identity_arguments`. Parameter NAMES and DEFAULT
+   * text are deliberately excluded: identity is what Postgres resolves an
+   * overload by, so a rename or a changed default can never cause a false
+   * mismatch. Defaults are inspected separately via `pg_get_function_arguments`.
+   */
   signature: string;
   /** Migration file that creates the function. */
   migration: string;
   /** Role the function's EXECUTE is granted to (others revoked). */
   grantedTo: string;
+  /** Expected `pg_get_function_result` output, e.g. `jsonb`. */
+  resultType: string;
+  /** Expected `pg_proc.prosecdef`. These run as owner, so this must be true. */
+  securityDefiner: boolean;
+  /**
+   * Expected `pg_proc.provolatile`. Both lock functions write, so both are the
+   * Postgres default VOLATILE ('v'); neither declares STABLE or IMMUTABLE.
+   */
+  volatility: string;
+  /**
+   * Expected `set search_path`, visible in `pg_proc.proconfig` as
+   * `search_path=<value>`. A SECURITY DEFINER function without a pinned
+   * search_path is a privilege-escalation surface, so this is the single most
+   * important property to confirm manually.
+   */
+  searchPath: string;
 }
 
 /** The model-run lock RPCs (per 20260618050000_model_run_locks.sql). */
@@ -63,12 +85,20 @@ export const EXPECTED_FUNCTIONS: readonly FunctionSpec[] = [
     signature: '(uuid, text, integer)',
     migration: '20260618050000_model_run_locks.sql',
     grantedTo: 'service_role',
+    resultType: 'jsonb',
+    securityDefiner: true,
+    volatility: 'v (volatile)',
+    searchPath: 'public, pg_temp',
   },
   {
     name: 'release_model_lock',
     signature: '(uuid, text)',
     migration: '20260618050000_model_run_locks.sql',
     grantedTo: 'service_role',
+    resultType: 'boolean',
+    securityDefiner: true,
+    volatility: 'v (volatile)',
+    searchPath: 'public, pg_temp',
   },
 ] as const;
 
@@ -178,45 +208,192 @@ export const UNRESOLVED_OBJECTS: readonly UnresolvedObject[] = [
 ] as const;
 
 /* -------------------------------------------------------------------------- */
-/* Function-presence classifier (read-only probe)                             */
+/* Function presence — evidence model (NEVER an RPC invocation)               */
 /* -------------------------------------------------------------------------- */
 
-/** The subset of a PostgREST RPC error the function classifier reasons about. */
+/**
+ * What is actually known about a function's presence.
+ *
+ * Deliberately a SEPARATE union from {@link ProbeOutcome} (used for tables and
+ * columns, which the data API really can probe): "the database does not have
+ * it" and "this tool cannot see it" are different facts, and collapsing them is
+ * what made the launch check report two live, verified functions as MISSING.
+ *
+ *  - `present`            authoritative evidence of existence (catalog metadata).
+ *  - `missing`            authoritative evidence of ABSENCE. Only this may ever
+ *                         recommend a migration.
+ *  - `inaccessible`       it exists but the caller lacks EXECUTE. A privilege
+ *                         problem, never a missing-object problem.
+ *  - `not_api_verifiable` the data API cannot answer the question at all. The
+ *                         normal state for these functions: PostgREST exposes
+ *                         RPC invocation, not catalog inspection, and this
+ *                         checker will not invoke a write-capable function to
+ *                         find out.
+ *  - `unknown`            the attempt itself failed (transport, auth, timeout).
+ */
+export type FunctionPresence =
+  | 'present'
+  | 'missing'
+  | 'inaccessible'
+  | 'not_api_verifiable'
+  | 'unknown';
+
+/** Evidence the classifier accepts. No variant carries an invocation result. */
+export type FunctionEvidence =
+  | { kind: 'catalog'; exists: boolean }
+  | { kind: 'privilege_denied' }
+  | { kind: 'transport_error' }
+  | { kind: 'no_evidence' };
+
+/**
+ * Classifies EVIDENCE about a function. It never calls anything.
+ *
+ * SUPERSEDES the previous `classifyFunctionProbe`, which classified the error
+ * from an `rpc(name, {})` call. That approach was wrong twice over. It sent a
+ * request to a WRITE-CAPABLE endpoint for discovery — side-effect-free only by
+ * the accident that both lock functions have required arguments, so one added
+ * DEFAULT would have made the "read-only" launch check acquire a real lock. And
+ * it read PostgREST's zero-argument PGRST202 ("Could not find the function
+ * public.try_acquire_model_lock without parameters in the schema cache") as
+ * proof of ABSENCE, when it is only proof that no ZERO-ARGUMENT overload
+ * exists — which is true of every function that takes arguments.
+ *
+ * A generic or ambiguous error is NEVER absence. Absence must be positively
+ * proven by catalog evidence, which the data API cannot supply — hence
+ * `not_api_verifiable` as the honest default. Pure; never throws.
+ */
+export function classifyFunctionEvidence(
+  evidence: FunctionEvidence | null | undefined,
+): FunctionPresence {
+  if (!evidence) return 'not_api_verifiable';
+  switch (evidence.kind) {
+    case 'catalog':
+      return evidence.exists ? 'present' : 'missing';
+    case 'privilege_denied':
+      return 'inaccessible';
+    case 'transport_error':
+      return 'unknown';
+    default:
+      return 'not_api_verifiable';
+  }
+}
+
+/** True ONLY for a status that justifies recommending the creating migration. */
+export function provesFunctionAbsent(status: FunctionPresence): boolean {
+  return status === 'missing';
+}
+
+/* ------------------------------------------------------------------------ */
+/* Overall launch status                                                    */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * The overall verdict. Deliberately THREE states, not a boolean.
+ *
+ *  - `PASS`   everything the checker can verify is verified, and every required
+ *             function is AUTHORITATIVELY present. Nothing is outstanding.
+ *  - `REVIEW` nothing is broken and nothing was proven absent, but at least one
+ *             required function could not be verified through the data API. The
+ *             launch gate is NOT closed: it is waiting on manual evidence.
+ *  - `FAIL`   a required object is proven missing, or a required function exists
+ *             but cannot be executed, or detection itself failed.
+ *
+ * REVIEW exists because the honest normal state of this check is "I did not
+ * invoke your write-capable lock functions to find out". Reporting that as a
+ * plain PASS with exit 0 would let CI read an unresolved manual gate as complete
+ * launch approval — the same class of error as the RPC probe it replaced, only
+ * green instead of red.
+ */
+export type LaunchStatus = 'PASS' | 'REVIEW' | 'FAIL';
+
+/**
+ * Process exit codes. Mirrors the repository convention already used by
+ * `producer:preflight` (0 READY / 3 REVIEW / 2 BLOCKED) and `racecards:commit`
+ * (`COMMIT_EXIT.stopped_safely = 3`): 3 always means "stopped safely, needs a
+ * human", never "broken".
+ */
+export const LAUNCH_EXIT = {
+  pass: 0,
+  fail: 1,
+  review: 3,
+} as const;
+
+/** Maps the overall status to its process exit code. Pure, total. */
+export function launchExitCode(status: LaunchStatus): number {
+  switch (status) {
+    case 'PASS':
+      return LAUNCH_EXIT.pass;
+    case 'REVIEW':
+      return LAUNCH_EXIT.review;
+    default:
+      return LAUNCH_EXIT.fail;
+  }
+}
+
+/**
+ * Derives the overall status from the gaps. Pure, total.
+ *
+ * `inaccessible` and `unknown` FAIL deliberately. Inaccessible means the
+ * application role cannot execute a function the pipeline depends on, so the
+ * system is not launch-ready even though the object exists. Unknown means
+ * detection itself broke, and a launch gate that shrugs at its own failure is
+ * not a gate. Neither recommends a migration — see {@link migrationsForGaps}.
+ *
+ * Only `not_api_verifiable` — "the data API structurally cannot answer this" —
+ * yields REVIEW, because it is expected on every healthy run.
+ */
+export function deriveLaunchStatus(input: {
+  missingTables: readonly string[];
+  missingColumns: readonly { table: string; column: string }[];
+  missingFunctions: readonly string[];
+  inaccessibleFunctions: readonly string[];
+  indeterminateFunctions: readonly string[];
+  notApiVerifiableFunctions: readonly string[];
+  rlsGaps: readonly string[];
+}): LaunchStatus {
+  const failed =
+    input.missingTables.length > 0 ||
+    input.missingColumns.length > 0 ||
+    input.missingFunctions.length > 0 ||
+    input.inaccessibleFunctions.length > 0 ||
+    input.indeterminateFunctions.length > 0 ||
+    input.rlsGaps.length > 0;
+  if (failed) return 'FAIL';
+  if (input.notApiVerifiableFunctions.length > 0) return 'REVIEW';
+  return 'PASS';
+}
+
+/** Operator-facing label for a function status. Pure. */
+export function renderFunctionStatus(status: FunctionPresence): string {
+  switch (status) {
+    case 'present':
+      return 'OK  ';
+    case 'missing':
+      return 'MISS';
+    case 'inaccessible':
+      return 'DENY';
+    case 'unknown':
+      return '????';
+    default:
+      return 'MAN ';
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* SUPERSEDED: the RPC-invocation probe                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The shape of a PostgREST RPC error. RETAINED only so the removal is legible
+ * to the next reader; nothing in this repository classifies one any more.
+ *
+ * The launch check no longer calls an RPC to discover whether a function
+ * exists. See {@link classifyFunctionEvidence} for what replaced it and why.
+ */
 export interface FunctionProbeError {
   code?: string | null;
   message?: string | null;
   hint?: string | null;
-}
-
-/**
- * Classifies a read-only `rpc(name, {})` probe (empty args — never executes a
- * function that requires arguments, so it is side-effect-free):
- *
- *  - no error            -> present (the function resolved/was callable);
- *  - the error message/hint surfaces the real `name(` signature -> present
- *    (PostgREST returns the candidate signature when the function EXISTS but the
- *    empty-arg probe matched no overload — proof of presence);
- *  - a "could not find the function" / PGRST202 with no such signature -> missing;
- *  - anything else       -> indeterminate (verify via the SQL the checker prints).
- *
- * Pure.
- */
-export function classifyFunctionProbe(
-  error: FunctionProbeError | null | undefined,
-  fnName: string,
-): ProbeOutcome {
-  if (!error) return 'present';
-  const haystack = `${error.message ?? ''} ${error.hint ?? ''}`.toLowerCase();
-  if (haystack.includes(`${fnName.toLowerCase()}(`)) return 'present';
-  const code = (error.code ?? '').toUpperCase();
-  if (
-    code === 'PGRST202' ||
-    haystack.includes('could not find the function') ||
-    haystack.includes('schema cache')
-  ) {
-    return 'missing';
-  }
-  return 'indeterminate';
 }
 
 /* -------------------------------------------------------------------------- */
@@ -240,17 +417,28 @@ export function detectRlsGaps(rlsEnabledByTable: Readonly<Record<string, boolean
 /** Per-function presence verdict, assembled by the script from probe results. */
 export interface FunctionHealth {
   name: string;
-  status: ProbeOutcome;
+  status: FunctionPresence;
 }
 
 /** The aggregate launch verdict + every gap that explains it. */
 export interface LaunchSummary {
+  /** The authoritative three-state verdict. Prefer this over {@link pass}. */
+  status: LaunchStatus;
+  /**
+   * True ONLY for a full `PASS`. REVIEW is deliberately false, so a caller that
+   * still reads the boolean cannot silently collapse an unresolved manual gate
+   * into approval. It is NOT the inverse of failure — check `status` for that.
+   */
   pass: boolean;
   missingTables: string[];
   indeterminateTables: string[];
   missingColumns: { table: string; column: string }[];
   missingFunctions: string[];
   indeterminateFunctions: string[];
+  /** Exists, but this caller lacks EXECUTE — a privilege gap, not a missing object. */
+  inaccessibleFunctions: string[];
+  /** The data API cannot answer; verify with the printed catalog SQL. */
+  notApiVerifiableFunctions: string[];
   /** RLS gaps — only populated when the caller supplies an RLS status map. */
   rlsGaps: string[];
   /** Whether RLS was actually evaluated (vs left for MANUAL verification). */
@@ -285,10 +473,17 @@ export function migrationsForGaps(input: {
 
 /**
  * Reduces the table/column/function probe results (and an optional RLS map) into
- * a single PASS/FAIL launch verdict plus the migrations needed. FAIL when any
- * required table, column, or function is missing, or any supplied RLS gap exists.
- * INDETERMINATE probes never fail the run (they are surfaced for manual
- * verification) — a launch check must not cry wolf on an unreadable probe. Pure.
+ * a single PASS / REVIEW / FAIL launch verdict plus the migrations needed.
+ *
+ * FAIL when any required table, column or function is proven missing, a required
+ * function is inaccessible or its status is unknown, or any supplied RLS gap
+ * exists. REVIEW when nothing is broken but a required function is not verifiable
+ * through the data API. PASS only when every function is authoritatively present.
+ *
+ * INDETERMINATE TABLE probes never fail the run (they are surfaced for manual
+ * verification) — a launch check must not cry wolf on an unreadable table probe.
+ * An indeterminate FUNCTION is different: it is a detection failure on an object
+ * the pipeline cannot run without, so it fails. Pure.
  */
 export function summarizeLaunchCheck(input: {
   tableHealth: readonly TableHealth[];
@@ -296,10 +491,14 @@ export function summarizeLaunchCheck(input: {
   rlsEnabledByTable?: Readonly<Record<string, boolean>>;
 }): LaunchSummary {
   const health: HealthSummary = summarizeHealth(input.tableHealth);
-  const missingFunctions = input.functionHealth.filter((f) => f.status === 'missing').map((f) => f.name);
-  const indeterminateFunctions = input.functionHealth
-    .filter((f) => f.status === 'indeterminate')
-    .map((f) => f.name);
+  // ONLY proven absence counts as missing. "Cannot see it" and "not allowed to
+  // call it" are separate facts with separate operator actions.
+  const byStatus = (s: FunctionPresence): string[] =>
+    input.functionHealth.filter((f) => f.status === s).map((f) => f.name);
+  const missingFunctions = input.functionHealth.filter((f) => provesFunctionAbsent(f.status)).map((f) => f.name);
+  const indeterminateFunctions = byStatus('unknown');
+  const inaccessibleFunctions = byStatus('inaccessible');
+  const notApiVerifiableFunctions = byStatus('not_api_verifiable');
 
   const rlsEvaluated = input.rlsEnabledByTable !== undefined;
   const rlsGaps = rlsEvaluated ? detectRlsGaps(input.rlsEnabledByTable as Record<string, boolean>) : [];
@@ -310,19 +509,28 @@ export function summarizeLaunchCheck(input: {
     rlsGaps,
   });
 
-  const pass =
-    health.missingTables.length === 0 &&
-    health.missingColumns.length === 0 &&
-    missingFunctions.length === 0 &&
-    rlsGaps.length === 0;
+  const status = deriveLaunchStatus({
+    missingTables: health.missingTables,
+    missingColumns: health.missingColumns,
+    missingFunctions,
+    inaccessibleFunctions,
+    indeterminateFunctions,
+    notApiVerifiableFunctions,
+    rlsGaps,
+  });
 
   return {
-    pass,
+    status,
+    // Strictly full PASS: REVIEW is false, so a stale boolean consumer fails
+    // closed onto the manual gate instead of reading it as approval.
+    pass: status === 'PASS',
     missingTables: health.missingTables,
     indeterminateTables: health.indeterminateTables,
     missingColumns: health.missingColumns,
     missingFunctions,
     indeterminateFunctions,
+    inaccessibleFunctions,
+    notApiVerifiableFunctions,
     rlsGaps,
     rlsEvaluated,
     presentTables: health.presentTables,
@@ -351,8 +559,51 @@ export function buildLaunchVerificationSql(): string[] {
     `where schemaname = 'public' and indexname in (${indexNames})`,
     'order by indexname;',
     '',
-    '-- 2. RPC functions (expect try_acquire_model_lock + release_model_lock):',
-    'select p.proname, pg_get_function_identity_arguments(p.oid) as args',
+    '-- 2. RPC functions — THE AUTHORITATIVE CHECK. The launch check cannot run',
+    '--    this itself (the data API exposes RPC invocation, not catalog inspection)',
+    '--    and will NEVER invoke a write-capable function to guess. A row here proves',
+    '--    the function exists; no row proves it absent. SELECT-only.',
+    '--',
+    '--    Verify each column against the expected posture below. They answer five',
+    '--    DIFFERENT questions: existence, signature, return type, security posture,',
+    '--    and (with section 5) privileges.',
+    '--',
+    '--    identity_arguments  overload identity — TYPES ONLY. Parameter names and',
+    '--                        DEFAULTs are excluded, so a rename cannot mismatch.',
+    '--    full_arguments      the same signature WITH names and DEFAULTs, shown',
+    '--                        separately. A default on every parameter is what would',
+    '--                        have let the old empty-arg probe EXECUTE the function.',
+    '--    result_type         return type.',
+    '--    security_definer    must be true: these run as the owner.',
+    '--    volatility          v = volatile, s = stable, i = immutable.',
+    '--    function_config     must pin search_path. A SECURITY DEFINER function',
+    '--                        WITHOUT a pinned search_path is a privilege-escalation',
+    '--                        surface — this is the most important line here.',
+    '--',
+    '--    Expected:',
+    ...EXPECTED_FUNCTIONS.flatMap((fn) => [
+      `--      ${fn.name}${fn.signature}`,
+      `--        result_type      ${fn.resultType}`,
+      `--        security_definer ${String(fn.securityDefiner)}`,
+      `--        volatility       ${fn.volatility}`,
+      `--        search_path      ${fn.searchPath}   (function_config shows search_path=${fn.searchPath})`,
+    ]),
+    'select n.nspname as schema_name,',
+    '       p.proname as function_name,',
+    '       pg_get_function_identity_arguments(p.oid) as identity_arguments,',
+    '       pg_get_function_arguments(p.oid) as full_arguments,',
+    '       pg_get_function_result(p.oid) as result_type,',
+    '       p.prosecdef as security_definer,',
+    '       p.provolatile as volatility,',
+    '       p.proconfig as function_config',
+    'from pg_proc p join pg_namespace n on n.oid = p.pronamespace',
+    `where n.nspname = 'public' and p.proname in (${fnNames})`,
+    'order by p.proname;',
+    '',
+    '-- 2b. Full definition (optional). Use when function_config is hard to read or',
+    '--     you want to confirm the body and header verbatim. SELECT-only; running',
+    '--     this DISPLAYS the definition, it does not execute the function.',
+    'select p.proname as function_name, pg_get_functiondef(p.oid) as definition',
     'from pg_proc p join pg_namespace n on n.oid = p.pronamespace',
     `where n.nspname = 'public' and p.proname in (${fnNames})`,
     'order by p.proname;',
@@ -371,9 +622,13 @@ export function buildLaunchVerificationSql(): string[] {
     'order by table_name, grantee;',
     '',
     '-- 5. Function grants: service_role should have EXECUTE; anon/authenticated should NOT.',
-    "select 'try_acquire_model_lock' as fn,",
-    "  has_function_privilege('service_role', 'public.try_acquire_model_lock(uuid, text, integer)', 'EXECUTE') as service_role,",
-    "  has_function_privilege('anon', 'public.try_acquire_model_lock(uuid, text, integer)', 'EXECUTE') as anon;",
+    '--    EXECUTE denied is a GRANT problem, never a missing object.',
+    ...EXPECTED_FUNCTIONS.flatMap((fn) => [
+      `select '${fn.name}' as fn,`,
+      `  has_function_privilege('service_role', 'public.${fn.name}${fn.signature}', 'EXECUTE') as service_role,`,
+      `  has_function_privilege('anon', 'public.${fn.name}${fn.signature}', 'EXECUTE') as anon,`,
+      `  has_function_privilege('authenticated', 'public.${fn.name}${fn.signature}', 'EXECUTE') as authenticated;`,
+    ]),
     '',
     '-- 6. Append-only guards (trigger functions are not RPC-probeable, so this',
     '--    is the only way to verify them). Expect one row from each query:',
@@ -402,10 +657,33 @@ const DASH = '\u2014';
  */
 export function renderLaunchReport(summary: LaunchSummary): string[] {
   const lines: string[] = [];
+  const verifiedFunctions = EXPECTED_FUNCTIONS.length
+    - summary.missingFunctions.length
+    - summary.indeterminateFunctions.length
+    - summary.inaccessibleFunctions.length
+    - summary.notApiVerifiableFunctions.length;
+  // The REVIEW headline must never read as a bare unconditional PASS: the whole
+  // point is that a human still owes this check evidence.
+  const headline =
+    summary.status === 'REVIEW'
+      ? `REVIEW ${DASH} PASS WITH MANUAL VERIFICATION REQUIRED`
+      : summary.status;
   lines.push(
-    `${summary.pass ? 'PASS' : 'FAIL'} ${DASH} ${summary.presentTables}/${summary.totalTables} required tables present, ` +
-      `${EXPECTED_FUNCTIONS.length - summary.missingFunctions.length}/${EXPECTED_FUNCTIONS.length} RPC functions present.`,
+    `${headline} ${DASH} ${summary.presentTables}/${summary.totalTables} required tables present, ` +
+      `${verifiedFunctions}/${EXPECTED_FUNCTIONS.length} RPC functions API-verified.`,
   );
+  if (summary.status === 'REVIEW') {
+    // Requirement: exit 3 must never be mistaken for approval.
+    lines.push(
+      `  Exit ${LAUNCH_EXIT.review}: NO absence was proven and nothing is known to be broken ` +
+        '— but launch approval still REQUIRES manual evidence.',
+    );
+    lines.push(
+      '  Run verification SQL section 2 (existence, signature, return type, SECURITY DEFINER,' +
+        ' search_path) and section 5 (EXECUTE grants) before approving go-live.',
+    );
+    lines.push('  Exit 3 is NOT launch approval. Do NOT treat it as a completed gate.');
+  }
 
   lines.push(`Missing tables: ${summary.missingTables.length === 0 ? 'none' : summary.missingTables.join(', ')}`);
   if (summary.missingColumns.length > 0) {
@@ -414,7 +692,25 @@ export function renderLaunchReport(summary: LaunchSummary): string[] {
   } else {
     lines.push('Missing columns: none');
   }
-  lines.push(`Missing functions: ${summary.missingFunctions.length === 0 ? 'none' : summary.missingFunctions.join(', ')}`);
+  lines.push(
+    `Missing functions (PROVEN absent): ${summary.missingFunctions.length === 0 ? 'none' : summary.missingFunctions.join(', ')}`,
+  );
+  if (summary.inaccessibleFunctions.length > 0) {
+    lines.push(
+      `Functions present but NOT EXECUTABLE by this role: ${summary.inaccessibleFunctions.join(', ')} ` +
+        `${DASH} a GRANT problem, not a missing object. Do NOT reapply the creating migration.`,
+    );
+  }
+  if (summary.notApiVerifiableFunctions.length > 0) {
+    lines.push(
+      `Functions: MANUAL VERIFICATION REQUIRED ${DASH} ${summary.notApiVerifiableFunctions.join(', ')}. ` +
+        'The data API exposes RPC invocation, not catalog inspection, and this check will not',
+    );
+    lines.push(
+      `  invoke a write-capable function to discover it. This is NOT evidence of absence ${DASH} run ` +
+        'verification SQL section 2.',
+    );
+  }
 
   if (summary.rlsEvaluated) {
     lines.push(`RLS gaps: ${summary.rlsGaps.length === 0 ? 'none' : summary.rlsGaps.join(', ')}`);
@@ -426,7 +722,10 @@ export function renderLaunchReport(summary: LaunchSummary): string[] {
     lines.push(`Could not verify tables: ${summary.indeterminateTables.join(', ')}`);
   }
   if (summary.indeterminateFunctions.length > 0) {
-    lines.push(`Could not verify functions: ${summary.indeterminateFunctions.join(', ')} (confirm via SQL section 2)`);
+    lines.push(
+      `Function status UNKNOWN (detection failed, NOT absence): ${summary.indeterminateFunctions.join(', ')}` +
+        ' — confirm via verification SQL section 2.',
+    );
   }
 
   lines.push(
