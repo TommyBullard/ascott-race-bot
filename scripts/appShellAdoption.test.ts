@@ -307,6 +307,9 @@ test('10. internal destinations are next/link, resolved from the live route', ()
   // dashboard's own race-day nav and the audit back-link legitimately carry
   // ?date/?course/?day, but they may only ever point at a route that exists.
   const known = new Set([`#${MAIN_LANDMARK_ID}`, ...PRIMARY_DESTINATIONS.map((d) => d.href)]);
+  // No date-route allowance is needed: the racing date is mount-gated, so a
+  // server render carries NO dated href at all. A `/date/...` target appearing
+  // here would mean a build-time date had been frozen into the HTML.
   for (const { route, html } of ADOPTED) {
     for (const anchor of anchors(html)) {
       const href = anchor.href ?? '';
@@ -358,6 +361,8 @@ test('12. the mobile bar carries working destinations only', () => {
     }
     const links = bar.match(/<a\b/g) ?? [];
     assert.ok(links.length > 0, `${route}: the bar needs destinations`);
+    // Pre-mount, the bar carries exactly the static destinations. No real
+    // clock is read here, and none should be.
     assert.equal(links.length, PRIMARY_DESTINATIONS.length, `${route}: all working routes`);
   }
 });

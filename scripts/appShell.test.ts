@@ -117,7 +117,13 @@ function atRuleBlock(prelude: string): string {
   throw new Error(`unterminated block: ${prelude}`);
 }
 
-/** Renders the shell with a single identifiable child. */
+/**
+ * Renders the shell with a single identifiable child.
+ *
+ * `renderToStaticMarkup` runs no effects, so this is exactly the SERVER and
+ * FIRST-HYDRATION render: the racing date is mount-gated, so `Today` and
+ * `Meetings` are absent here by construction and every href below is static.
+ */
 function renderShell(pathname?: string | null): string {
   return renderToStaticMarkup(
     h(AppShell, { pathname, children: h('p', { id: 'child-probe' }, 'child content') })
@@ -240,6 +246,8 @@ test('7. planned destinations are never rendered as links', () => {
 
   // No link anywhere points at a route that does not exist.
   const hrefs = anchors(html).map((a) => a.href ?? '');
+  // The static set EXACTLY: a pre-mount render carries no dated destination,
+  // so any `/date/...` href appearing here would be the frozen-date defect.
   const known = new Set<string>([
     `#${MAIN_LANDMARK_ID}`,
     ...PRIMARY_DESTINATIONS.map((d) => d.href),
@@ -673,11 +681,24 @@ test('20b. the one client component is narrowly scoped to navigation state', () 
   assert.match(NAV_SRC, /\busePathname\s*\(\s*\)/);
 
   // No state, no effects, no storage, no history/router mutation, no fetch.
+  //
+  // ONE exception, added with the mount-gated racing date: a single
+  // `useSyncExternalStore` whose SERVER snapshot is a constant null. That is
+  // React's mechanism for a value the server cannot know, and it is what stops
+  // a build-time date freezing into statically prerendered HTML. Everything
+  // else stays forbidden — including `useState` and `useEffect`, so the date
+  // cannot drift back into a set-state-in-effect pattern.
   assert.equal(
-    /\buse(State|Effect|Reducer|SyncExternalStore|LayoutEffect)\s*\(/.test(NAV_SRC),
+    /\buse(State|Effect|Reducer|LayoutEffect)\s*\(/.test(NAV_SRC),
     false,
     'navigation holds no state and runs no effect'
   );
+  assert.equal(
+    (NAV_SRC.match(/\buseSyncExternalStore\s*\(/g) ?? []).length,
+    1,
+    'exactly one external-store subscription: the racing date'
+  );
+  assert.match(NAV_SRC, /serverRacingDate = \(\): string \| null => null;/);
   assert.equal(/useRouter|router\.(push|replace)|history\.(push|replace)/.test(NAV_SRC), false);
   assert.equal(/localStorage|sessionStorage|indexedDB|document\.cookie/.test(NAV_SRC), false);
   assert.equal(/\bfetch\s*\(|XMLHttpRequest|EventSource|WebSocket/.test(NAV_SRC), false);

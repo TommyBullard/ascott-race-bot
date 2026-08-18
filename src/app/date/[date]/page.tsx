@@ -20,6 +20,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import AppShell from '@/components/AppShell';
+import { MEETINGS_ANCHOR_ID } from '@/components/navDestinations';
 import { EmptyState, ErrorState, SectionHeader } from '@/components/UiPrimitives';
 import Breadcrumbs from '@/components/racing/Breadcrumbs';
 import MeetingSummaryCard from '@/components/racing/MeetingSummaryCard';
@@ -104,10 +105,12 @@ export default async function DatePage({ params }: DatePageProps) {
           choose another date.
         </ErrorState>
       ) : outcome.races.length === 0 ? (
-        <EmptyState title="No stored races for this date" level={2}>
-          No racecard has been stored for {longDate}. This is not an error — a date only has
-          meetings once its racecards have been ingested.
-        </EmptyState>
+        <section id={MEETINGS_ANCHOR_ID} aria-label="Meetings" tabIndex={-1}>
+          <EmptyState title="No stored races for this date" level={2}>
+            No racecard has been stored for {longDate}. This is not an error — a date only has
+            meetings once its racecards have been ingested.
+          </EmptyState>
+        </section>
       ) : (
         <>
           {/*
@@ -136,7 +139,7 @@ export default async function DatePage({ params }: DatePageProps) {
             </ul>
           </section>
 
-          <section aria-label="Meetings">
+          <section id={MEETINGS_ANCHOR_ID} aria-label="Meetings" tabIndex={-1}>
             <SectionHeader level={2} title="Meetings" />
             <div className="rb-meeting-grid">
               {meetings.map((meeting) => (

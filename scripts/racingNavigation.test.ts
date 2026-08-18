@@ -318,7 +318,7 @@ test('8. historical rows with a null course_key get NO fabricated link', () => {
   );
   assert.doesNotMatch(markup, /<a /, 'a handle-less meeting renders no anchor at all');
   assert.match(markup, /Old Course/);
-  assert.match(markup, /no permanent page/);
+  assert.match(markup, /no permanent meeting page or race links/);
 });
 
 test('8b. a date mixing canonical and historical rows links only the canonical ones', () => {
@@ -399,6 +399,8 @@ test('12. a null race_slug yields no link and no invented handle', () => {
     h(RaceSummaryRow, { race: race({ race_slug: null }), date: '2026-08-17' }),
   );
   assert.doesNotMatch(markup, /<a /);
+  // RaceSummaryRow keeps its own wording: this is a RACE row, not a meeting
+  // card, so "no permanent page" is accurate and deliberately unchanged.
   assert.match(markup, /no permanent page/);
 
   // The slug builder is never imported into the navigation — nothing can
@@ -1146,7 +1148,10 @@ function importClosure(roots: readonly string[]): {
   const walk = (file: string): void => {
     if (visited.has(file)) return; // visited set breaks cycles
     visited.add(file);
-    const text = readFileSync(file, 'utf8');
+    // COMMENT-STRIPPED: prose such as `derived from "today"` would otherwise be
+    // recorded as an external import, and a commented-out import would be
+    // followed. Only real specifiers count.
+    const text = code(file);
     for (const match of text.matchAll(/from\s+['"]([^'"]+)['"]/g)) {
       const resolved = resolveLocalImport(match[1], file, externals);
       if (resolved !== null) walk(resolved);

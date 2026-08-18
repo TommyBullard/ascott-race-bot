@@ -5,10 +5,26 @@
  * rebuild: skip link, header landmark, navigation landmarks, a single `<main>`
  * landmark with a stable id, and the standing decision-support disclaimer.
  *
- * SERVER COMPONENT. No `'use client'`, no hooks, no browser storage, no
- * environment access, no data fetching, no write controls. The only part that
- * crosses the client boundary is `AppNavigation`, which exists solely to read
- * the current route for `aria-current`.
+ * SHARED COMPONENT — NOT inherently server-only.
+ *
+ * It carries no `'use client'` directive, and that is exactly what makes it
+ * SHARED rather than server-only: a module without the directive is compiled
+ * into whichever graph imports it. `/how-it-works` and the canonical `/date`
+ * routes are server pages, so there it server-renders; `/`, `/leaderboard`
+ * and `/results-audit` are `'use client'` pages that import it directly, so
+ * there it is bundled for the BROWSER and re-runs on hydration.
+ *
+ * CONSEQUENCE, AND IT IS LOAD-BEARING: this component must never read
+ * request-time or current-time state. It previously derived the racing date
+ * here, which froze `Today` to the BUILD date on statically prerendered
+ * pages and produced a hydration mismatch on the client-bundled ones. The
+ * navigation date is now owned by `AppNavigation`, after mount. See the
+ * MOUNT-GATED DATE note there.
+ *
+ * So: no hooks, no clock, no browser storage, no environment access, no data
+ * fetching, no write controls. The only part that deliberately crosses the
+ * client boundary is `AppNavigation`, the one module in the shell that
+ * carries `'use client'`.
  *
  * ADOPTION. The shell owns `<main>`, so a page that renders inside it must NOT
  * render its own — nested `<main>` landmarks are invalid and break landmark
@@ -29,10 +45,13 @@ import { AppNavigation } from './AppNavigation';
  * the public entry point for consumers and tests.
  */
 export {
+  MEETINGS_ANCHOR_ID,
   MOBILE_DESTINATIONS,
   MOBILE_NAV_MAX_DESTINATIONS,
   PLANNED_DESTINATIONS,
   PRIMARY_DESTINATIONS,
+  buildMobileDestinations,
+  buildPrimaryDestinations,
   isNavDestinationActive,
   type NavDestination,
   type PlannedDestination,
@@ -68,6 +87,12 @@ export const PLACEHOLDER_SLOTS: readonly { label: string; state: string }[] = [
 
 export interface AppShellProps {
   children: ReactNode;
+  /*
+   * There is deliberately NO `todayDate` prop. Accepting one would let a
+   * server page inject a render-time date, which is the defect this shell
+   * was corrected for: on a statically prerendered page that date is the
+   * BUILD date and it never changes again.
+   */
   /**
    * Explicit route override for `aria-current`. Omit it — the normal case —
    * and the navigation detects the live route itself.
