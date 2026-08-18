@@ -48,17 +48,20 @@ export async function GET(request: NextRequest) {
   // Ownership gate: after Step A auth, before any provider call or write. The
   // guard date is derived from the ALREADY-coerced dayParam using the same UTC
   // today/tomorrow semantics syncRacecards uses internally — never invented.
+  const scopeMeetingDate = resolveCronMeetingDate({ day: dayParam }).meetingDate;
   const gate = await enforceRouteOwnership(
     request,
     'cron/racecards',
-    staticEffectiveDate(resolveCronMeetingDate({ day: dayParam }).meetingDate),
+    staticEffectiveDate(scopeMeetingDate),
   );
   if (!gate.proceed) return gate.response;
 
   const startedAt = new Date();
 
   try {
-    const summary = await syncRacecards({ day: dayParam });
+    // The scope date is the one the ownership guard just enforced, so the
+    // off-time observer can never record outside the date this producer owns.
+    const summary = await syncRacecards({ day: dayParam, meetingDate: scopeMeetingDate });
     await recordCronRun(
       buildCronRunRecord({ job: 'racecards', startedAt, ok: true, httpStatus: 200, counts: { ...summary } }),
     );

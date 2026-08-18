@@ -30,6 +30,16 @@ export const BETFAIR_BOOKMAKER = 'Betfair Exchange';
 
 const HANDICAP_RE = /\bh'?cap\b|\bhandicap\b/i;
 
+/**
+ * Which raw provider field produced a resolved off time.
+ *
+ * `off_dt` is a full ISO instant with an offset and is trustworthy. The
+ * `date_off_time` fallback composes `date` + a LOCAL `off_time` and forces it
+ * to UTC, which is a one-hour error under British Summer Time — so anything
+ * downstream that must not act on a wrong instant can refuse it by source.
+ */
+export type OffTimeSource = 'off_dt' | 'date_off_time';
+
 /** Coerces a numeric-ish value to a finite number, else null. Never throws. */
 export function toNumberOrNull(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null;
@@ -129,20 +139,24 @@ const UNKNOWN_RACE_SLUG = 'unknown-race';
  * path rewrites it. That is the whole of the guarantee, and it is asserted by
  * test so it cannot be lost silently.
  *
- * WHAT THIS DOES NOT GUARANTEE — ONE ROW, OR ONE URL, PER REAL RACE.
+ * WHAT THIS DOES NOT GUARANTEE — AND HOW THAT CHANGED.
  *
- * Race resolution still uses the RAW `course` display string plus `off_time`.
- * `provider_race_id` is captured by Programme 0 but is NOT read by any lookup.
- * So if the same provider race arrives later with a corrected off time — or a
- * corrected course label — the lookup misses the existing row and a SECOND row
- * is inserted, with its own uuid and its own slug. The partial
- * `provider_race_id` index is deliberately non-unique and does not prevent
- * this.
+ * Programme 0 captured `provider_race_id` without reading it, so a corrected
+ * off time or course label missed the existing row and inserted a SECOND row
+ * with its own uuid and its own slug. Commit a9ee1cd closed that: resolution is
+ * now provider-identity-first, so the same provider race resolves to the same
+ * `races.id` and the slug stays frozen on ONE row.
  *
- * That duplication behaviour PREDATES Programme 0 and is unchanged by it.
- * Programme 0 captures provider identity; it does not resolve on it. Moving
- * resolution to provider_race_id-first is a change to lookup behaviour and is
- * deferred to a later, independently reviewed programme.
+ * The failure mode INVERTED rather than disappearing. A corrected card now
+ * reuses the existing row and writes nothing, so `races.off_time` can go stale
+ * instead. That is deliberate and is handled WITHOUT rewriting the column: see
+ * `offTimeObservation.ts`, which records the divergence as immutable evidence
+ * and lets the write-side safety guards use a strictest-known "effective" off
+ * that can only ever move EARLIER. `races.off_time` itself is frozen at insert
+ * by every write path in the repository.
+ *
+ * The `provider_race_id` index remains deliberately non-unique; duplicate
+ * provider ids fail closed in application logic rather than at the schema.
  *
  * Deliberately NOT derived from a race number or array position: those depend
  * on how many races were fetched, which is not stable across calls.
@@ -184,7 +198,7 @@ export function resolveOffTime(
   offDt: string | undefined,
   date: string | undefined,
   offTime: string | undefined,
-): { offTimeIso: string; meetingDate: string } | null {
+): { offTimeIso: string; meetingDate: string; source: OffTimeSource } | null {
   const tryParse = (s: string | undefined): string | null => {
     if (!s || s.trim() === '') return null;
     const ms = Date.parse(s);
@@ -192,7 +206,9 @@ export function resolveOffTime(
   };
 
   let iso = tryParse(offDt);
+  let source: OffTimeSource = 'off_dt';
   if (!iso && date && offTime) {
+    source = 'date_off_time';
     // Compose "YYYY-MM-DDTHH:MM" — interpreted as UTC by Date.parse when 'Z'-less
     // is ambiguous, so append Z to make the instant explicit.
     const hhmm = offTime.trim().padStart(5, '0');
@@ -203,7 +219,7 @@ export function resolveOffTime(
   // meeting_date prefers the explicit `date`; else the UTC date of the instant.
   const meetingDate =
     date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : iso.slice(0, 10);
-  return { offTimeIso: iso, meetingDate };
+  return { offTimeIso: iso, meetingDate, source };
 }
 
 /**
@@ -350,6 +366,17 @@ export function racecardToRaceUpsert(card: StandardRacecard): RaceUpsert | null 
     // when the card said nothing at all.
     is_abandoned: typeof card.is_abandoned === 'boolean' ? card.is_abandoned : null,
   };
+}
+
+/**
+ * Which provider field a card's off time came from, or null when it has none.
+ *
+ * Deliberately NOT a field on {@link RaceUpsert}: every key of that interface
+ * becomes a column in the `races` insert, and there is no such column. This is
+ * provenance for the off-time observer, not stored race data.
+ */
+export function racecardOffTimeSource(card: StandardRacecard): OffTimeSource | null {
+  return resolveOffTime(card.off_dt, card.date, card.off_time)?.source ?? null;
 }
 
 /** Maps a standard-racecard runner to a `runners` upsert row. */

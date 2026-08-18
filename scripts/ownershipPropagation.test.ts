@@ -405,13 +405,43 @@ test('53-54. createCallCron never acquires/heartbeats/releases or queries claim 
   assert.doesNotMatch(s, /tryAcquireProducerClaim|heartbeatProducerClaim|releaseProducerClaim|fetchProducerClaimStatus|producer_claim_status/);
 });
 
+/**
+ * The racecards route left the byte-identity list when the Off-Time Integrity
+ * programme threaded the ALREADY-COMPUTED ownership scope date into
+ * `syncRacecards` (it was previously derived for the guard and discarded).
+ *
+ * Byte-identity is replaced with a STRICTER, targeted guarantee rather than
+ * dropped: the ownership machinery in that route — fail-closed auth first, then
+ * the ownership gate, then and only then any provider work — is asserted
+ * explicitly, and the guard's date must still be the one `resolveCronMeetingDate`
+ * produces. A change that weakened any of those now fails here, whereas
+ * byte-identity would only have told us "something changed".
+ */
+test('55-59a. the racecards route keeps auth -> ownership -> sync, on the resolved scope date', () => {
+  const route = src('src/app/api/cron/racecards/route.ts');
+  const authAt = route.indexOf('requireCronSecret(');
+  const scopeAt = route.indexOf('resolveCronMeetingDate({ day: dayParam }).meetingDate');
+  const gateAt = route.indexOf('enforceRouteOwnership(');
+  const syncAt = route.indexOf('syncRacecards({');
+  assert.ok(authAt > 0, 'fail-closed auth must still be first');
+  assert.ok(scopeAt > authAt, 'the scope date is still derived after auth');
+  assert.ok(gateAt > scopeAt, 'the ownership gate still follows the scope date');
+  assert.ok(syncAt > gateAt, 'no provider work may precede the ownership gate');
+  // The gate date and the date handed to the sync are the SAME value, so the
+  // observer can never record outside the date this producer owns.
+  assert.match(route, /staticEffectiveDate\(scopeMeetingDate\)/);
+  assert.match(route, /syncRacecards\(\{ day: dayParam, meetingDate: scopeMeetingDate \}\)/);
+  // The route still supplies no ownership context itself and holds no claim.
+  assert.doesNotMatch(route, /tryAcquireProducerClaim|heartbeatProducerClaim|releaseProducerClaim/);
+});
+
 test('55-59. Slice 1/2 wire+guard+routes+auth+migration+deploy files are byte-identical to HEAD', () => {
   const normalize = (s: string): string => s.replace(/\r\n/g, '\n');
   for (const f of [
     'src/lib/ownershipContext.ts',
     'src/lib/routeOwnershipGuard.ts',
     'src/lib/auth.ts',
-    'src/app/api/cron/racecards/route.ts',
+    // 'src/app/api/cron/racecards/route.ts' — see 55-59a above.
     'src/app/api/cron/odds/route.ts',
     'src/app/api/cron/model/route.ts',
     'src/app/api/cron/results/route.ts',

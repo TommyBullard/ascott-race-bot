@@ -43,12 +43,20 @@ import {
   indexRunnersByName,
   matchMarketToRace,
   normalizeHorseName,
+  racecardOffTimeSource,
   racecardRunnerToUpsert,
   racecardToRaceUpsert,
   resolveOffTime,
   resultRunnerToUpdate,
   type RaceUpsert,
 } from './raceSync';
+import { resolveCronMeetingDate } from './cronDate';
+import {
+  OFF_TIME_OBSERVER_RACECARDS,
+  emptyOffTimeObservationSummary,
+  recordOffTimeObservations,
+  type ObservedOffTime,
+} from './offTimeObservation';
 
 /** UK + Irish region codes for The Racing API. */
 const DEFAULT_REGIONS = ['gb', 'ire'];
@@ -188,6 +196,17 @@ export interface RacecardsSyncSummary {
   skipped: number;
   /** Which racecards endpoint actually produced the cards ('standard'|'basic'). */
   tier: RacecardsTier;
+  /**
+   * Off-time integrity counters. A resolved race whose provider off time has
+   * moved was previously indistinguishable from an unchanged one — it was just
+   * `racesExisting++`. These make the divergence visible in the route response
+   * and in the `cron_runs` heartbeat, which is where an operator can alarm on
+   * it. Recording never affects ingestion: it fails open to zero.
+   */
+  offTimeDivergencesObserved: number;
+  offTimeTighteningObservations: number;
+  offTimeObservationsRecorded: number;
+  offTimeObservationErrors: number;
 }
 
 /**
@@ -247,6 +266,14 @@ export async function syncRacecards(
     day?: 'today' | 'tomorrow';
     regionCodes?: string[];
     tier?: RacecardsTier;
+    /**
+     * The race date the CALLING producer actually owns, as the route already
+     * resolves it for the ownership guard. A card outside this scope is
+     * recorded `out_of_scope_meeting_date` and can never tighten anything —
+     * without it the observation write would sit in a loop with no date filter,
+     * widening the ownership boundary this design declares inviolable.
+     */
+    meetingDate?: string;
   } = {},
   client: RacingApiClient = createRacingApiClient(),
 ): Promise<RacecardsSyncSummary> {
@@ -261,7 +288,14 @@ export async function syncRacecards(
     runnersInserted: 0,
     skipped: 0,
     tier,
+    ...emptyOffTimeObservationSummary(),
   };
+  /**
+   * Observations collected during the existing card loop, for RESOLVED races
+   * only — a newly inserted race cannot diverge from itself. Zero extra I/O
+   * here: every value is already in hand.
+   */
+  const offTimeObservations: ObservedOffTime[] = [];
 
   const { cards, usedTier } = await fetchRacecards(
     client,
@@ -282,6 +316,18 @@ export async function syncRacecards(
     let raceId = await resolveExistingRaceId(raceRow, supabaseRaceResolutionLookups);
     if (raceId) {
       summary.racesExisting++;
+      // The resolved row keeps its stored off_time; the freshly mapped one is
+      // evidence, never a write. Recorded after the loop, in one batch.
+      const offTimeSource = racecardOffTimeSource(card);
+      if (offTimeSource !== null) {
+        offTimeObservations.push({
+          race_id: raceId,
+          provider_race_id: raceRow.provider_race_id,
+          off_time_iso: raceRow.off_time,
+          meeting_date: raceRow.meeting_date,
+          source_field: offTimeSource,
+        });
+      }
     } else {
       raceId = randomUUID();
       const { error } = await supabaseAdmin.from('races').insert({ id: raceId, ...raceRow });
@@ -313,6 +359,22 @@ export async function syncRacecards(
       summary.runnersInserted += toInsert.length;
     }
   }
+
+  // Off-time integrity: record any divergence between the stored off and the
+  // provider's current one, as immutable evidence. This NEVER writes `races`
+  // and NEVER throws — a failure degrades to exactly today's behaviour. The
+  // loop's own throws above are unchanged and can still abort a card.
+  const scopeMeetingDate =
+    options.meetingDate ?? resolveCronMeetingDate({ day }).meetingDate;
+  Object.assign(
+    summary,
+    await recordOffTimeObservations(
+      offTimeObservations,
+      scopeMeetingDate,
+      new Date().toISOString(),
+      OFF_TIME_OBSERVER_RACECARDS,
+    ),
+  );
 
   return summary;
 }

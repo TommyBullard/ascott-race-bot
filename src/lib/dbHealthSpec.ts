@@ -101,6 +101,10 @@ export const REQUIRED_TABLES: readonly TableSpec[] = [
       'probability_engine_version', 'staking_engine_version', 'input_mode',
       'config_json', 'data_quality_flags', 'bet_mode', 'base_kelly_fraction',
       'signal_kappa', 'is_current', 'superseded_at',
+      // Off-Time Integrity: the EFFECTIVE off this run was judged against by
+      // the pre-off guard. Nullable, never backfilled — null means the run
+      // predates capture. Required by 20260818000000.
+      'off_time_at_run',
     ],
   },
   {
@@ -244,6 +248,21 @@ export const REQUIRED_TABLES: readonly TableSpec[] = [
       'created_at',
     ],
   },
+  {
+    // Off-Time Integrity (20260818000000). Append-only evidence of every
+    // observed divergence between a stored race off time and the provider's
+    // current one. NOTHING here is ever applied to `races` — the row is
+    // evidence, and only an `earlier_than_stored` row may tighten the
+    // write-side guards.
+    name: 'race_off_time_observations',
+    columns: [
+      'id', 'race_id', 'provider_race_id', 'stored_off_time', 'observed_off_time',
+      'delta_seconds', 'source_field', 'classification', 'tightening_eligible',
+      'observed_at', 'observer', 'scope_meeting_date', 'stored_meeting_date',
+      'observed_meeting_date', 'race_status_at_observation', 'had_official_lock',
+      'created_at',
+    ],
+  },
 ];
 
 /** Indexes the migrations create (verified MANUALLY — see header). */
@@ -272,6 +291,9 @@ export const REQUIRED_INDEXES: readonly IndexSpec[] = [
   // day/proof window index, per 20260708000000_locked_race_decisions.sql.
   { name: 'locked_race_decisions_one_per_horizon', table: 'locked_race_decisions', columns: 'race_id, minutes_before' },
   { name: 'idx_locked_race_decisions_lock_time', table: 'locked_race_decisions', columns: 'lock_time, decision_status' },
+  // Off-Time Integrity, per 20260818000000_race_off_time_observations.sql.
+  { name: 'race_off_time_observations_race_id_idx', table: 'race_off_time_observations', columns: 'race_id, observed_at desc' },
+  { name: 'idx_race_off_time_observations_observed_at', table: 'race_off_time_observations', columns: 'observed_at, classification' },
 ];
 
 /** Tables whose `is_current` / `superseded_at` history columns are required. */

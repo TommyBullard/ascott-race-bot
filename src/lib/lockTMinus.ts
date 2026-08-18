@@ -138,6 +138,38 @@ export function classifyLockWindow(
   return 'in_window';
 }
 
+/**
+ * Whether an in-window race must be REFUSED because corroborated evidence says
+ * its effective off has already passed.
+ *
+ * Extracted from the CLI so the most consequential new refusal in the tranche
+ * is asserted by BEHAVIOUR rather than by a source scan. Pure; never throws.
+ *
+ * Deliberately one-directional. It is consulted only for a race the stored off
+ * already placed IN WINDOW, and it can only ever return true (refuse) — it
+ * cannot make a lock happen, cannot widen a window, and cannot alter what a
+ * lock contains. When no tightening occurred it returns false immediately, so
+ * the untightened path is byte-for-byte today's behaviour.
+ */
+export function shouldRefuseContestedLock(
+  effective: { effectiveOffTime: string | null; tightened: boolean },
+  capture: { capture_target_time: string | null | undefined },
+  status: string | null | undefined,
+  nowIso: string,
+): boolean {
+  if (!effective.tightened) return false;
+  return (
+    classifyLockWindow(
+      {
+        off_time: effective.effectiveOffTime,
+        capture_target_time: capture.capture_target_time,
+        status,
+      },
+      nowIso,
+    ) === 'post_off'
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Decision mapping                                                           */
 /* -------------------------------------------------------------------------- */
@@ -286,6 +318,15 @@ export type LockOutcomeKind =
   | 'no_run_available'
   | 'too_early_not_locked'
   | 'skipped_post_off'
+  /**
+   * Corroborated evidence says this race's EFFECTIVE off has already passed,
+   * even though the stored off has not. Refusing is deliberate: a missing lock
+   * is recoverable and already modelled (`lock_missing` / `no_run_available`,
+   * never a loss and never a no-bet), whereas an IMMUTABLE lock anchored to a
+   * contested off cannot be undone. This outcome can only ever REFUSE a lock;
+   * it can never create one.
+   */
+  | 'skipped_off_time_contested'
   | 'already_locked'
   | 'error';
 
@@ -307,6 +348,7 @@ export interface LockRunSummary {
   no_run_available: number;
   too_early_not_locked: number;
   skipped_post_off: number;
+  skipped_off_time_contested: number;
   already_locked: number;
   errors: number;
 }
@@ -322,6 +364,7 @@ export function summarizeLockOutcomes(
     no_run_available: 0,
     too_early_not_locked: 0,
     skipped_post_off: 0,
+    skipped_off_time_contested: 0,
     already_locked: 0,
     errors: 0,
   };
@@ -383,6 +426,7 @@ export function renderLockRunSummary(
   lines.push(`  no_run_available:     ${summary.no_run_available}`);
   lines.push(`  too_early_not_locked: ${summary.too_early_not_locked}`);
   lines.push(`  skipped_post_off:     ${summary.skipped_post_off}`);
+  lines.push(`  skipped_off_time_contested: ${summary.skipped_off_time_contested}`);
   lines.push(`  already_locked:       ${summary.already_locked}`);
   lines.push(`  errors:               ${summary.errors}`);
   return lines;
