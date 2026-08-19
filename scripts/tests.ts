@@ -151,3 +151,4 @@ import './appShellAdoption.test';
 import './homepageContrast.test';
 import './racingNavigation.test';
 import './racingNavExposure.test';
+import './racingSearch.test';

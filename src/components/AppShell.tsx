@@ -38,6 +38,7 @@
 import type { ReactNode } from 'react';
 
 import { AppNavigation } from './AppNavigation';
+import { RacingControls } from './RacingControls';
 
 /**
  * The navigation model lives in its own module so the shell and the client
@@ -78,11 +79,15 @@ export const MAIN_LANDMARK_ID = 'rb-main';
 // prettier-ignore
 export const SHELL_DISCLAIMER = 'Decision-support analytics only. Outputs are evidence-based signals, not guarantees or instructions to place a bet.';
 
-/** Inert regions reserving space for controls that arrive in later slices. */
+/**
+ * Inert regions reserving space for controls that arrive in later slices.
+ *
+ * Search, Date and Scope have SHIPPED and are rendered by `RacingControls`;
+ * they are no longer placeholders. Operations remains genuinely planned, so it
+ * stays here and stays incapable of being rendered as a control.
+ */
 export const PLACEHOLDER_SLOTS: readonly { label: string; state: string }[] = [
-  { label: 'Search', state: 'Planned' },
-  { label: 'Date', state: 'Planned' },
-  { label: 'Scope', state: 'Planned' },
+  { label: 'Operations', state: 'Planned' },
 ];
 
 export interface AppShellProps {
@@ -129,6 +134,9 @@ export function AppShell({ children, pathname, className }: AppShellProps) {
             text so nothing reads as operable.
           */}
           <div className="rb-control-channel">
+            {/* Interactive, read-only product controls. */}
+            <RacingControls />
+
             {PLACEHOLDER_SLOTS.map((slot) => (
               <div className="rb-slot" key={slot.label}>
                 <span className="rb-slot__label">{slot.label}</span>

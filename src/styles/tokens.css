@@ -1510,3 +1510,153 @@
   flex: 1 1 12rem;
   overflow-wrap: anywhere;
 }
+
+/* ========================================================================== *
+ * 13. Racing controls — search, scope and date
+ *
+ * Additive, `rb-`-namespaced, mobile-first, built only from tokens already
+ * defined above. No global element selector, no focus-outline suppression, no
+ * animation, no fixed height that could clip results, and no hidden overflow
+ * that would put a result beyond keyboard reach.
+ * ========================================================================== */
+
+.rb-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--rb-space-2);
+  position: relative;
+}
+
+.rb-controls__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rb-space-1);
+  min-width: 0;
+}
+
+.rb-controls__label {
+  font-size: var(--rb-text-meta);
+  font-weight: 600;
+  letter-spacing: var(--rb-tracking-label);
+  text-transform: uppercase;
+  color: var(--rb-text-muted);
+}
+
+.rb-controls__input,
+.rb-controls__select {
+  min-height: var(--rb-touch-target-min);
+  max-width: 100%;
+  padding: var(--rb-space-1) var(--rb-space-2);
+  font-family: var(--rb-font-system);
+  font-size: var(--rb-text-body);
+  color: var(--rb-text-primary);
+  background: var(--rb-surface-elevated);
+  border: 1px solid var(--rb-border-strong);
+  border-radius: var(--rb-radius-control);
+}
+
+/* Narrow by default so three controls fit a phone header without overflow. */
+.rb-controls__input {
+  width: 100%;
+  min-width: 8rem;
+}
+
+.rb-controls__input--date {
+  min-width: 9.5rem;
+}
+
+@media (min-width: 40rem) {
+  .rb-controls__input {
+    width: auto;
+    min-width: 12rem;
+  }
+}
+
+/* The live region is announced, not seen: it duplicates visible state. */
+.rb-controls__status {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--rb-text-meta);
+  color: var(--rb-text-muted);
+}
+
+/* Results ----------------------------------------------------------------- */
+
+/*
+ * In normal flow on small screens and floated above the header on wide ones.
+ * `max-height` with `auto` overflow keeps a long list scrollable rather than
+ * clipped, so every result stays keyboard reachable.
+ */
+.rb-search__panel {
+  flex-basis: 100%;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: var(--rb-space-2);
+  background: var(--rb-surface-raised);
+  border: 1px solid var(--rb-border);
+  border-radius: var(--rb-radius-panel);
+  box-shadow: var(--rb-shadow-elevated);
+}
+
+@media (min-width: 48rem) {
+  .rb-search__panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 40;
+    width: min(30rem, 100%);
+    margin-top: var(--rb-space-1);
+  }
+}
+
+.rb-search__results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--rb-space-1);
+}
+
+.rb-search__result-link,
+.rb-search__result-static {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--rb-space-2);
+  border-radius: var(--rb-radius-control);
+  overflow-wrap: anywhere;
+}
+
+.rb-search__result-link {
+  color: var(--rb-text-primary);
+  text-decoration: none;
+}
+
+.rb-search__result-link:hover {
+  background: var(--rb-state-hover);
+  text-decoration: underline;
+}
+
+/* Non-linkable results are visibly inset, never styled as links. */
+.rb-search__result-static {
+  background: var(--rb-surface-inset);
+  color: var(--rb-text-secondary);
+}
+
+.rb-search__result-title {
+  font-weight: 600;
+}
+
+.rb-search__result-meta,
+.rb-search__result-note {
+  font-size: var(--rb-text-meta);
+  color: var(--rb-text-muted);
+}
+
+.rb-search__result-kind {
+  font-weight: 600;
+  letter-spacing: var(--rb-tracking-label);
+  text-transform: uppercase;
+}

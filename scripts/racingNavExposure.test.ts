@@ -280,20 +280,30 @@ test('10-11. Today and Meetings are no longer planned', () => {
   }
 });
 
-test('12-15. Search, Date, Scope and Operations remain planned', () => {
+test('12-15. Operations remains planned; Search, Date and Scope have shipped', () => {
   // Operations is the only remaining planned NAV destination.
   assert.deepEqual(
     PLANNED_DESTINATIONS.map((p) => p.label),
     ['Operations'],
   );
-  // The header control slots are untouched.
+  // Search, Date and Scope are no longer placeholders: they are real controls,
+  // so Operations is the only remaining placeholder slot.
   assert.deepEqual(
     PLACEHOLDER_SLOTS.map((s) => `${s.label}:${s.state}`),
-    ['Search:Planned', 'Date:Planned', 'Scope:Planned'],
+    ['Operations:Planned'],
   );
 
   const html = renderShell(`/date/${TODAY}`);
   assert.match(html, /Operations<span class="rb-nav__planned-tag">Planned/);
+  // The shipped controls render as real form controls, not planned slots.
+  for (const shipped of ['Search racing', 'Search scope', 'Go to date']) {
+    assert.ok(html.includes(shipped), `${shipped} control must render`);
+    assert.doesNotMatch(
+      html,
+      new RegExp(`<span class="rb-slot__label">${shipped}</span>`),
+      `${shipped} must not be a placeholder slot`,
+    );
+  }
   for (const slot of PLACEHOLDER_SLOTS) {
     assert.match(
       html,

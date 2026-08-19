@@ -1236,6 +1236,19 @@ test('L-2b. NO module reachable from a route can reach a producer or write path'
     ['slug generation', /\braceSlug\s*\(|\bcourseKey\s*\(\s*['"]|normalizeCourse\s*\(/],
   ];
 
+  /*
+   * ONE narrowly-scoped exception, added with racing search.
+   *
+   * `RacingControls` is the search UI, so it necessarily calls `fetch` and
+   * necessarily names an `/api/` path. That is categorically different from the
+   * forbidden cases — it is a read of THIS application's bounded search
+   * endpoint, not a provider call, an operational route or a write. The
+   * exemption is granted to that ONE file, for exactly those two patterns, and
+   * the endpoint it may reach is pinned separately below.
+   */
+  const SEARCH_UI = 'src/components/RacingControls.tsx';
+  const SEARCH_UI_EXEMPT = new Set(['fetch', 'cron/api route']);
+
   for (const file of modules) {
     const executable = code(file);
     for (const mod of forbiddenImports) {
@@ -1246,9 +1259,21 @@ test('L-2b. NO module reachable from a route can reach a producer or write path'
       );
     }
     for (const [label, pattern] of forbiddenCalls) {
+      if (file === SEARCH_UI && SEARCH_UI_EXEMPT.has(label)) continue;
       assert.doesNotMatch(executable, pattern, `${file} (reachable from a route) contains ${label}`);
     }
   }
+
+  // The exemption is bounded: the search UI may reach exactly ONE path, it is a
+  // module constant, and no other API path or absolute URL appears.
+  const searchUi = code(SEARCH_UI);
+  assert.match(searchUi, /const SEARCH_ENDPOINT = '\/api\/search\/racing';/);
+  const apiPaths = [...searchUi.matchAll(/['"`](\/api\/[^'"`]*)['"`]/g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(apiPaths)], ['/api/search/racing'], 'one endpoint only');
+  assert.doesNotMatch(searchUi, /https?:\/\//, 'no absolute URL may be fetched');
+  // Every fetch call goes through the constant-prefixed url, never raw input.
+  assert.match(searchUi, /fetch\(url, \{ signal: controller\.signal/);
+  assert.equal((searchUi.match(/\bfetch\s*\(/g) ?? []).length, 1, 'exactly one fetch call site');
 
   // Non-vacuous: the scanned text is real executable code, and the ONE allowed
   // database access is still present in the read layer.
